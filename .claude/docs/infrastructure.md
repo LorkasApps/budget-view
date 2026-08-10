@@ -46,5 +46,5 @@ Per-feature `{presentation,domain,data}` folders are created by each feature tic
 ## Developer Commands
 All Flutter commands run via the root `Makefile` (Flutter cannot run in the agent sandbox). Key targets: `make get`, `make check` (analyze+test), `make gen` (build_runner, from ticket 002), `make run`, `make build-apk`. `make help` lists all.
 
-## Not Yet Present (later Setup tickets)
-- Sync adapter + change-queue (ticket 003)
+## Setup epic complete
+Foundation done (tickets 001–003): Flutter scaffold, Isar persistence, sync stub. Feature epics (Accounts onwards) build on this. See `sync.md` for the repository-layer contract every feature repo must follow.

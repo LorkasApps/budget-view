@@ -6,7 +6,7 @@
 | **Epic** | Setup |
 | **Domain** | Infra |
 | **Blocked By** | 002 |
-| **Status** | Ready |
+| **Status** | Done |
 
 ## Description
 Define the `SyncAdapter` abstraction so the domain layer never talks to a concrete sync backend. Ship a local-only concrete impl that captures every mutation as an Op-Log entry in an Isar collection. Actual Supabase wiring lands in a later ticket — this stub validates the design end-to-end without network.
@@ -18,20 +18,19 @@ Define the `SyncAdapter` abstraction so the domain layer never talks to a concre
 - **Entity identity:** every domain entity implements `SyncableEntity` and carries a `String uuid` (v4, client-generated on first save). Isar auto-inc `id` stays internal.
 
 ## Acceptance Criteria
-- [ ] `SyncAdapter` abstract class defined in `lib/core/sync/sync_adapter.dart`
-- [ ] `ChangeQueueEntry` Isar collection: `{id (auto-inc), op (enum: create|update|delete), entityType, entityUuid, payloadJson, ts, processed (bool, default false)}`
-- [ ] `LocalSyncAdapter` concrete impl enqueues entries into `ChangeQueueEntry`
-- [ ] `sync()` is a no-op that flips `processed=true` on all pending entries and returns success
-- [ ] `SyncableEntity` mixin/interface defined: exposes `uuid` (String) and `entityType` (String)
-- [ ] `uuid` auto-populated on first `save()` if empty (uses `uuid` package, v4)
-- [ ] Repository-Layer pattern documented in a short section of `.claude/docs/dependencies.md` or a new `sync.md`
-- [ ] Riverpod provider `syncAdapterProvider` exposes the adapter (overridable in tests)
-- [ ] Unit tests: `enqueue(create)`, `enqueue(update)`, `enqueue(delete)`, `sync()` drains queue
-- [ ] No network calls anywhere in the code
+- [x] `SyncAdapter` interface defined in `lib/core/sync/sync_adapter.dart` (+ `SyncResult`)
+- [x] `ChangeQueueEntry` Isar collection: `{id (auto-inc), op (@enumerated), entityType (indexed), entityUuid (indexed), payloadJson, ts, processed=false}`
+- [x] `LocalSyncAdapter` concrete impl enqueues entries into `ChangeQueueEntry`
+- [x] `sync()` is a no-op that flips `processed=true` on all pending entries and returns `SyncResult(processed: n)`
+- [x] `SyncableEntity` interface defined: `uuid` (get/set), `entityType`, `toSyncPayload()`
+- [x] `uuid` auto-populated via `ensureUuid()` extension (uuid v4) — repos call it on first save (from ticket 004)
+- [x] Repository-Layer pattern documented in `.claude/docs/sync.md`
+- [x] Riverpod provider `syncAdapterProvider` exposes the adapter (overridable in tests)
+- [x] Unit tests: `enqueue(create/update/delete)`, `sync()` drains, empty-queue → 0, `ensureUuid` behavior
+- [x] No network calls anywhere in the code
 
 ## Affected Tests
-- `test/core/sync/local_sync_adapter_test.dart` — enqueue + drain
-- `test/core/sync/syncable_entity_test.dart` — UUID auto-population
+- `test/core/sync/local_sync_adapter_test.dart` — enqueue + drain + empty-queue + `ensureUuid` (UUID auto-population folded in here rather than a separate file)
 
 ## Fixtures Needed
 No — in-memory Isar for tests suffices.
@@ -43,5 +42,6 @@ When the real Supabase impl arrives, it swaps `LocalSyncAdapter` for a `Supabase
 - Input: ~7k tokens
 - Output: ~2k tokens
 
-## Token Usage
-_Filled after Done._
+## Implementation Tokens (estimate)
+- Input: ~14k tokens
+- Output: ~3.5k tokens

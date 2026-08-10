@@ -2,6 +2,7 @@ import 'package:isar_community/isar.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
+import '../sync/change_queue_entry.dart';
 import 'app_meta.dart';
 import 'schema_version.dart';
 
@@ -9,7 +10,10 @@ const _uuid = Uuid();
 
 /// All Isar collection schemas that make up the app database.
 /// Extend this list as feature tickets add collections.
-const List<CollectionSchema<dynamic>> appIsarSchemas = [AppMetaSchema];
+const List<CollectionSchema<dynamic>> appIsarSchemas = [
+  AppMetaSchema,
+  ChangeQueueEntrySchema,
+];
 
 /// Opens the app's Isar instance and reconciles [AppMeta] / schema version.
 ///
