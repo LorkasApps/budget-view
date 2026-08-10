@@ -1,0 +1,104 @@
+# Duplicate detection (transaction + document level)
+
+| Field | Value |
+|-------|-------|
+| **Type** | Feature |
+| **Epic** | Import |
+| **Domain** | Transaction |
+| **Blocked By** | 006, 008 |
+| **Status** | Ready |
+
+## Description
+Two-layer defence against duplicate imports:
+
+1. **Document-level** — SHA-256 of the raw file bytes (PDF or receipt photo) checked at the file-picker entry point, **before** parsing. Hash match surfaces a warning; user may override and continue.
+2. **Transaction-level** — SHA-256 over `amountCents` + `bookingDate` (date-only) + normalized `counterparty` per candidate row, checked in the import preview. Match flagged per row; user may include anyway.
+
+Raw documents are **not persisted** (per project-wide decision). Only `ImportedSource` metadata rows persist for re-import warnings.
+
+## Entities
+
+### `Transaction` — add field
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `dedupeHash` | String | Indexed, non-nullable. SHA-256 hex, computed from tx fields |
+
+### `ImportedSource` — new collection
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | int (auto-inc) | Isar internal |
+| `uuid` | String | UUID v4 (from `SyncableEntity`) |
+| `kind` | enum | `pdf` \| `photo` |
+| `contentHashSha256` | String | Indexed, hex-encoded (64 chars) |
+| `filename` | String | Displayable name from picker; may be empty for camera captures |
+| `importedAt` | DateTime | Wall-clock at time of persist |
+| `transactionsProduced` | int | 0-N transactions this import created |
+| `lineItemsProduced` | int | 0-N line-items this import created |
+| `note` | String? | Optional, e.g. "User overrode duplicate warning" |
+| `createdAt` | DateTime | |
+| `updatedAt` | DateTime | |
+
+No uniqueness constraint on `contentHashSha256` — repeated imports of the same file (after warning override) create additional rows; history preserved.
+
+## Hash Rules
+
+**Transaction hash (`dedupeHash`):**
+- Input: `amountCents`, `bookingDate` (formatted `YYYY-MM-DD`), `counterparty` normalized (lower → trim → whitespace-collapse). Empty counterparty stays empty.
+- Canonical string: `"${amountCents}|${bookingDate}|${counterpartyNorm}"`
+- Algorithm: SHA-256 → hex.
+
+**Document hash (`contentHashSha256`):**
+- Input: raw file bytes (unmodified).
+- Algorithm: SHA-256 → hex.
+
+Same normalization helper serves ticket 009 + 013 (tagging).
+
+## Match Scope
+- **Transaction hash:** same `accountUuid` only. Transfers between accounts remain distinct.
+- **Document hash:** global. Same file re-picked from anywhere in the phone triggers the warning.
+
+## Match Semantics
+Both layers = **suspicion**, not blocker. User decides.
+
+## Acceptance Criteria
+- [ ] `dedupeHash` added to `Transaction` (indexed, non-nullable)
+- [ ] `ImportedSource` Isar collection defined in `lib/features/import/data/imported_source.dart`
+- [ ] `ImportedSourceRepository`: `save`, `findByHash(hash) → List<ImportedSource>` (sorted `importedAt DESC`), `findAll`, `delete(uuid)`
+- [ ] Writes to `ImportedSource` route through `syncAdapter.enqueue(...)`
+- [ ] `computeDedupeHash(Transaction)` pure helper in `lib/features/transaction/domain/dedupe_hash.dart` — unit-tested
+- [ ] `computeContentHash(Uint8List bytes)` pure helper in `lib/features/import/domain/content_hash.dart` — unit-tested
+- [ ] `TransactionRepository.save(...)` auto-populates `dedupeHash` if empty
+- [ ] `DuplicateChecker` service in `lib/features/import/domain/`:
+  - `findTransactionMatches(hash, accountUuid, {excludeDeleted: true}) → List<Transaction>`
+  - `findDocumentMatches(hash) → List<ImportedSource>`
+- [ ] `duplicateCheckerProvider` (Riverpod) exposes service
+- [ ] **PDF import (ticket 008 flow):** after file-pick, hash bytes → `findDocumentMatches` → if any, show modal `"Diese Datei wurde am ... schon importiert (N Transaktionen erzeugt). Trotzdem fortfahren?"` with Ja/Nein
+- [ ] On confirm import: create one `ImportedSource` row with `kind=pdf`, hash, filename, counts
+- [ ] **Photo scan (ticket 016 flow):** after capture / gallery pick, same doc-hash flow with `kind=photo`
+- [ ] **Manual entry (ticket 006 form):** on submit, `findTransactionMatches` → modal shows existing matches with `Save anyway` / `Cancel`
+- [ ] **PDF-import preview list (ticket 008 UI):** each candidate row marked with a warning icon if its `dedupeHash` matches an existing transaction; expandable to show the match
+- [ ] **Intra-batch check:** candidates within one import batch are cross-hashed; internal duplicates flagged
+- [ ] Preview-list header shows `N new / M possible duplicates`
+- [ ] Existing pre-009 transactions get their `dedupeHash` back-filled once at first launch after upgrade (dev-mode: covered by nuke+rebuild)
+- [ ] `ImportedSource` list visible under Settings → Import History; user can delete rows (e.g. to allow legit re-import without warning)
+
+## Affected Tests
+- `test/features/transaction/domain/dedupe_hash_test.dart`
+- `test/features/import/domain/content_hash_test.dart` — deterministic per bytes, differs on 1-byte change
+- `test/features/import/domain/duplicate_checker_test.dart` — both `findTransactionMatches` + `findDocumentMatches`
+- `test/features/transaction/import/pdf/pdf_dedupe_integration_test.dart` — doc-hash warning + row-level warnings + intra-batch flagging
+- `test/features/drilldown/import/photo_dedupe_integration_test.dart` — doc-hash warning on photo re-scan
+- `test/features/transaction/presentation/manual_entry_dupe_modal_test.dart` — tx-hash modal appears on hit, absent on miss
+- `test/features/import/data/imported_source_repository_test.dart` + sync-integration
+
+## Fixtures Needed
+No — reuses ING fixtures from 008 + inline builders.
+
+## Refinement Tokens (estimate)
+- Input: ~14k tokens
+- Output: ~5k tokens
+
+## Token Usage
+_Filled after Done._
