@@ -29,10 +29,10 @@ Currency: EUR only, not stored (decisions.md). Money = integer cents.
 
 Follows the docs/sync.md contract: `ensureUuid()` → Isar write → `syncAdapter.enqueue`.
 
-## Balance (ticket 005)
-- `AccountBalance` (`domain/account_balance.dart`): `{accountUuid, openingBalanceCents, transactionSumCents}`, `totalCents = opening + transactionSum`. `transactionSumCents` is 0 until ticket 006.
+## Balance (tickets 005 + 006)
+- `AccountBalance` (`domain/account_balance.dart`): `{accountUuid, openingBalanceCents, transactionSumCents}`, `totalCents = opening + transactionSum`.
 - `BalanceService` (`domain/balance_service.dart`): `watch(uuid) → Stream<AccountBalance>`, `watchTotalCents({includeArchived}) → Stream<int>`.
-- `LocalBalanceService` (`data/local_balance_service.dart`): opening-only; streams re-emit on `accounts.watchLazy()`. `TODO(ticket-006)` marks where transaction sum plugs in.
+- `LocalBalanceService` (`data/local_balance_service.dart`): opening balance + `TransactionRepository.sumForAccount` (non-deleted only). Streams re-emit on a `StreamGroup.merge` of `accounts.watchLazy()` + `transactions.watchLazy()`.
 
 ## Providers (`domain/account_providers.dart`)
 - `accountRepositoryProvider` → `AccountRepository(isar, syncAdapter)`
@@ -45,7 +45,7 @@ Follows the docs/sync.md contract: `ensureUuid()` → Isar write → `syncAdapte
 Pure static validators: `name`, `openingBalance` (parseable cents), `openingDate` (not future). Unit-tested independently of the widget.
 
 ## UI (`presentation/`)
-- `AccountListScreen` — reactive list, archived toggle, swipe→archive (confirm dialog), long-press archived→restore, FAB→create. App home.
+- `AccountListScreen` — reactive list, archived toggle, swipe→archive (confirm dialog), long-press archived→restore, FAB→create. App home. **Row tap → `TransactionListScreen`** (since ticket 006); account edit lives in that screen's app bar.
 - `AccountFormScreen` — create/edit; name, type dropdown, EUR balance input, date picker.
 
 ## UI additions (ticket 005)
@@ -56,4 +56,4 @@ Pure static validators: `name`, `openingBalance` (parseable cents), `openingDate
 `parseEurosToCents` (comma/dot/negative), `formatCentsPlain` (no symbol, form input), `formatCentsEur` (intl `NumberFormat.currency`, `de_DE`/`€`, used for display).
 
 ## Not in scope here
-- Transaction sum in balance — ticket 006 fills `AccountBalance.transactionSumCents` via `LocalBalanceService`
+- Category assignment on transactions (ticket 011)

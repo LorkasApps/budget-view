@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/money/money.dart';
 import '../data/account.dart';
 import '../data/account_type.dart';
+import '../../transaction/presentation/transaction_list_screen.dart';
 import '../domain/account_providers.dart';
 import 'account_form_screen.dart';
 
@@ -21,6 +22,14 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
     return Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => AccountFormScreen(existing: existing),
+      ),
+    );
+  }
+
+  Future<void> _openTransactions(Account account) {
+    return Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => TransactionListScreen(account: account),
       ),
     );
   }
@@ -57,7 +66,7 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
                   separatorBuilder: (_, _) => const Divider(height: 1),
                   itemBuilder: (_, i) => _AccountTile(
                     account: accounts[i],
-                    onEdit: () => _openForm(existing: accounts[i]),
+                    onOpen: () => _openTransactions(accounts[i]),
                   ),
                 ),
               ),
@@ -74,10 +83,10 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
 }
 
 class _AccountTile extends ConsumerWidget {
-  const _AccountTile({required this.account, required this.onEdit});
+  const _AccountTile({required this.account, required this.onOpen});
 
   final Account account;
-  final VoidCallback onEdit;
+  final VoidCallback onOpen;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -124,7 +133,7 @@ class _AccountTile extends ConsumerWidget {
         title: Text(account.name),
         subtitle: Text(subtitle),
         trailing: _BalanceLabel(accountUuid: account.uuid),
-        onTap: onEdit,
+        onTap: onOpen,
         onLongPress: account.archived
             ? () => repo.restore(account.uuid)
             : null,

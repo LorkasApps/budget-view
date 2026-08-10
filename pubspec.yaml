@@ -51,6 +51,9 @@ dependencies:
   # Locale-aware number / currency formatting.
   intl: ^0.20.2
 
+  # StreamGroup (merging Isar change streams).
+  async: ^2.11.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

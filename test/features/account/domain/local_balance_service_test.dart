@@ -9,6 +9,8 @@ import 'package:budget_view/features/account/data/account.dart';
 import 'package:budget_view/features/account/data/account_type.dart';
 import 'package:budget_view/features/account/data/local_balance_service.dart';
 import 'package:budget_view/features/account/domain/account_repository.dart';
+import 'package:budget_view/features/transaction/data/transaction.dart';
+import 'package:budget_view/features/transaction/domain/transaction_repository.dart';
 
 Account _account({required String name, required int openingBalanceCents}) {
   return Account()
@@ -18,10 +20,19 @@ Account _account({required String name, required int openingBalanceCents}) {
     ..openingDate = DateTime(2024, 1, 1);
 }
 
+Transaction _tx({required String accountUuid, required int amountCents}) {
+  return Transaction()
+    ..accountUuid = accountUuid
+    ..amountCents = amountCents
+    ..bookingDate = DateTime(2026, 8, 1)
+    ..description = 'test';
+}
+
 void main() {
   late Directory tempDir;
   late Isar isar;
-  late AccountRepository repo;
+  late AccountRepository accounts;
+  late TransactionRepository transactions;
   late LocalBalanceService service;
 
   setUpAll(() async {
@@ -31,8 +42,10 @@ void main() {
   setUp(() async {
     tempDir = await Directory.systemTemp.createTemp('budgetview_balance_');
     isar = await openAppIsar(directory: tempDir.path);
-    repo = AccountRepository(isar, LocalSyncAdapter(isar));
-    service = LocalBalanceService(isar);
+    final sync = LocalSyncAdapter(isar);
+    accounts = AccountRepository(isar, sync);
+    transactions = TransactionRepository(isar, sync);
+    service = LocalBalanceService(isar, transactions);
   });
 
   tearDown(() async {
@@ -42,8 +55,10 @@ void main() {
     }
   });
 
-  test('watch emits opening balance as total (transactionSum 0)', () async {
-    final acc = await repo.save(_account(name: 'Giro', openingBalanceCents: 5000));
+  test('watch returns opening balance when there are no transactions',
+      () async {
+    final acc =
+        await accounts.save(_account(name: 'Giro', openingBalanceCents: 5000));
 
     final balance = await service.watch(acc.uuid).first;
     expect(balance.openingBalanceCents, 5000);
@@ -51,16 +66,45 @@ void main() {
     expect(balance.totalCents, 5000);
   });
 
-  test('watchTotalCents sums non-archived, excludes archived by default',
+  test('watch adds the transaction sum, ignoring deleted ones', () async {
+    final acc =
+        await accounts.save(_account(name: 'Giro', openingBalanceCents: 10000));
+    await transactions.save(_tx(accountUuid: acc.uuid, amountCents: -2500));
+    await transactions.save(_tx(accountUuid: acc.uuid, amountCents: 500));
+    final gone =
+        await transactions.save(_tx(accountUuid: acc.uuid, amountCents: -9999));
+    await transactions.softDelete(gone.uuid);
+
+    final balance = await service.watch(acc.uuid).first;
+    expect(balance.transactionSumCents, -2000);
+    expect(balance.totalCents, 8000);
+  });
+
+  test('transactions of other accounts do not leak into the balance', () async {
+    final a =
+        await accounts.save(_account(name: 'A', openingBalanceCents: 1000));
+    final b =
+        await accounts.save(_account(name: 'B', openingBalanceCents: 1000));
+    await transactions.save(_tx(accountUuid: b.uuid, amountCents: -700));
+
+    expect((await service.watch(a.uuid).first).totalCents, 1000);
+    expect((await service.watch(b.uuid).first).totalCents, 300);
+  });
+
+  test('watchTotalCents sums opening + transactions, excludes archived',
       () async {
-    await repo.save(_account(name: 'A', openingBalanceCents: 1000));
-    final b = await repo.save(_account(name: 'B', openingBalanceCents: 2500));
+    final a =
+        await accounts.save(_account(name: 'A', openingBalanceCents: 1000));
+    final b =
+        await accounts.save(_account(name: 'B', openingBalanceCents: 2500));
+    await transactions.save(_tx(accountUuid: a.uuid, amountCents: -300));
+    await transactions.save(_tx(accountUuid: b.uuid, amountCents: 200));
 
-    expect(await service.watchTotalCents().first, 3500);
+    expect(await service.watchTotalCents().first, 3400);
 
-    await repo.softDelete(b.uuid);
-    expect(await service.watchTotalCents().first, 1000);
-    expect(await service.watchTotalCents(includeArchived: true).first, 3500);
+    await accounts.softDelete(b.uuid);
+    expect(await service.watchTotalCents().first, 700);
+    expect(await service.watchTotalCents(includeArchived: true).first, 3400);
   });
 
   test('watch of unknown account yields zero', () async {

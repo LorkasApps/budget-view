@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/persistence/isar_provider.dart';
 import '../../../core/sync/sync_provider.dart';
+import '../../transaction/domain/transaction_providers.dart';
 import '../data/account.dart';
 import '../data/local_balance_service.dart';
 import 'account_balance.dart';
@@ -16,7 +17,10 @@ final accountRepositoryProvider = Provider<AccountRepository>((ref) {
 });
 
 final balanceServiceProvider = Provider<BalanceService>((ref) {
-  return LocalBalanceService(ref.watch(isarProvider));
+  return LocalBalanceService(
+    ref.watch(isarProvider),
+    ref.watch(transactionRepositoryProvider),
+  );
 });
 
 /// Reactive balance for a single account.

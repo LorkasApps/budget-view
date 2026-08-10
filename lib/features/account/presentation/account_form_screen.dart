@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/format/date_format.dart';
 import '../../../core/money/money.dart';
 import '../data/account.dart';
 import '../data/account_type.dart';
@@ -122,9 +123,7 @@ class _AccountFormScreenState extends ConsumerState<AccountFormScreen> {
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Startdatum'),
-              subtitle: Text(
-                '${_openingDate.year}-${_openingDate.month.toString().padLeft(2, '0')}-${_openingDate.day.toString().padLeft(2, '0')}',
-              ),
+              subtitle: Text(formatDateDe(_openingDate)),
               trailing: const Icon(Icons.calendar_today),
               onTap: _pickDate,
             ),
