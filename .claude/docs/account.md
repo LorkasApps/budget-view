@@ -29,9 +29,17 @@ Currency: EUR only, not stored (decisions.md). Money = integer cents.
 
 Follows the docs/sync.md contract: `ensureUuid()` → Isar write → `syncAdapter.enqueue`.
 
+## Balance (ticket 005)
+- `AccountBalance` (`domain/account_balance.dart`): `{accountUuid, openingBalanceCents, transactionSumCents}`, `totalCents = opening + transactionSum`. `transactionSumCents` is 0 until ticket 006.
+- `BalanceService` (`domain/balance_service.dart`): `watch(uuid) → Stream<AccountBalance>`, `watchTotalCents({includeArchived}) → Stream<int>`.
+- `LocalBalanceService` (`data/local_balance_service.dart`): opening-only; streams re-emit on `accounts.watchLazy()`. `TODO(ticket-006)` marks where transaction sum plugs in.
+
 ## Providers (`domain/account_providers.dart`)
 - `accountRepositoryProvider` → `AccountRepository(isar, syncAdapter)`
 - `accountsProvider` (`StreamProvider.family<List<Account>, bool>`) — reactive list; param = includeArchived. Emits initial snapshot then re-queries on `isar.accounts.watchLazy()`.
+- `balanceServiceProvider` → `LocalBalanceService(isar)`
+- `accountBalanceProvider` (`StreamProvider.family<AccountBalance, String>`) — per-account balance
+- `totalBalanceProvider` (`StreamProvider.family<int, bool>`) — total across accounts
 
 ## Validation (`domain/account_validation.dart`)
 Pure static validators: `name`, `openingBalance` (parseable cents), `openingDate` (not future). Unit-tested independently of the widget.
@@ -40,8 +48,12 @@ Pure static validators: `name`, `openingBalance` (parseable cents), `openingDate
 - `AccountListScreen` — reactive list, archived toggle, swipe→archive (confirm dialog), long-press archived→restore, FAB→create. App home.
 - `AccountFormScreen` — create/edit; name, type dropdown, EUR balance input, date picker.
 
+## UI additions (ticket 005)
+- `_TotalHeader` — sum row atop the account list (reads `totalBalanceProvider`)
+- `_BalanceLabel` — per-row balance (reads `accountBalanceProvider`); negative → theme `error` color
+
 ## Money helpers (`lib/core/money/money.dart`)
-`parseEurosToCents` (comma/dot/negative), `formatCentsPlain` (no symbol). Ticket 005 adds `intl` currency formatting on top.
+`parseEurosToCents` (comma/dot/negative), `formatCentsPlain` (no symbol, form input), `formatCentsEur` (intl `NumberFormat.currency`, `de_DE`/`€`, used for display).
 
 ## Not in scope here
-- Computed balance incl. transactions (ticket 005 extends `LocalBalanceService`)
+- Transaction sum in balance — ticket 006 fills `AccountBalance.transactionSumCents` via `LocalBalanceService`

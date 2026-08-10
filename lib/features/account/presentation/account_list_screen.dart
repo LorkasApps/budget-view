@@ -47,13 +47,21 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
           if (accounts.isEmpty) {
             return const Center(child: Text('Noch keine Konten. Lege eins an.'));
           }
-          return ListView.separated(
-            itemCount: accounts.length,
-            separatorBuilder: (_, _) => const Divider(height: 1),
-            itemBuilder: (_, i) => _AccountTile(
-              account: accounts[i],
-              onEdit: () => _openForm(existing: accounts[i]),
-            ),
+          return Column(
+            children: [
+              _TotalHeader(includeArchived: _showArchived),
+              const Divider(height: 1),
+              Expanded(
+                child: ListView.separated(
+                  itemCount: accounts.length,
+                  separatorBuilder: (_, _) => const Divider(height: 1),
+                  itemBuilder: (_, i) => _AccountTile(
+                    account: accounts[i],
+                    onEdit: () => _openForm(existing: accounts[i]),
+                  ),
+                ),
+              ),
+            ],
           );
         },
       ),
@@ -115,14 +123,73 @@ class _AccountTile extends ConsumerWidget {
       child: ListTile(
         title: Text(account.name),
         subtitle: Text(subtitle),
-        trailing: Text(
-          '${formatCentsPlain(account.openingBalanceCents)} €',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
+        trailing: _BalanceLabel(accountUuid: account.uuid),
         onTap: onEdit,
         onLongPress: account.archived
             ? () => repo.restore(account.uuid)
             : null,
+      ),
+    );
+  }
+}
+
+class _BalanceLabel extends ConsumerWidget {
+  const _BalanceLabel({required this.accountUuid});
+
+  final String accountUuid;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final balanceAsync = ref.watch(accountBalanceProvider(accountUuid));
+    final theme = Theme.of(context);
+    return balanceAsync.when(
+      loading: () => const SizedBox(
+        width: 18,
+        height: 18,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      ),
+      error: (_, _) => const Icon(Icons.error_outline, size: 18),
+      data: (b) => Text(
+        formatCentsEur(b.totalCents),
+        style: theme.textTheme.titleMedium?.copyWith(
+          color: b.totalCents < 0 ? theme.colorScheme.error : null,
+        ),
+      ),
+    );
+  }
+}
+
+class _TotalHeader extends ConsumerWidget {
+  const _TotalHeader({required this.includeArchived});
+
+  final bool includeArchived;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final totalAsync = ref.watch(totalBalanceProvider(includeArchived));
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text('Gesamt', style: theme.textTheme.titleMedium),
+          totalAsync.when(
+            loading: () => const SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            error: (_, _) => const Icon(Icons.error_outline, size: 18),
+            data: (cents) => Text(
+              formatCentsEur(cents),
+              style: theme.textTheme.titleLarge?.copyWith(
+                color: cents < 0 ? theme.colorScheme.error : null,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
