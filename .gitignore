@@ -33,6 +33,14 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# Generated code (run `make gen`)
+*.g.dart
+
+# Isar core binary downloaded by tests (initializeIsarCore(download: true))
+libisar.dylib
+libisar.so
+isar.dll
+
 # Symbolication related
 app.*.symbols
 

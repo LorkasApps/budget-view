@@ -15,8 +15,8 @@
 | 2026-08-10 | Feature-first folder layout | Fits domain-driven ticket structure |
 | 2026-08-10 | flutter_lints (default) as linter | Sanft, ausreichend, kann später verschärft werden |
 | 2026-08-10 | Package = `de.lorkaps_apps.budget_view`, App name = `BudgetView` | User choice |
-| 2026-08-10 | Isar-DB verschlüsselt (Bankdaten) | Data-at-rest protection, key in Android Keystore |
-| 2026-08-10 | `isar_community` 4.x statt originalem `isar` | Original-Repo unmaintained, Community-Fork aktiv |
+| 2026-08-10 | KEINE DB-Encryption; Verlass auf Android FBE + App-Sandbox | Isar bietet keine eingebaute Encryption; Field-Encryption würde Queries/Sortierung brechen (Kern der App). Threat-Model für lokale Single-User-App durch OS + App-scoped storage abgedeckt. App-Lock (Biometrie/PIN) optional als späteres Ticket |
+| 2026-08-10 | `isar_community` 3.3.2 (nicht 4.x — existiert nicht) | Original-Repo unmaintained, Community-Fork aktiv; neueste stable ist 3.3.2 |
 | 2026-08-10 | Dev: nuke+rebuild bei Schema-Änderung. Prod: manuelle Migration ab v1.0 | Frühphase-Overhead klein, sauber ab Release |
 | 2026-08-10 | Sync-Stub = Interface + lokale Change-Queue (Op-Log) | Validiert Design ohne Cloud-Anbindung |
 | 2026-08-10 | Change-Queue-Eintrag: {op, entity_type, entity_id, payload_json, ts} | Fein-granular, standard local-first |

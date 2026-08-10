@@ -1,8 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-void main() {
-  runApp(const ProviderScope(child: BudgetViewApp()));
+import 'core/persistence/isar_db.dart';
+import 'core/persistence/isar_provider.dart';
+
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  final isar = await openAppIsar();
+  runApp(
+    ProviderScope(
+      overrides: [isarProvider.overrideWithValue(isar)],
+      child: const BudgetViewApp(),
+    ),
+  );
 }
 
 class BudgetViewApp extends StatelessWidget {
