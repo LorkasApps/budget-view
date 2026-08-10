@@ -5,7 +5,7 @@
 | 001-flutter-project-init.md | Feature | Setup | Infra | Done | None | Bootstrap Flutter project structure |
 | 002-isar-setup-base-schema.md | Feature | Setup | Infra | Done | 001 | Isar 3.3.2 + base schema + DB init (no encryption) |
 | 003-supabase-sync-adapter-stub.md | Feature | Setup | Infra | Done | 002 | Supabase sync adapter interface (stub only) |
-| 004-account-entity-crud.md | Feature | Accounts | Account | Ready | 002, 003 | Multi-account entity + CRUD |
+| 004-account-entity-crud.md | Feature | Accounts | Account | Done | 002, 003 | Multi-account entity + CRUD |
 | 005-account-balance-display.md | Feature | Accounts | Account | Ready | 004 | Per-account balance display |
 | 006-manual-transaction-entry.md | Feature | Import | Transaction | Ready | 004, 005 | Manual transaction entry form |
 | 007-pdf-parser-plugin-interface.md | Feature | Import | Transaction | Ready | 006 | Abstract PDF parser plug-in contract |
