@@ -29,3 +29,30 @@ Compacts `make check` output (`flutter analyze` + `flutter test`) down to failur
     12 passed, 1 failed, 0 skipped
 
 **Exit codes:** `0` analyze clean and all tests passed, `1` any analyze issue or test failure, `2` input was empty or could not be parsed.
+
+## `ticket_status_count.py`
+
+Ticket progress from `.claude/tickets/README.md` — counts per epic/domain/type, or lists the tickets behind one status.
+
+**Usage:** `./.claude/helper/ticket_status_count.py [--by {epic,domain,type}] [--status STATUS] [--file PATH]`
+
+**Args:**
+- `--by` (optional, default `epic`) — grouping for the count matrix
+- `--status` (optional) — list matching tickets instead of counting: `Draft`, `Ready`, `In Progress`, `Done`. `Draft (post-V1)` is normalised to `Draft`
+- `--file` (optional, default `.claude/tickets/README.md`) — alternative table path
+
+**Output:** matrix mode is tab-separated `<group>\ttotal\t<one column per status present>` with a trailing `TOTAL` row. List mode is tab-separated `<id>\t<epic>\t<domain>\t<blocked by>\t<summary>`, ascending by id.
+
+**Example:**
+
+    $ ./.claude/helper/ticket_status_count.py
+    epic    total   Draft   Ready   Done
+    Accounts        2       0       0       2
+    Import  4       0       1       3
+    Setup   3       0       0       3
+    TOTAL   23      1       14      8
+
+    $ ./.claude/helper/ticket_status_count.py --status Ready
+    009     Import  Transaction     006, 008        Duplicate detection (tx-level + doc-level SHA-256)
+
+**Exit codes:** `0` OK, `1` tickets README not found, `2` table malformed or no ticket rows, `3` no ticket matched `--status`.
