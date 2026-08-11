@@ -1,19 +1,15 @@
-import 'dart:typed_data';
-
 import 'package:file_selector/file_selector.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/format/date_format.dart';
 import '../../../../core/money/money.dart';
-import '../../data/transaction.dart';
-import '../candidate_conversion.dart';
-import '../pdf/pdf_parser.dart';
-import '../pdf/pdf_parser_providers.dart';
-import '../pdf/pdf_parser_registry.dart';
+import '../../../account/data/account.dart';
+import '../../../account/domain/account_providers.dart';
+import '../domain/import_flow_controller.dart';
 
-/// Import flow: pick a statement PDF, let the registry rank the parsers,
-/// confirm one, read it out. Persisting the result is not wired up yet.
+/// Import flow: pick a statement PDF, confirm the detected parser, curate the
+/// parsed rows, then persist them onto an account.
 class PdfImportScreen extends ConsumerStatefulWidget {
   const PdfImportScreen({super.key, required this.accountUuid});
 
@@ -24,14 +20,14 @@ class PdfImportScreen extends ConsumerStatefulWidget {
 }
 
 class _PdfImportScreenState extends ConsumerState<PdfImportScreen> {
-  Uint8List? _bytes;
-  String? _fileName;
-  List<PdfParserRanking> _ranking = const [];
-  PdfParser? _selected;
-  List<Transaction> _converted = const [];
-  List<String> _warnings = const [];
-  bool _busy = false;
-  String? _error;
+  String? _targetAccountUuid;
+  String _pickError = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _targetAccountUuid = widget.accountUuid;
+  }
 
   Future<void> _pickFile() async {
     const pdfGroup = XTypeGroup(
@@ -39,153 +35,406 @@ class _PdfImportScreenState extends ConsumerState<PdfImportScreen> {
       extensions: ['pdf'],
       mimeTypes: ['application/pdf'],
     );
+
     final file = await openFile(acceptedTypeGroups: const [pdfGroup]);
     if (file == null) return;
 
-    setState(() {
-      _busy = true;
-      _error = null;
-      _converted = const [];
-      _warnings = const [];
-    });
+    setState(() => _pickError = '');
     try {
       final bytes = await file.readAsBytes();
-      final ranking = await ref.read(pdfParserRegistryProvider).rank(bytes);
       if (!mounted) return;
-      setState(() {
-        _bytes = bytes;
-        _fileName = file.name;
-        _ranking = ranking;
-        _selected = ranking.isEmpty ? null : ranking.first.parser;
-      });
+      await ref
+          .read(importFlowProvider.notifier)
+          .loadDocument(bytes, fileName: file.name);
     } catch (e) {
       if (mounted) {
-        setState(() => _error = 'Datei konnte nicht gelesen werden: $e');
+        setState(() => _pickError = 'Datei konnte nicht gelesen werden: $e');
       }
-    } finally {
-      if (mounted) setState(() => _busy = false);
     }
   }
 
-  Future<void> _runParse() async {
-    final parser = _selected;
-    final bytes = _bytes;
-    if (parser == null || bytes == null) return;
+  Future<void> _editRow(int index, ImportRow row) async {
+    final edited = await showDialog<ImportRow>(
+      context: context,
+      builder: (_) => _RowEditDialog(row: row),
+    );
+    if (edited == null) return;
 
-    setState(() {
-      _busy = true;
-      _error = null;
-    });
-    try {
-      final result = await parser.parse(bytes);
-      if (!mounted) return;
-      setState(() {
-        _converted = result.transactions
-            .map(
-              (c) => candidateToTransaction(c, accountUuid: widget.accountUuid),
-            )
-            .toList();
-        _warnings = result.warnings;
-      });
-    } catch (e) {
-      if (mounted) setState(() => _error = 'Parsen fehlgeschlagen: $e');
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
+    ref.read(importFlowProvider.notifier).editRow(
+          index,
+          bookingDate: edited.bookingDate,
+          amountCents: edited.amountCents,
+          description: edited.description,
+          counterparty: edited.counterparty,
+        );
   }
+
+  Future<void> _persist() async {
+    final accountUuid = _targetAccountUuid;
+    if (accountUuid == null) return;
+    await ref.read(importFlowProvider.notifier).persist(
+          accountUuid: accountUuid,
+        );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(importFlowProvider);
+    final theme = Theme.of(context);
+    final summary = state.summary;
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('PDF importieren')),
+      body: summary != null
+          ? _ImportSummary(summary: summary)
+          : ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                FilledButton.icon(
+                  onPressed: state.busy ? null : _pickFile,
+                  icon: const Icon(Icons.attach_file),
+                  label: const Text('PDF auswählen'),
+                ),
+                if (state.fileName != null) ...[
+                  const SizedBox(height: 12),
+                  Text(state.fileName!, style: theme.textTheme.bodyMedium),
+                ],
+                if (state.busy) ...[
+                  const SizedBox(height: 16),
+                  const LinearProgressIndicator(),
+                ],
+                for (final message in [_pickError, state.error])
+                  if (message.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    Text(
+                      message,
+                      style: TextStyle(color: theme.colorScheme.error),
+                    ),
+                  ],
+                if (!state.busy &&
+                    state.hasDocument &&
+                    state.ranking.isEmpty) ...[
+                  const SizedBox(height: 16),
+                  const Text('Kein Parser erkennt diese Datei.'),
+                ],
+                if (state.ranking.isNotEmpty && state.rows.isEmpty) ...[
+                  const SizedBox(height: 24),
+                  Text('Parser', style: theme.textTheme.titleMedium),
+                  for (final match in state.ranking)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(
+                        match.parser.id == state.selectedParserId
+                            ? Icons.radio_button_checked
+                            : Icons.radio_button_off,
+                      ),
+                      title: Text(match.parser.displayName),
+                      subtitle: Text(
+                        '${(match.confidence * 100).round()} % Konfidenz',
+                      ),
+                      onTap: state.busy
+                          ? null
+                          : () => ref
+                              .read(importFlowProvider.notifier)
+                              .selectParser(match.parser.id),
+                    ),
+                  const SizedBox(height: 8),
+                  FilledButton(
+                    onPressed: state.busy || state.selectedParserId == null
+                        ? null
+                        : () =>
+                            ref.read(importFlowProvider.notifier).parseDocument(),
+                    child: const Text('Auslesen'),
+                  ),
+                ],
+                if (state.rows.isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  Text(
+                    '${state.includedCount} von ${state.rows.length} Buchungen ausgewählt',
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  for (var index = 0; index < state.rows.length; index++)
+                    _RowTile(
+                      row: state.rows[index],
+                      enabled: !state.busy,
+                      onToggle: () => ref
+                          .read(importFlowProvider.notifier)
+                          .toggleRow(index),
+                      onEdit: () => _editRow(index, state.rows[index]),
+                    ),
+                ],
+                if (state.warnings.isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  Text('Hinweise', style: theme.textTheme.titleMedium),
+                  for (final warning in state.warnings)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: Text(
+                        '• $warning',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ),
+                ],
+                if (state.rows.isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  _AccountPicker(
+                    selected: _targetAccountUuid,
+                    enabled: !state.busy,
+                    onChanged: (uuid) =>
+                        setState(() => _targetAccountUuid = uuid),
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: state.busy ||
+                            state.includedCount == 0 ||
+                            _targetAccountUuid == null
+                        ? null
+                        : _persist,
+                    child: Text('${state.includedCount} Buchungen importieren'),
+                  ),
+                ],
+              ],
+            ),
+    );
+  }
+}
+
+class _RowTile extends StatelessWidget {
+  const _RowTile({
+    required this.row,
+    required this.enabled,
+    required this.onToggle,
+    required this.onEdit,
+  });
+
+  final ImportRow row;
+  final bool enabled;
+  final VoidCallback onToggle;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isExpense = row.amountCents < 0;
+
+    return CheckboxListTile(
+      value: row.included,
+      onChanged: enabled ? (_) => onToggle() : null,
+      controlAffinity: ListTileControlAffinity.leading,
+      contentPadding: EdgeInsets.zero,
+      title: Text(
+        row.description,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: Text(
+        '${formatDateCompactDe(row.bookingDate)}'
+        '${row.counterparty.isEmpty ? '' : ' · ${row.counterparty}'}',
+        style: theme.textTheme.bodySmall,
+      ),
+      secondary: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            formatCentsEur(row.amountCents),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: isExpense ? theme.colorScheme.error : Colors.green.shade700,
+            ),
+          ),
+          IconButton(
+            tooltip: 'Zeile bearbeiten',
+            icon: const Icon(Icons.edit_outlined),
+            onPressed: enabled ? onEdit : null,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccountPicker extends ConsumerWidget {
+  const _AccountPicker({
+    required this.selected,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final String? selected;
+  final bool enabled;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final accountsAsync = ref.watch(accountsProvider(false));
+
+    return accountsAsync.when(
+      loading: () => const LinearProgressIndicator(),
+      error: (e, _) => Text('Konten nicht verfügbar: $e'),
+      data: (accounts) => DropdownButtonFormField<String>(
+        initialValue: selected,
+        decoration: const InputDecoration(labelText: 'Zielkonto'),
+        items: [
+          for (final Account account in accounts)
+            DropdownMenuItem(value: account.uuid, child: Text(account.name)),
+        ],
+        onChanged: enabled ? onChanged : null,
+      ),
+    );
+  }
+}
+
+class _ImportSummary extends StatelessWidget {
+  const _ImportSummary({required this.summary});
+
+  final ImportSummary summary;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('PDF importieren')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          FilledButton.icon(
-            onPressed: _busy ? null : _pickFile,
-            icon: const Icon(Icons.attach_file),
-            label: const Text('PDF auswählen'),
+          Text('Import abgeschlossen', style: theme.textTheme.titleLarge),
+          const SizedBox(height: 16),
+          Text('${summary.imported} importiert'),
+          Text('${summary.skipped} übersprungen'),
+          Text('${summary.warnings} Hinweise'),
+          const SizedBox(height: 24),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Fertig'),
           ),
-          if (_fileName != null) ...[
-            const SizedBox(height: 12),
-            Text(_fileName!, style: theme.textTheme.bodyMedium),
-          ],
-          if (_busy) ...[
-            const SizedBox(height: 16),
-            const LinearProgressIndicator(),
-          ],
-          if (_error != null) ...[
-            const SizedBox(height: 16),
-            Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
-          ],
-          if (!_busy && _fileName != null && _ranking.isEmpty) ...[
-            const SizedBox(height: 16),
-            const Text(
-              'Kein Parser kann diese Datei lesen — es ist noch keiner '
-              'registriert.',
-            ),
-          ],
-          if (_ranking.isNotEmpty) ...[
-            const SizedBox(height: 24),
-            Text('Parser', style: theme.textTheme.titleMedium),
-            for (final match in _ranking)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(
-                  match.parser.id == _selected?.id
-                      ? Icons.radio_button_checked
-                      : Icons.radio_button_off,
-                ),
-                title: Text(match.parser.displayName),
-                subtitle: Text(
-                  '${(match.confidence * 100).round()} % Konfidenz',
-                ),
-                onTap: _busy
-                    ? null
-                    : () => setState(() => _selected = match.parser),
-              ),
-            const SizedBox(height: 8),
-            FilledButton(
-              onPressed: _busy || _selected == null ? null : _runParse,
-              child: const Text('Auslesen'),
-            ),
-          ],
-          if (_warnings.isNotEmpty) ...[
-            const SizedBox(height: 24),
-            Text('Hinweise', style: theme.textTheme.titleMedium),
-            for (final warning in _warnings)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 2),
-                child: Text('• $warning', style: theme.textTheme.bodySmall),
-              ),
-          ],
-          if (_converted.isNotEmpty) ...[
-            const SizedBox(height: 24),
-            Text(
-              '${_converted.length} Buchungen erkannt',
-              style: theme.textTheme.titleMedium,
-            ),
-            Text(
-              'Speichern ist noch nicht angebunden.',
-              style: theme.textTheme.bodySmall,
-            ),
-            const SizedBox(height: 8),
-            for (final transaction in _converted)
-              ListTile(
-                dense: true,
-                contentPadding: EdgeInsets.zero,
-                leading: Text(
-                  formatDateCompactDe(transaction.bookingDate),
-                  style: theme.textTheme.bodySmall,
-                ),
-                title: Text(transaction.description),
-                trailing: Text(formatCentsEur(transaction.amountCents)),
-              ),
-          ],
         ],
       ),
+    );
+  }
+}
+
+class _RowEditDialog extends StatefulWidget {
+  const _RowEditDialog({required this.row});
+
+  final ImportRow row;
+
+  @override
+  State<_RowEditDialog> createState() => _RowEditDialogState();
+}
+
+class _RowEditDialogState extends State<_RowEditDialog> {
+  late final TextEditingController _amount;
+  late final TextEditingController _description;
+  late final TextEditingController _counterparty;
+  late DateTime _bookingDate;
+  late bool _isExpense;
+
+  @override
+  void initState() {
+    super.initState();
+    final row = widget.row;
+    _bookingDate = row.bookingDate;
+    _isExpense = row.amountCents < 0;
+    _amount = TextEditingController(
+      text: (row.amountCents.abs() / 100).toStringAsFixed(2).replaceAll(
+            '.',
+            ',',
+          ),
+    );
+    _description = TextEditingController(text: row.description);
+    _counterparty = TextEditingController(text: row.counterparty);
+  }
+
+  @override
+  void dispose() {
+    _amount.dispose();
+    _description.dispose();
+    _counterparty.dispose();
+    super.dispose();
+  }
+
+  int? _parsedCents() {
+    final magnitude = double.tryParse(_amount.text.trim().replaceAll(',', '.'));
+    if (magnitude == null || magnitude == 0) return null;
+    final cents = (magnitude.abs() * 100).round();
+    return _isExpense ? -cents : cents;
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _bookingDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) setState(() => _bookingDate = picked);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Buchung bearbeiten'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(value: true, label: Text('Ausgabe')),
+                ButtonSegment(value: false, label: Text('Einnahme')),
+              ],
+              selected: {_isExpense},
+              onSelectionChanged: (selection) =>
+                  setState(() => _isExpense = selection.first),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _amount,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: const InputDecoration(labelText: 'Betrag (EUR)'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _description,
+              decoration: const InputDecoration(labelText: 'Verwendungszweck'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _counterparty,
+              decoration: const InputDecoration(labelText: 'Gegenpartei'),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _pickDate,
+              icon: const Icon(Icons.calendar_today_outlined),
+              label: Text(formatDateCompactDe(_bookingDate)),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Abbrechen'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final cents = _parsedCents();
+            final description = _description.text.trim();
+            if (cents == null || description.isEmpty) return;
+            Navigator.of(context).pop(
+              widget.row.copyWith(
+                bookingDate: _bookingDate,
+                amountCents: cents,
+                description: description,
+                counterparty: _counterparty.text.trim(),
+              ),
+            );
+          },
+          child: const Text('Übernehmen'),
+        ),
+      ],
     );
   }
 }

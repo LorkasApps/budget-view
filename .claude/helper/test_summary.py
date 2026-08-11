@@ -9,6 +9,7 @@ passing-test noise that must never be dumped into an LLM context.
 """
 
 import argparse
+import collections
 import re
 import sys
 
@@ -51,6 +52,28 @@ def parse_dart(lines, context, include_info):
 
     current = None  # failure currently being collected, or None
 
+    # Flutter prints its exception dump BEFORE the failing progress line, so the
+    # detail is already gone by the time the failure is recognised. Keep a
+    # rolling window and mine it for the last exception block.
+    recent = collections.deque(maxlen=60)
+
+    def preceding_detail():
+        lines_before = list(recent)
+        start = 0
+        for index, text in enumerate(lines_before):
+            if 'EXCEPTION CAUGHT' in text:
+                start = index + 1
+
+        detail = []
+        for text in lines_before[start:]:
+            # The stack that follows adds nothing the --context lines don't.
+            if text.startswith('When the exception was thrown'):
+                break
+            if set(text) <= {'═', '╡', '╞', '─', '━', '='}:
+                continue
+            detail.append(text)
+        return detail[:context + 2]
+
     def flush():
         if current is not None:
             failures.append(current)
@@ -75,7 +98,13 @@ def parse_dart(lines, context, include_info):
             message = message.strip()
             if message.endswith('[E]'):
                 name = message[:-len('[E]')].strip()
-                current = {'name': name, 'message': None, 'stack': []}
+                current = {
+                    'name': name,
+                    'detail': preceding_detail(),
+                    'message': None,
+                    'stack': [],
+                }
+            recent.clear()
             continue
 
         analyze_match = ANALYZE_RE.match(line)
@@ -95,8 +124,11 @@ def parse_dart(lines, context, include_info):
             analyze_issues = 0
             continue
 
+        text = line.strip()
+        if text:
+            recent.append(text)
+
         if current is not None:
-            text = line.strip()
             if not text:
                 continue
             if current['message'] is None:
@@ -138,6 +170,7 @@ def build_output(analyze_findings, failures, counts, analyze_issues=None):
 
     for failure in failures:
         block_lines = [failure['name']]
+        block_lines.extend(failure.get('detail') or [])
         if failure['message']:
             block_lines.append(failure['message'])
         block_lines.extend(failure['stack'])
