@@ -29,18 +29,25 @@ PROGRESS_RE = re.compile(
 #      info • Unused import • lib/foo.dart:3:8 • unused_import
 ANALYZE_RE = re.compile(r'^\s*(info|warning|error)\s*•\s*(.*)$')
 
+# flutter analyze tail, e.g. "1 issue found. (ran in 2.4s)" / "No issues found!"
+ISSUE_COUNT_RE = re.compile(r'^\s*(\d+)\s+issues?\s+found\.')
+NO_ISSUES_RE = re.compile(r'^\s*No issues found!')
+
 
 def parse_dart(lines, context, include_info):
     """Parse combined flutter analyze + flutter test output.
 
-    Returns (analyze_findings, failures, counts) where:
+    Returns (analyze_findings, failures, counts, analyze_issues) where:
       - analyze_findings: list[str] of formatted "severity • ..." lines
       - failures: list of dict(name=str, message=str, stack=list[str])
       - counts: dict(passed, skipped, failed) or None if never seen
+      - analyze_issues: int issue count reported by flutter analyze, or None
+        if analyze did not report a tally
     """
     analyze_findings = []
     failures = []
     counts = None
+    analyze_issues = None
 
     current = None  # failure currently being collected, or None
 
@@ -79,6 +86,15 @@ def parse_dart(lines, context, include_info):
             analyze_findings.append(f'{severity} • {analyze_match.group(2)}')
             continue
 
+        issue_count_match = ISSUE_COUNT_RE.match(line)
+        if issue_count_match:
+            analyze_issues = int(issue_count_match.group(1))
+            continue
+
+        if NO_ISSUES_RE.match(line):
+            analyze_issues = 0
+            continue
+
         if current is not None:
             text = line.strip()
             if not text:
@@ -89,7 +105,7 @@ def parse_dart(lines, context, include_info):
                 current['stack'].append(text)
 
     flush()
-    return analyze_findings, failures, counts
+    return analyze_findings, failures, counts, analyze_issues
 
 
 FORMAT_PARSERS = {
@@ -104,12 +120,21 @@ def resolve_format(fmt):
     return fmt
 
 
-def build_output(analyze_findings, failures, counts):
+def build_output(analyze_findings, failures, counts, analyze_issues=None):
     """Render the final compact report text (without trailing newline)."""
     sections = []
 
     if analyze_findings:
-        sections.append('ANALYZE\n' + '\n'.join(analyze_findings))
+        heading = 'ANALYZE'
+        if analyze_issues is not None:
+            heading += f' ({analyze_issues} issue(s) reported)'
+        sections.append(heading + '\n' + '\n'.join(analyze_findings))
+    elif analyze_issues:
+        # analyze failed but no finding line was captured — never stay silent
+        sections.append(
+            f'ANALYZE reported {analyze_issues} issue(s) but none were '
+            'captured; rerun `flutter analyze` raw'
+        )
 
     for failure in failures:
         block_lines = [failure['name']]
@@ -156,8 +181,12 @@ def main(argv=None):
         ),
     )
     parser.add_argument(
-        '--include-info', action='store_true',
-        help='also report flutter analyze "info" level findings (default: only error/warning)',
+        '--skip-info', action='store_true',
+        help=(
+            'drop flutter analyze "info" findings. Off by default because '
+            '`flutter analyze` exits non-zero on info, so hiding them hides '
+            'the reason `make check` failed.'
+        ),
     )
     args = parser.parse_args(argv)
 
@@ -174,15 +203,22 @@ def main(argv=None):
         print(f'test_summary: unknown format: {fmt}', file=sys.stderr)
         return 2
 
-    analyze_findings, failures, counts = parse_fn(lines, args.context, args.include_info)
+    analyze_findings, failures, counts, analyze_issues = parse_fn(
+        lines, args.context, not args.skip_info
+    )
 
-    if not analyze_findings and not failures and counts is None:
+    if (
+        not analyze_findings
+        and not failures
+        and counts is None
+        and analyze_issues is None
+    ):
         print('test_summary: could not parse input', file=sys.stderr)
         return 2
 
-    print(build_output(analyze_findings, failures, counts))
+    print(build_output(analyze_findings, failures, counts, analyze_issues))
 
-    if analyze_findings or (counts and counts['failed'] > 0):
+    if analyze_findings or analyze_issues or (counts and counts['failed'] > 0):
         return 1
     return 0
 
