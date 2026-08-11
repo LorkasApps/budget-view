@@ -35,3 +35,6 @@
 | 2026-08-11 | Parser choice per PDF via confidence ranking (canParse 0.0–1.0), user may override top pick | No bank lock-in; heuristics can be wrong |
 | 2026-08-11 | Parser that throws or times out in canParse is skipped, not fatal | One broken plug-in must not block whole import |
 | 2026-08-11 | `file_selector` (not `file_picker`) as file picker | Official Flutter package; Android-only scope needs only single-file pick; smaller native surface |
+| 2026-08-11 | `syncfusion_flutter_pdf` für PDF-Text-Extraktion | Ticket-Wahl; Lizenz = Syncfusion Community License (nicht OSS), für private Single-User-App akzeptiert |
+| 2026-08-11 | `pdf` (Apache-2.0) nur als dev_dependency für Fixture-Generierung | Synthetische ING-PDFs im Repo statt echter Kontoauszüge — keine Realdaten in git |
+| 2026-08-11 | Dedupe bleibt komplett in Ticket 009, 008 importiert nur | 008-ACs verlangten 009-Artefakte, während 009 auf 008 blockte — Zyklus aufgelöst durch Schnitt "008 imports, 009 warns" |

@@ -9,7 +9,7 @@
 | 005-account-balance-display.md | Feature | Accounts | Account | Done | 004 | Per-account balance display |
 | 006-manual-transaction-entry.md | Feature | Import | Transaction | Done | 004, 005 | Manual transaction entry form |
 | 007-pdf-parser-plugin-interface.md | Feature | Import | Transaction | Done | 006 | Abstract PDF parser plug-in contract |
-| 008-first-concrete-pdf-parser.md | Feature | Import | Transaction | Ready | 007 | First concrete PDF parser (ING Giro, ephemeral) |
+| 008-first-concrete-pdf-parser.md | Feature | Import | Transaction | In Progress | 007 | First concrete PDF parser (ING Giro, ephemeral) |
 | 009-duplicate-detection-hash.md | Feature | Import | Transaction | Ready | 006, 008 | Duplicate detection (tx-level + doc-level SHA-256) |
 | 010-category-tree-entity-crud.md | Feature | Categories | Category | Ready | 002, 003 | Category tree entity + CRUD |
 | 011-category-assignment.md | Feature | Categories | Category | Ready | 010, 006 | Assign one category per transaction |

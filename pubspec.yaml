@@ -57,6 +57,9 @@ dependencies:
   # Native file picker for PDF statement import.
   file_selector: ^1.1.0
 
+  # PDF text extraction for statement parsing (Syncfusion Community License).
+  syncfusion_flutter_pdf: ^34.2.3
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -71,6 +74,9 @@ dev_dependencies:
   # Isar code generation.
   isar_community_generator: ^3.3.2
   build_runner: ^2.4.13
+
+  # PDF authoring — test fixture generator only, never shipped.
+  pdf: ^3.13.0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
