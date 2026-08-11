@@ -75,9 +75,6 @@ dev_dependencies:
   isar_community_generator: ^3.3.2
   build_runner: ^2.4.13
 
-  # PDF authoring — test fixture generator only, never shipped.
-  pdf: ^3.13.0
-
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 

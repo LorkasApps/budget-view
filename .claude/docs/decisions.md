@@ -36,5 +36,7 @@
 | 2026-08-11 | Parser that throws or times out in canParse is skipped, not fatal | One broken plug-in must not block whole import |
 | 2026-08-11 | `file_selector` (not `file_picker`) as file picker | Official Flutter package; Android-only scope needs only single-file pick; smaller native surface |
 | 2026-08-11 | `syncfusion_flutter_pdf` für PDF-Text-Extraktion | Ticket-Wahl; Lizenz = Syncfusion Community License (nicht OSS), für private Single-User-App akzeptiert |
-| 2026-08-11 | `pdf` (Apache-2.0) nur als dev_dependency für Fixture-Generierung | Synthetische ING-PDFs im Repo statt echter Kontoauszüge — keine Realdaten in git |
+| 2026-08-11 | Keine Fixture-PDFs; Parser-Verifikation über Saldo-Abstimmung an echten Auszügen (env-gated Harness) | Ein mit dem `pdf`-Paket erzeugtes PDF reproduziert ING's Textlayer-Eigenheiten nicht (gepolsterte Wörter, geschluckte Klammern, gesplittete TextLines) — es würde einen Pfad prüfen, den der echte Extraktor nie nimmt. Layout-Logik hängt stattdessen an synthetischen Wort-Koordinaten. Realdaten bleiben außerhalb von git |
+| 2026-08-11 | ING-Spaltengrenzen aus der Kopfzeile jeder Seite ableiten, nicht hart kodieren | Layout-Änderung der Bank degradiert zu einer Warnung statt zu stillem Fehl-Parsing |
+| 2026-08-11 | Zeilengrammatik ohne Whitelist der Buchungsarten (Datum+Betrag = neue Zeile, nacktes Datum = Valuta) | Die Liste der ING-Buchungsarten ist offen; eine Whitelist würde unbekannte Typen unbemerkt verschlucken |
 | 2026-08-11 | Dedupe bleibt komplett in Ticket 009, 008 importiert nur | 008-ACs verlangten 009-Artefakte, während 009 auf 008 blockte — Zyklus aufgelöst durch Schnitt "008 imports, 009 warns" |
