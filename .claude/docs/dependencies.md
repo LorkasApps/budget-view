@@ -17,6 +17,7 @@ on the transaction feature.
 
 ## Notes
 - Category assignment is on Transaction (1 category per entry, tree-aware).
+- Account's dependency on Category is navigation only: `AccountListScreen`'s app bar opens `CategoryTreeScreen`. No account data or logic touches the category feature.
 - Drilldown line-items override parent Transaction category (fractal rule).
 - Tagging learns from user-assigned Transaction↔Category pairs.
 - Analytics reads across Transaction + Drilldown for reports.

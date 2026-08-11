@@ -3,6 +3,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../features/account/data/account.dart';
+import '../../features/category/data/category.dart';
 import '../../features/transaction/data/transaction.dart';
 import '../sync/change_queue_entry.dart';
 import 'app_meta.dart';
@@ -17,6 +18,7 @@ const List<CollectionSchema<dynamic>> appIsarSchemas = [
   ChangeQueueEntrySchema,
   AccountSchema,
   TransactionSchema,
+  CategorySchema,
 ];
 
 /// Opens the app's Isar instance and reconciles [AppMeta] / schema version.

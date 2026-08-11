@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/money/money.dart';
 import '../data/account.dart';
 import '../data/account_type.dart';
+import '../../category/presentation/category_tree_screen.dart';
 import '../../transaction/presentation/transaction_list_screen.dart';
 import '../domain/account_providers.dart';
 import 'account_form_screen.dart';
@@ -42,6 +43,13 @@ class _AccountListScreenState extends ConsumerState<AccountListScreen> {
       appBar: AppBar(
         title: const Text('Konten'),
         actions: [
+          IconButton(
+            tooltip: 'Kategorien',
+            icon: const Icon(Icons.category_outlined),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const CategoryTreeScreen()),
+            ),
+          ),
           IconButton(
             tooltip: _showArchived ? 'Archivierte ausblenden' : 'Archivierte anzeigen',
             icon: Icon(_showArchived ? Icons.visibility_off : Icons.archive_outlined),

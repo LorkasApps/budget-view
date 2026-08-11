@@ -32,7 +32,15 @@ Add to `Transaction`:
 - [ ] Tapping the category chip on a list row opens quick-pick to (re)assign inline
 - [ ] Category picker is a tree-view (from ticket 010's tree) — user can pick leaf or node
 - [ ] Changing category on save enqueues an `update` op via `syncAdapter`
-- [ ] Deleting a category is still blocked while transactions reference it (already covered by 010 — verify the check hits new field)
+- [ ] Deleting a category is blocked while transactions reference it — **010 could not build this**: it ships `CategoryDeleteBlocked.transactionCount` wired into the user message but hardcoded to 0, because the field did not exist yet. Count non-deleted transactions for the uuid inside `CategoryRepository.delete`; the UI needs no change.
+
+## Decide before starting
+`categoryUuid` is specified as a nullable `String?`. No stored field anywhere in
+this schema is nullable — ticket 010 deliberately used `parentUuid = ''` as its
+root sentinel for that reason. Either follow that convention (`''` =
+uncategorized) or make `Transaction.categoryUuid` the first nullable stored
+field and accept a nullable index. Pick one explicitly; do not let the two
+conventions coexist.
 
 ## Out of Scope
 - Line-item-level category override (ticket 012 — fractal inheritance)
