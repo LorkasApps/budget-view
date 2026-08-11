@@ -54,6 +54,9 @@ dependencies:
   # StreamGroup (merging Isar change streams).
   async: ^2.11.0
 
+  # Native file picker for PDF statement import.
+  file_selector: ^1.1.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

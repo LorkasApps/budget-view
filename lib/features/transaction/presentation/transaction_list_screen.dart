@@ -8,6 +8,7 @@ import '../../account/domain/account_providers.dart';
 import '../../account/presentation/account_form_screen.dart';
 import '../data/transaction.dart';
 import '../domain/transaction_providers.dart';
+import '../import/presentation/pdf_import_screen.dart';
 import 'transaction_form_screen.dart';
 
 /// Transactions of one account, newest first.
@@ -24,6 +25,15 @@ class TransactionListScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text(account.name),
         actions: [
+          IconButton(
+            tooltip: 'PDF importieren',
+            icon: const Icon(Icons.picture_as_pdf_outlined),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => PdfImportScreen(accountUuid: account.uuid),
+              ),
+            ),
+          ),
           IconButton(
             tooltip: 'Konto bearbeiten',
             icon: const Icon(Icons.edit_outlined),

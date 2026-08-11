@@ -32,3 +32,6 @@
 | 2026-08-10 | Dedupe-Hash: SHA-256 über amountCents + bookingDate (Datum) + normalisierter counterparty | User-Wahl; Kollisionen bei leerem counterparty werden als UI-Warnung dargestellt, User entscheidet |
 | 2026-08-10 | Roh-Dokumente (PDFs + Kassenbon-Fotos) werden NICHT persistiert | Nur einmal ausgewertet, Bytes verworfen; nur Extrakt (Transaktionen / Line-Items) + Metadata bleiben |
 | 2026-08-10 | ImportedSource-Entity: contentHash SHA-256 + Metadata pro Import | Re-Import-Warnung ("diese Datei schon am ... importiert") — Deckt PDF- + Foto-Imports |
+| 2026-08-11 | Parser choice per PDF via confidence ranking (canParse 0.0–1.0), user may override top pick | No bank lock-in; heuristics can be wrong |
+| 2026-08-11 | Parser that throws or times out in canParse is skipped, not fatal | One broken plug-in must not block whole import |
+| 2026-08-11 | `file_selector` (not `file_picker`) as file picker | Official Flutter package; Android-only scope needs only single-file pick; smaller native surface |
