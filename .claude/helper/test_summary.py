@@ -57,20 +57,27 @@ def parse_dart(lines, context, include_info):
     # rolling window and mine it for the last exception block.
     recent = collections.deque(maxlen=60)
 
+    def is_separator(text):
+        return set(text) <= {'═', '╡', '╞', '─', '━', '=', ' '}
+
     def preceding_detail():
-        lines_before = list(recent)
-        start = 0
+        lines_before = [t for t in recent if t and not is_separator(t)]
+        marker = None
         for index, text in enumerate(lines_before):
             if 'EXCEPTION CAUGHT' in text:
-                start = index + 1
+                marker = index
+
+        if marker is None:
+            # No recognisable marker: show the tail rather than nothing. Being
+            # silent here is worse than being slightly noisy — a swallowed
+            # failure reason costs a whole extra test run to recover.
+            return lines_before[-(context + 2):]
 
         detail = []
-        for text in lines_before[start:]:
+        for text in lines_before[marker + 1:]:
             # The stack that follows adds nothing the --context lines don't.
             if text.startswith('When the exception was thrown'):
                 break
-            if set(text) <= {'═', '╡', '╞', '─', '━', '='}:
-                continue
             detail.append(text)
         return detail[:context + 2]
 

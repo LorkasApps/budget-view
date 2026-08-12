@@ -6,25 +6,46 @@ import '../../../core/money/money.dart';
 import '../../account/data/account.dart';
 import '../../account/domain/account_providers.dart';
 import '../../account/presentation/account_form_screen.dart';
+import '../../category/presentation/category_chip.dart';
+import '../../category/presentation/category_picker.dart';
 import '../data/transaction.dart';
 import '../domain/transaction_providers.dart';
 import '../import/presentation/pdf_import_screen.dart';
 import 'transaction_form_screen.dart';
 
 /// Transactions of one account, newest first.
-class TransactionListScreen extends ConsumerWidget {
+class TransactionListScreen extends ConsumerStatefulWidget {
   const TransactionListScreen({super.key, required this.account});
 
   final Account account;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TransactionListScreen> createState() =>
+      _TransactionListScreenState();
+}
+
+class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
+  bool _onlyUncategorized = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final account = widget.account;
     final transactionsAsync = ref.watch(transactionsProvider(account.uuid));
 
     return Scaffold(
       appBar: AppBar(
         title: Text(account.name),
         actions: [
+          IconButton(
+            tooltip: _onlyUncategorized
+                ? 'Alle Buchungen zeigen'
+                : 'Nur ohne Kategorie',
+            icon: Icon(
+              _onlyUncategorized ? Icons.label : Icons.label_off_outlined,
+            ),
+            onPressed: () =>
+                setState(() => _onlyUncategorized = !_onlyUncategorized),
+          ),
           IconButton(
             tooltip: 'PDF importieren',
             icon: const Icon(Icons.picture_as_pdf_outlined),
@@ -53,12 +74,22 @@ class TransactionListScreen extends ConsumerWidget {
             child: transactionsAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('Fehler: $e')),
-              data: (transactions) {
-                if (transactions.isEmpty) {
+              data: (all) {
+                if (all.isEmpty) {
                   return const Center(
                     child: Text('Noch keine Buchungen. Lege eine an.'),
                   );
                 }
+
+                final transactions = _onlyUncategorized
+                    ? all.where((t) => t.categoryUuid == null).toList()
+                    : all;
+                if (transactions.isEmpty) {
+                  return const Center(
+                    child: Text('Alle Buchungen haben eine Kategorie.'),
+                  );
+                }
+
                 return ListView.separated(
                   itemCount: transactions.length,
                   separatorBuilder: (_, _) => const Divider(height: 1),
@@ -131,6 +162,18 @@ class _TransactionTile extends ConsumerWidget {
 
   final Transaction transaction;
 
+  Future<void> _reassignCategory(BuildContext context, WidgetRef ref) async {
+    final pick = await pickCategory(
+      context,
+      selected: transaction.categoryUuid,
+      allowNone: true,
+    );
+    if (pick == null) return;
+
+    transaction.categoryUuid = pick.uuid;
+    await ref.read(transactionRepositoryProvider).save(transaction);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
@@ -178,12 +221,27 @@ class _TransactionTile extends ConsumerWidget {
           style: theme.textTheme.bodySmall,
         ),
         title: Text(transaction.description),
-        subtitle: transaction.counterparty.isEmpty
-            ? null
-            : Text(
-                transaction.counterparty,
-                style: theme.textTheme.bodySmall,
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Row(
+            children: [
+              CategoryChip(
+                categoryUuid: transaction.categoryUuid,
+                onTap: () => _reassignCategory(context, ref),
               ),
+              if (transaction.counterparty.isNotEmpty) ...[
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    transaction.counterparty,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
         trailing: Text(
           formatCentsEur(transaction.amountCents),
           style: theme.textTheme.titleMedium?.copyWith(color: amountColor),

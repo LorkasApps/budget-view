@@ -6,6 +6,8 @@ import '../../../../core/format/date_format.dart';
 import '../../../../core/money/money.dart';
 import '../../../account/data/account.dart';
 import '../../../account/domain/account_providers.dart';
+import '../../../category/presentation/category_chip.dart';
+import '../../../category/presentation/category_picker.dart';
 import '../domain/import_flow_controller.dart';
 
 /// Import flow: pick a statement PDF, confirm the detected parser, curate the
@@ -67,6 +69,22 @@ class _PdfImportScreenState extends ConsumerState<PdfImportScreen> {
           description: edited.description,
           counterparty: edited.counterparty,
         );
+  }
+
+  Future<void> _pickRowCategory(int index, ImportRow row) async {
+    final pick = await pickCategory(
+      context,
+      selected: row.categoryUuid,
+      allowNone: true,
+    );
+    if (pick == null) return;
+    ref.read(importFlowProvider.notifier).setRowCategory(index, pick.uuid);
+  }
+
+  Future<void> _pickCategoryForAll() async {
+    final pick = await pickCategory(context, allowNone: true);
+    if (pick == null) return;
+    ref.read(importFlowProvider.notifier).setCategoryForAll(pick.uuid);
   }
 
   Future<void> _persist() async {
@@ -149,9 +167,20 @@ class _PdfImportScreenState extends ConsumerState<PdfImportScreen> {
                 ],
                 if (state.rows.isNotEmpty) ...[
                   const SizedBox(height: 24),
-                  Text(
-                    '${state.includedCount} von ${state.rows.length} Buchungen ausgewählt',
-                    style: theme.textTheme.titleMedium,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          '${state.includedCount} von ${state.rows.length} Buchungen ausgewählt',
+                          style: theme.textTheme.titleMedium,
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: state.busy ? null : _pickCategoryForAll,
+                        icon: const Icon(Icons.label_outline),
+                        label: const Text('Für alle'),
+                      ),
+                    ],
                   ),
                   for (var index = 0; index < state.rows.length; index++)
                     _RowTile(
@@ -161,6 +190,8 @@ class _PdfImportScreenState extends ConsumerState<PdfImportScreen> {
                           .read(importFlowProvider.notifier)
                           .toggleRow(index),
                       onEdit: () => _editRow(index, state.rows[index]),
+                      onPickCategory: () =>
+                          _pickRowCategory(index, state.rows[index]),
                     ),
                 ],
                 if (state.warnings.isNotEmpty) ...[
@@ -205,12 +236,14 @@ class _RowTile extends StatelessWidget {
     required this.enabled,
     required this.onToggle,
     required this.onEdit,
+    required this.onPickCategory,
   });
 
   final ImportRow row;
   final bool enabled;
   final VoidCallback onToggle;
   final VoidCallback onEdit;
+  final VoidCallback onPickCategory;
 
   @override
   Widget build(BuildContext context) {
@@ -227,10 +260,25 @@ class _RowTile extends StatelessWidget {
         maxLines: 2,
         overflow: TextOverflow.ellipsis,
       ),
-      subtitle: Text(
-        '${formatDateCompactDe(row.bookingDate)}'
-        '${row.counterparty.isEmpty ? '' : ' · ${row.counterparty}'}',
-        style: theme.textTheme.bodySmall,
+      subtitle: Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Row(
+          children: [
+            CategoryChip(
+              categoryUuid: row.categoryUuid,
+              onTap: enabled ? onPickCategory : null,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                '${formatDateCompactDe(row.bookingDate)}'
+                '${row.counterparty.isEmpty ? '' : ' · ${row.counterparty}'}',
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
+          ],
+        ),
       ),
       secondary: Row(
         mainAxisSize: MainAxisSize.min,

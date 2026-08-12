@@ -5,6 +5,8 @@ import '../../../core/format/date_format.dart';
 import '../../../core/money/money.dart';
 import '../../account/data/account.dart';
 import '../../account/domain/account_providers.dart';
+import '../../category/presentation/category_chip.dart';
+import '../../category/presentation/category_picker.dart';
 import '../data/transaction.dart';
 import '../domain/transaction_providers.dart';
 import '../domain/transaction_validation.dart';
@@ -37,6 +39,7 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
   late bool _isExpense;
   late DateTime _bookingDate;
   String? _accountUuid;
+  String? _categoryUuid;
   bool _saving = false;
 
   bool get _isEdit => widget.existing != null;
@@ -58,6 +61,7 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
     _noteController = TextEditingController(text: existing?.note ?? '');
     _bookingDate = existing?.bookingDate ?? DateTime.now();
     _accountUuid = existing?.accountUuid ?? widget.initialAccountUuid;
+    _categoryUuid = existing?.categoryUuid;
   }
 
   @override
@@ -67,6 +71,12 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
     _counterpartyController.dispose();
     _noteController.dispose();
     super.dispose();
+  }
+
+  Future<void> _chooseCategory() async {
+    final pick = await pickCategory(context, selected: _categoryUuid);
+    if (pick == null) return;
+    setState(() => _categoryUuid = pick.uuid);
   }
 
   Future<void> _pickDate() async {
@@ -86,6 +96,7 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
 
     final errors = [
       TransactionValidation.account(_accountUuid),
+      TransactionValidation.category(_categoryUuid),
       TransactionValidation.bookingDate(_bookingDate),
     ].whereType<String>();
     if (errors.isNotEmpty) {
@@ -99,6 +110,7 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
     final transaction = widget.existing ?? Transaction();
     transaction
       ..accountUuid = _accountUuid!
+      ..categoryUuid = _categoryUuid
       ..amountCents = _isExpense ? -magnitude : magnitude
       ..bookingDate = _bookingDate
       ..description = _descriptionController.text.trim()
@@ -169,7 +181,22 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
                 validator: (v) => TransactionValidation.account(v),
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Kategorie'),
+              subtitle: _categoryUuid == null
+                  ? Text(
+                      'Pflichtfeld',
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    )
+                  : null,
+              trailing: CategoryChip(categoryUuid: _categoryUuid),
+              onTap: _saving ? null : _chooseCategory,
+            ),
+            const SizedBox(height: 8),
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Buchungsdatum'),

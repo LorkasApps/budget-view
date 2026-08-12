@@ -45,7 +45,7 @@ User-defined free category tree (parent-child, arbitrary depth). No hardcoded ro
 ## Deviations from the original spec
 | Spec | Built | Why |
 |------|-------|-----|
-| `parentUuid` as `String?`, `null` = root | `String parentUuid = ''`, empty = root | No stored field anywhere in this schema is nullable and there is no precedent for `@Index()` on a `String?`. The sentinel keeps root lookups a plain `parentUuidEqualTo('')` and avoids the one untested index path. |
+| `parentUuid` as `String?`, `null` = root | ~~`String parentUuid = ''`, empty = root~~ — **reverted by ticket 011**, now `String?` as originally specified | The sentinel avoided the schema's only untested index path, but `Transaction.categoryUuid` needed the same "not set" concept and two spellings in one schema cost more. See decisions.md, 2026-08-12. |
 | Edit **sheet** | Full-screen `CategoryFormScreen` | Matches the account and transaction forms, and the icon + colour grids need the room. |
 | — | No `kDbSchemaVersion` bump | Adding a collection is additive; Isar opens existing databases unchanged. A bump would have falsely signalled that the dev DB needs nuking. |
 | Delete blocks on transaction references | Children only | Forward dependency on ticket 011, see the open AC above. |

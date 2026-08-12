@@ -16,6 +16,7 @@ class ImportRow {
     required this.amountCents,
     required this.description,
     required this.counterparty,
+    this.categoryUuid,
     this.included = true,
   });
 
@@ -24,13 +25,31 @@ class ImportRow {
         amountCents = candidate.amountCents,
         description = candidate.description,
         counterparty = candidate.counterparty ?? '',
+        categoryUuid = null,
         included = true;
 
   final DateTime bookingDate;
   final int amountCents;
   final String description;
   final String counterparty;
+
+  /// Null while uncategorized — imported rows are allowed to stay that way.
+  final String? categoryUuid;
+
   final bool included;
+
+  /// Separate from [copyWith] because copyWith cannot express "set back to
+  /// null", and clearing a category has to be possible.
+  ImportRow withCategory(String? uuid) {
+    return ImportRow(
+      bookingDate: bookingDate,
+      amountCents: amountCents,
+      description: description,
+      counterparty: counterparty,
+      categoryUuid: uuid,
+      included: included,
+    );
+  }
 
   ParsedTransactionCandidate toCandidate() => ParsedTransactionCandidate(
         bookingDate: bookingDate,
@@ -51,6 +70,7 @@ class ImportRow {
       amountCents: amountCents ?? this.amountCents,
       description: description ?? this.description,
       counterparty: counterparty ?? this.counterparty,
+      categoryUuid: categoryUuid,
       included: included ?? this.included,
     );
   }
@@ -198,6 +218,22 @@ class ImportFlowController extends AutoDisposeNotifier<ImportFlowState> {
     state = state.copyWith(rows: rows);
   }
 
+  void setRowCategory(int index, String? categoryUuid) {
+    final rows = [...state.rows];
+    rows[index] = rows[index].withCategory(categoryUuid);
+    state = state.copyWith(rows: rows);
+  }
+
+  /// Bulk-assigns to every row, included or not — the user is categorising the
+  /// statement, not the selection.
+  void setCategoryForAll(String? categoryUuid) {
+    state = state.copyWith(
+      rows: [
+        for (final row in state.rows) row.withCategory(categoryUuid),
+      ],
+    );
+  }
+
   Future<void> persist({required String accountUuid}) async {
     final included = state.rows.where((row) => row.included).toList();
     if (included.isEmpty) return;
@@ -206,7 +242,8 @@ class ImportFlowController extends AutoDisposeNotifier<ImportFlowState> {
     final repository = ref.read(transactionRepositoryProvider);
     for (final row in included) {
       await repository.save(
-        candidateToTransaction(row.toCandidate(), accountUuid: accountUuid),
+        candidateToTransaction(row.toCandidate(), accountUuid: accountUuid)
+          ..categoryUuid = row.categoryUuid,
       );
     }
 

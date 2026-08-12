@@ -209,6 +209,79 @@ void main() {
     expect(state.error, isEmpty);
   });
 
+  test('imported rows start uncategorized and may stay that way', () async {
+    final container = containerWith(registryYielding([candidate(-500, 'DM')]));
+    final controller = container.read(importFlowProvider.notifier);
+
+    await controller.loadDocument(bytes, fileName: 'auszug.pdf');
+    await controller.parseDocument();
+    expect(container.read(importFlowProvider).rows.single.categoryUuid, isNull);
+
+    await controller.persist(accountUuid: 'account-1');
+
+    final saved = await container
+        .read(transactionRepositoryProvider)
+        .findByAccount('account-1');
+    expect(saved.single.categoryUuid, isNull);
+  });
+
+  test('setRowCategory hits one row, setCategoryForAll hits every row',
+      () async {
+    final container = containerWith(
+      registryYielding([candidate(-1299, 'REWE'), candidate(5000, 'GEHALT')]),
+    );
+    final controller = container.read(importFlowProvider.notifier);
+
+    await controller.loadDocument(bytes, fileName: 'auszug.pdf');
+    await controller.parseDocument();
+
+    controller.setRowCategory(0, 'cat-a');
+    var rows = container.read(importFlowProvider).rows;
+    expect(rows[0].categoryUuid, 'cat-a');
+    expect(rows[1].categoryUuid, isNull);
+
+    controller.setCategoryForAll('cat-b');
+    rows = container.read(importFlowProvider).rows;
+    expect(rows.map((row) => row.categoryUuid), ['cat-b', 'cat-b']);
+
+    controller.setCategoryForAll(null);
+    rows = container.read(importFlowProvider).rows;
+    expect(rows.every((row) => row.categoryUuid == null), isTrue);
+  });
+
+  test('editing a row keeps its category', () async {
+    final container = containerWith(registryYielding([candidate(-500, 'DM')]));
+    final controller = container.read(importFlowProvider.notifier);
+
+    await controller.loadDocument(bytes, fileName: 'auszug.pdf');
+    await controller.parseDocument();
+    controller.setRowCategory(0, 'cat-a');
+    controller.editRow(0, description: 'Drogerie');
+
+    final row = container.read(importFlowProvider).rows.single;
+    expect(row.description, 'Drogerie');
+    expect(row.categoryUuid, 'cat-a');
+  });
+
+  test('persist carries the row category onto the transaction', () async {
+    final container = containerWith(
+      registryYielding([candidate(-1299, 'REWE'), candidate(5000, 'GEHALT')]),
+    );
+    final controller = container.read(importFlowProvider.notifier);
+
+    await controller.loadDocument(bytes, fileName: 'auszug.pdf');
+    await controller.parseDocument();
+    controller.setRowCategory(0, 'cat-a');
+    controller.toggleRow(1);
+    await controller.persist(accountUuid: 'account-1');
+
+    final saved = await container
+        .read(transactionRepositoryProvider)
+        .findByAccount('account-1');
+    expect(saved.single.description, 'REWE');
+    expect(saved.single.categoryUuid, 'cat-a');
+  });
+
   test('persist with no included rows writes nothing', () async {
     final container = containerWith(registryYielding([candidate(-500, 'DM')]));
     final controller = container.read(importFlowProvider.notifier);

@@ -39,6 +39,15 @@ class TransactionValidation {
     return null;
   }
 
+  /// Manual entry requires a category. PDF import deliberately does not call
+  /// this — imported rows may stay uncategorized.
+  static String? category(String? categoryUuid) {
+    if (categoryUuid == null || categoryUuid.isEmpty) {
+      return 'Kategorie erforderlich';
+    }
+    return null;
+  }
+
   static String? account(String? accountUuid) {
     if (accountUuid == null || accountUuid.isEmpty) {
       return 'Konto erforderlich';

@@ -6,7 +6,9 @@ Python 3, stdlib only. Read-only unless prefixed `mutate_`. Operate on `.claude/
 
 Compacts `make check` output (`flutter analyze` + `flutter test`) down to failures only, so raw passing-test noise never has to be dumped into an LLM context.
 
-**Usage:** `make check | ./.claude/helper/test_summary.py [flags]`
+**Usage:** `make check 2>&1 | ./.claude/helper/test_summary.py [flags]`
+
+**Always merge stderr.** `flutter test` writes its exception dumps to stderr while the failing `[E]` progress line goes to stdout. Piping stdout alone reduces every widget failure to a useless `Test failed. See exception logs above.`
 
 **Args:**
 - `--context N` (optional, default `3`) — lines of stack trace to keep per failure

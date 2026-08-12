@@ -45,11 +45,9 @@ coverage: ## Run tests with coverage → coverage/lcov.info
 
 # --- Code generation (Isar / build_runner, used from ticket 002 onwards) ---
 gen: ## One-shot code generation
-	dart run build_runner build --delete-conflicting-outputs
-
+	dart run build_runner build
 gen-watch: ## Watch + regenerate on change
-	dart run build_runner watch --delete-conflicting-outputs
-
+	dart run build_runner watch
 # --- Run / build -----------------------------------------------------------
 devices: ## List connected devices / emulators
 	flutter devices
