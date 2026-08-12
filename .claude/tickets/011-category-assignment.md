@@ -6,7 +6,7 @@
 | **Epic** | Categories |
 | **Domain** | Category |
 | **Blocked By** | 010, 006 |
-| **Status** | Ready |
+| **Status** | In Progress |
 
 ## Description
 Assign exactly one category (leaf or node) per transaction. The `categoryUuid` field on `Transaction` is nullable at the entity level; the constraint (required vs optional) is enforced at the **form / flow** level:

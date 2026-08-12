@@ -6,6 +6,7 @@ import 'package:budget_view/core/sync/local_sync_adapter.dart';
 import 'package:budget_view/core/sync/sync_op.dart';
 import 'package:budget_view/features/category/data/category.dart';
 import 'package:budget_view/features/category/domain/category_repository.dart';
+import 'package:budget_view/features/transaction/domain/transaction_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isar_community/isar.dart';
 
@@ -21,7 +22,8 @@ void main() {
   setUp(() async {
     tempDir = await Directory.systemTemp.createTemp('budgetview_catsync_');
     isar = await openAppIsar(directory: tempDir.path);
-    repo = CategoryRepository(isar, LocalSyncAdapter(isar));
+    final sync = LocalSyncAdapter(isar);
+    repo = CategoryRepository(isar, sync, TransactionRepository(isar, sync));
   });
 
   tearDown(() async {
@@ -33,11 +35,7 @@ void main() {
       isar.changeQueueEntrys.where().findAll();
 
   test('every write enqueues one matching change-queue entry', () async {
-    final category = await repo.save(
-      Category()
-        ..name = 'Wohnen'
-        ..parentUuid = '',
-    );
+    final category = await repo.save(Category()..name = 'Wohnen');
     category.name = 'Wohnen & Nebenkosten';
     await repo.save(category);
     await repo.delete(category.uuid);

@@ -4,6 +4,8 @@ import 'package:budget_view/core/persistence/isar_db.dart';
 import 'package:budget_view/core/sync/local_sync_adapter.dart';
 import 'package:budget_view/features/category/data/category.dart';
 import 'package:budget_view/features/category/domain/category_repository.dart';
+import 'package:budget_view/features/transaction/data/transaction.dart';
+import 'package:budget_view/features/transaction/domain/transaction_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:isar_community/isar.dart';
 
@@ -11,6 +13,7 @@ void main() {
   late Directory tempDir;
   late Isar isar;
   late CategoryRepository repo;
+  late TransactionRepository transactions;
 
   setUpAll(() async {
     await Isar.initializeIsarCore(download: true);
@@ -19,7 +22,9 @@ void main() {
   setUp(() async {
     tempDir = await Directory.systemTemp.createTemp('budgetview_category_');
     isar = await openAppIsar(directory: tempDir.path);
-    repo = CategoryRepository(isar, LocalSyncAdapter(isar));
+    final sync = LocalSyncAdapter(isar);
+    transactions = TransactionRepository(isar, sync);
+    repo = CategoryRepository(isar, sync, transactions);
   });
 
   tearDown(() async {
@@ -27,7 +32,7 @@ void main() {
     if (await tempDir.exists()) await tempDir.delete(recursive: true);
   });
 
-  Category build(String name, {String parent = '', int sort = 1000}) {
+  Category build(String name, {String? parent, int sort = 1000}) {
     return Category()
       ..name = name
       ..parentUuid = parent
@@ -115,6 +120,59 @@ void main() {
       expect(error.transactionCount, 0);
       expect(error.message, contains('2 Unterkategorien'));
     }
+  });
+
+  test('delete blocks while an active transaction references it', () async {
+    final category = await repo.save(build('Einkauf'));
+    await transactions.save(
+      Transaction()
+        ..accountUuid = 'account-1'
+        ..categoryUuid = category.uuid
+        ..amountCents = -1299
+        ..bookingDate = DateTime(2026, 8, 1)
+        ..description = 'REWE',
+    );
+
+    try {
+      await repo.delete(category.uuid);
+      fail('expected CategoryDeleteBlocked');
+    } on CategoryDeleteBlocked catch (error) {
+      expect(error.childCount, 0);
+      expect(error.transactionCount, 1);
+      expect(error.message, contains('1 Buchungen'));
+    }
+  });
+
+  test('a soft-deleted transaction stops blocking the category', () async {
+    final category = await repo.save(build('Einkauf'));
+    final transaction = await transactions.save(
+      Transaction()
+        ..accountUuid = 'account-1'
+        ..categoryUuid = category.uuid
+        ..amountCents = -1299
+        ..bookingDate = DateTime(2026, 8, 1)
+        ..description = 'REWE',
+    );
+    await transactions.softDelete(transaction.uuid);
+
+    await repo.delete(category.uuid);
+
+    expect((await repo.findByUuid(category.uuid))!.archived, isTrue);
+  });
+
+  test('an uncategorized transaction never blocks anything', () async {
+    final category = await repo.save(build('Einkauf'));
+    await transactions.save(
+      Transaction()
+        ..accountUuid = 'account-1'
+        ..amountCents = -500
+        ..bookingDate = DateTime(2026, 8, 1)
+        ..description = 'Ohne Kategorie',
+    );
+
+    await repo.delete(category.uuid);
+
+    expect((await repo.findByUuid(category.uuid))!.archived, isTrue);
   });
 
   test('delete archives a leaf and restore brings it back', () async {

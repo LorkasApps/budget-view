@@ -11,7 +11,7 @@ import 'package:flutter_test/flutter_test.dart';
 Category _cat(
   String uuid,
   String name, {
-  String parent = '',
+  String? parent,
   int sort = 1000,
   bool archived = false,
 }) {

@@ -3,6 +3,7 @@ import 'package:isar_community/isar.dart';
 import '../../../core/sync/sync_adapter.dart';
 import '../../../core/sync/sync_op.dart';
 import '../../../core/sync/syncable_entity.dart';
+import '../../transaction/domain/transaction_repository.dart';
 import '../data/category.dart';
 import 'category_validation.dart';
 
@@ -41,11 +42,16 @@ class CategoryDeleteBlocked implements Exception {
 
 /// Persists the category tree and mirrors every write to the sync change-queue,
 /// per the repository-layer contract in docs/sync.md.
+///
+/// Injects [TransactionRepository] for one reason only: the delete-block has to
+/// know how many transactions still point at a category. Nothing else here
+/// touches the transaction feature.
 class CategoryRepository {
-  CategoryRepository(this._isar, this._sync);
+  CategoryRepository(this._isar, this._sync, this._transactions);
 
   final Isar _isar;
   final SyncAdapter _sync;
+  final TransactionRepository _transactions;
 
   Future<Category> save(Category category) async {
     await _assertSavable(category);
@@ -66,17 +72,15 @@ class CategoryRepository {
     return category;
   }
 
-  /// Soft-deletes by archiving. Throws [CategoryDeleteBlocked] while anything
-  /// still hangs off the category.
+  /// Soft-deletes by archiving. Throws [CategoryDeleteBlocked] while children or
+  /// active transactions still hang off the category.
   Future<void> delete(String uuid) async {
     final category = await findByUuid(uuid);
     if (category == null || category.archived) return;
 
     final childCount =
         await _isar.categorys.filter().parentUuidEqualTo(uuid).count();
-    // Transactions cannot reference a category yet; ticket 011 adds the field
-    // and fills this in.
-    const transactionCount = 0;
+    final transactionCount = await _transactions.countByCategory(uuid);
     if (childCount > 0 || transactionCount > 0) {
       throw CategoryDeleteBlocked(
         childCount: childCount,
@@ -131,11 +135,7 @@ class CategoryRepository {
 
   Future<List<Category>> findAll({bool includeArchived = false}) {
     if (includeArchived) {
-      return _isar.categorys
-          .where()
-          .sortBySortOrder()
-          .thenByName()
-          .findAll();
+      return _isar.categorys.where().sortBySortOrder().thenByName().findAll();
     }
     return _isar.categorys
         .filter()
@@ -145,36 +145,42 @@ class CategoryRepository {
         .findAll();
   }
 
-  Future<List<Category>> findChildren(String parentUuid) => _isar.categorys
-      .filter()
-      .parentUuidEqualTo(parentUuid)
-      .sortBySortOrder()
-      .thenByName()
-      .findAll();
+  /// Children of [parentUuid], or the roots when it is null.
+  Future<List<Category>> findChildren(String? parentUuid) {
+    if (parentUuid == null) {
+      return _isar.categorys
+          .filter()
+          .parentUuidIsNull()
+          .sortBySortOrder()
+          .thenByName()
+          .findAll();
+    }
+    return _isar.categorys
+        .filter()
+        .parentUuidEqualTo(parentUuid)
+        .sortBySortOrder()
+        .thenByName()
+        .findAll();
+  }
 
-  Future<List<Category>> findRoots() => findChildren('');
+  Future<List<Category>> findRoots() => findChildren(null);
 
   Future<void> _assertSavable(Category category) async {
     final nameError = CategoryValidation.name(category.name);
     if (nameError != null) throw CategoryInvalid(nameError);
 
-    if (category.parentUuid == category.uuid && category.uuid.isNotEmpty) {
-      throw const CategoryInvalid(
-        'Eine Kategorie kann nicht ihr eigenes Elternteil sein',
-      );
-    }
-
-    if (category.parentUuid.isNotEmpty) {
-      final parent = await findByUuid(category.parentUuid);
-      if (parent == null) {
+    final parentUuid = category.parentUuid;
+    if (parentUuid != null) {
+      if (parentUuid == category.uuid && category.uuid.isNotEmpty) {
         throw const CategoryInvalid(
-          'Übergeordnete Kategorie existiert nicht',
+          'Eine Kategorie kann nicht ihr eigenes Elternteil sein',
         );
       }
+      if (await findByUuid(parentUuid) == null) {
+        throw const CategoryInvalid('Übergeordnete Kategorie existiert nicht');
+      }
       if (await _wouldCycle(category)) {
-        throw const CategoryInvalid(
-          'Verschieben würde einen Zirkel erzeugen',
-        );
+        throw const CategoryInvalid('Verschieben würde einen Zirkel erzeugen');
       }
     }
 
@@ -192,7 +198,7 @@ class CategoryRepository {
 
     var cursor = category.parentUuid;
     final seen = <String>{};
-    while (cursor.isNotEmpty) {
+    while (cursor != null) {
       if (cursor == category.uuid) return true;
       if (!seen.add(cursor)) return true; // pre-existing loop, do not spin
       final parent = await findByUuid(cursor);
@@ -205,15 +211,12 @@ class CategoryRepository {
   /// Names are unique per level, compared case-insensitively so `Einkauf` and
   /// `einkauf` cannot coexist as siblings. Archived siblings free their name.
   Future<bool> _siblingNameTaken(Category category) async {
-    final siblings = await _isar.categorys
-        .filter()
-        .parentUuidEqualTo(category.parentUuid)
-        .archivedEqualTo(false)
-        .findAll();
-
+    final siblings = await findChildren(category.parentUuid);
     final name = category.name.trim().toLowerCase();
+
     return siblings.any(
       (sibling) =>
+          !sibling.archived &&
           sibling.uuid != category.uuid &&
           sibling.name.trim().toLowerCase() == name,
     );

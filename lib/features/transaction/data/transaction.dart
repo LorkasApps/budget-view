@@ -17,6 +17,11 @@ class Transaction implements SyncableEntity {
   @Index()
   late String accountUuid;
 
+  /// Null while uncategorized. Manual entry requires one, PDF import does not —
+  /// that rule lives in the forms, not here.
+  @Index()
+  String? categoryUuid;
+
   late int amountCents;
 
   late DateTime bookingDate;
@@ -41,6 +46,7 @@ class Transaction implements SyncableEntity {
   Map<String, dynamic> toSyncPayload() => {
         'uuid': uuid,
         'accountUuid': accountUuid,
+        'categoryUuid': categoryUuid,
         'amountCents': amountCents,
         'bookingDate': bookingDate.toIso8601String(),
         'description': description,

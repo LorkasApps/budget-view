@@ -6,9 +6,9 @@ part 'category.g.dart';
 
 /// A node in the user's free category tree.
 ///
-/// [parentUuid] is empty for a root rather than null: no stored field in this
-/// schema is nullable, and an empty-string sentinel keeps root lookups a plain
-/// `parentUuidEqualTo('')` instead of null-aware index handling.
+/// [parentUuid] is null for a root. Absence is modelled as null rather than an
+/// empty-string sentinel so that "not set" reads the same way here as it does
+/// on `Transaction.categoryUuid`.
 ///
 /// Direction (income vs expense) is never derived from where a category sits —
 /// that comes from the sign of the transaction amount.
@@ -23,7 +23,7 @@ class Category implements SyncableEntity {
   late String name;
 
   @Index()
-  String parentUuid = '';
+  String? parentUuid;
 
   /// Manual sibling order. Defaults leave gaps so a single insert does not
   /// renumber the whole level.
@@ -44,7 +44,7 @@ class Category implements SyncableEntity {
   String get entityType => 'category';
 
   @ignore
-  bool get isRoot => parentUuid.isEmpty;
+  bool get isRoot => parentUuid == null;
 
   @override
   Map<String, dynamic> toSyncPayload() => {

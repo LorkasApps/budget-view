@@ -15,11 +15,11 @@ class CategoryFormScreen extends ConsumerStatefulWidget {
   const CategoryFormScreen({
     super.key,
     this.existing,
-    this.initialParentUuid = '',
+    this.initialParentUuid,
   });
 
   final Category? existing;
-  final String initialParentUuid;
+  final String? initialParentUuid;
 
   @override
   ConsumerState<CategoryFormScreen> createState() => _CategoryFormScreenState();
@@ -28,7 +28,7 @@ class CategoryFormScreen extends ConsumerStatefulWidget {
 class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _name;
-  late String _parentUuid;
+  String? _parentUuid;
   late String _iconName;
   late String _colorHex;
   bool _saving = false;
@@ -91,8 +91,9 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
           final options = all
               .where((category) => !blocked.contains(category.uuid))
               .toList();
-          if (!options.any((option) => option.uuid == _parentUuid)) {
-            _parentUuid = '';
+          if (_parentUuid != null &&
+              !options.any((option) => option.uuid == _parentUuid)) {
+            _parentUuid = null;
           }
 
           return Form(
@@ -107,25 +108,25 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
                   validator: CategoryValidation.name,
                 ),
                 const SizedBox(height: 16),
-                DropdownButtonFormField<String>(
+                DropdownButtonFormField<String?>(
                   initialValue: _parentUuid,
                   decoration: const InputDecoration(
                     labelText: 'Übergeordnete Kategorie',
                   ),
                   items: [
-                    const DropdownMenuItem(
-                      value: '',
+                    const DropdownMenuItem<String?>(
+                      value: null,
                       child: Text('Keine (Wurzel)'),
                     ),
                     for (final option in options)
-                      DropdownMenuItem(
+                      DropdownMenuItem<String?>(
                         value: option.uuid,
                         child: Text(option.name),
                       ),
                   ],
                   onChanged: _saving
                       ? null
-                      : (value) => setState(() => _parentUuid = value ?? ''),
+                      : (value) => setState(() => _parentUuid = value),
                 ),
                 const SizedBox(height: 24),
                 Text('Symbol', style: Theme.of(context).textTheme.titleSmall),

@@ -65,6 +65,14 @@ class TransactionRepository {
         .findAll();
   }
 
+  /// Active transactions referencing one category. Backs the category
+  /// delete-block, which refuses to archive a category still in use.
+  Future<int> countByCategory(String categoryUuid) => _isar.transactions
+      .filter()
+      .categoryUuidEqualTo(categoryUuid)
+      .deletedEqualTo(false)
+      .count();
+
   /// Sum of active (non-deleted) transaction amounts for one account.
   Future<int> sumForAccount(String accountUuid) async {
     final transactions = await _isar.transactions

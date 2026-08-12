@@ -12,7 +12,7 @@
 | 008-first-concrete-pdf-parser.md | Feature | Import | Transaction | Done | 007 | First concrete PDF parser (ING Giro, ephemeral) |
 | 009-duplicate-detection-hash.md | Feature | Import | Transaction | Ready | 006, 008 | Duplicate detection (tx-level + doc-level SHA-256) |
 | 010-category-tree-entity-crud.md | Feature | Categories | Category | Done | 002, 003 | Category tree entity + CRUD |
-| 011-category-assignment.md | Feature | Categories | Category | Ready | 010, 006 | Assign one category per transaction |
+| 011-category-assignment.md | Feature | Categories | Category | In Progress | 010, 006 | Assign one category per transaction |
 | 012-fractal-category-inheritance.md | Feature | Categories | Category | Ready | 011, 015 | Line-item category overrides parent transaction |
 | 013-tagging-rule-storage.md | Feature | Auto-Tagging | Tagging | Ready | 011 | Store learned rules from user assignments |
 | 014-auto-suggest-on-import.md | Feature | Auto-Tagging | Tagging | Ready | 013 | Suggest category on new imports |

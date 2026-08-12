@@ -23,19 +23,19 @@ class CategoryNode {
 /// Groups a flat category list into roots and children.
 ///
 /// Siblings are ordered by `sortOrder` then `name`. A category whose parent is
-/// absent from [categories] is promoted to a root, so filtering archived
-/// parents out never makes their children disappear.
+/// null, or absent from [categories], is a root — so filtering archived parents
+/// out never makes their children disappear.
 List<CategoryNode> buildCategoryTree(List<Category> categories) {
   final known = {for (final category in categories) category.uuid};
-  final childrenOf = <String, List<Category>>{};
+  final childrenOf = <String?, List<Category>>{};
 
   for (final category in categories) {
-    final parent =
-        known.contains(category.parentUuid) ? category.parentUuid : '';
+    final declared = category.parentUuid;
+    final parent = declared != null && known.contains(declared) ? declared : null;
     childrenOf.putIfAbsent(parent, () => <Category>[]).add(category);
   }
 
-  List<CategoryNode> build(String parentUuid, int depth) {
+  List<CategoryNode> build(String? parentUuid, int depth) {
     final children = childrenOf[parentUuid] ?? const <Category>[];
     final ordered = [...children]..sort(_bySortOrderThenName);
     return [
@@ -48,7 +48,7 @@ List<CategoryNode> buildCategoryTree(List<Category> categories) {
     ];
   }
 
-  return build('', 0);
+  return build(null, 0);
 }
 
 /// Depth-first list of the nodes currently on screen: a node's children are

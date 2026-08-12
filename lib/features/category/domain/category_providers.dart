@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/persistence/isar_provider.dart';
 import '../../../core/sync/sync_provider.dart';
+import '../../transaction/domain/transaction_providers.dart';
 import '../data/category.dart';
 import 'category_repository.dart';
 
@@ -9,6 +10,7 @@ final categoryRepositoryProvider = Provider<CategoryRepository>((ref) {
   return CategoryRepository(
     ref.watch(isarProvider),
     ref.watch(syncAdapterProvider),
+    ref.watch(transactionRepositoryProvider),
   );
 });
 
