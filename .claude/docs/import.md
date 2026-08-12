@@ -1,4 +1,57 @@
-# Import (Transaction domain)
+# Import
+
+## Shared Import Domain (`lib/features/import/`)
+
+Artifacts shared by every import path (PDF, photo, future formats).
+
+### ImportedSource Entity (`data/imported_source.dart`)
+
+Metadata of one completed import. The document itself is not persisted; this row survives to warn on re-import and supply import history.
+
+| Field | Type | Notes |
+|---|---|---|
+| `id` | Id | Isar auto-inc, internal |
+| `uuid` | String | UUID v4, unique index |
+| `kind` | ImportedSourceKind | `pdf` / `photo`, @enumerated |
+| `contentHashSha256` | String | Indexed (intentionally **not unique**): same file re-imported after override creates a second row for history |
+| `filename` | String | Display name from picker; empty for camera captures |
+| `importedAt` | DateTime | Wall-clock at persistence |
+| `transactionsProduced` | int | Count from this import |
+| `lineItemsProduced` | int | Count from this import (0 for PDF, filled by photo flow) |
+| `note` | String? | Optional narrative, e.g. "Erneuter Import trotz Warnung" when file was seen before |
+| `createdAt` / `updatedAt` | DateTime | Maintained by repo |
+
+### ImportedSourceRepository (`domain/imported_source_repository.dart`)
+
+| Method | Behavior |
+|---|---|
+| `save(source)` | Persists new or updated, routes through sync adapter |
+| `findByHash(contentHashSha256)` | All imports of this file, sorted `importedAt DESC` (newest first) |
+| `findAll` | All imports, sorted `importedAt DESC` |
+| `findByUuid(uuid)` | — |
+| `delete(uuid)` | **Real delete** (not soft-delete); a row only exists to warn, so an archived-but-still-warning row would be pointless; user can delete to force a re-import |
+
+### DuplicateChecker Interface (`domain/duplicate_checker.dart`)
+
+An interface with `LocalDuplicateChecker` as implementation, mirroring `SyncAdapter`/`LocalSyncAdapter`, so widget tests can stub it.
+
+| Method | Scope | Behavior |
+|---|---|---|
+| `findTransactionMatches(hash, accountUuid:, excludeDeleted:)` | Account-scoped | Bookings on one account with the same dedupe hash; transfers stay distinct |
+| `findDocumentMatches(hash)` | Global | Earlier imports of this exact file (by content hash) |
+
+### Content Hash (`domain/content_hash.dart`)
+
+`computeContentHash(List<int> bytes)` → SHA-256 hex of raw bytes; identifies a re-imported file before parsing.
+
+### Providers (`domain/import_providers.dart`)
+
+- `importedSourceRepositoryProvider`
+- `duplicateCheckerProvider` (yields `LocalDuplicateChecker`)
+
+---
+
+## PDF Import (Transaction domain)
 
 PDF statement parsing layer. `lib/features/transaction/import/`.
 
@@ -82,29 +135,34 @@ Typedef: `PdfParserRanking = ({PdfParser parser, double confidence})`
 
 ## ImportFlow (`domain/import_flow_controller.dart`)
 
-- `ImportRow`: immutable, `fromCandidate`, `toCandidate`, `copyWith`, `included: bool`
+- `ImportRow`: immutable, `fromCandidate`, `toCandidate`, `copyWith`, `included: bool`, computed `dedupeHash`, `toCandidate()`
 - `ImportSummary`: `imported`, `skipped`, `warnings` counts
-- `ImportFlowController extends AutoDisposeNotifier`: methods `loadDocument`, `selectParser`, `parseDocument`, `toggleRow`, `editRow`, `persist`; raw bytes in private `_bytes` field, dropped on dispose
+- `ImportFlowState`: extends prior with `contentHash`, `documentMatches` (re-import warning list), `targetAccountUuid`, `rowMatches` (row index → existing bookings on target account), `intraBatchDuplicates` (row indexes); derives `documentSeenBefore` (bool), `isSuspicious(index)`, `suspiciousCount`, `newCount`
+- `ImportFlowController extends AutoDisposeNotifier`: methods `loadDocument` (hashes bytes, checks document matches), `selectParser`, `parseDocument`, `toggleRow`, `editRow` (async, re-runs duplicate check), `setTargetAccount` (async, re-runs check since matching is account-scoped), `persist` (async, no longer takes account param; uses state); raw bytes in private `_bytes` field, dropped on dispose
 - `importFlowProvider`: `NotifierProvider.autoDispose<ImportFlowController, ImportFlowState>`
-- **Persistence:** `persist` routes included rows through `candidateToTransaction` → `TransactionRepository.save` (single place to build `Transaction`)
+- **Persistence:** `persist` routes included rows through `candidateToTransaction` → `TransactionRepository.save`, then writes one `ImportedSource` row with `kind=pdf`, document hash, filename, counts, and `note` when `documentSeenBefore`
 
 ## UI Flow
 
 `PdfImportScreen(accountUuid:)` (`presentation/pdf_import_screen.dart`)
 - Entry: PDF icon in `TransactionListScreen` app bar, left of the account-edit action
 - Steps:
-  1. Pick PDF via `file_selector` dialog (single .pdf file)
-  2. Registry ranks parsers; show list with confidence %
-  3. User picks parser (first ranked is pre-selected)
-  4. Click "Auslesen" → per-row list with include/exclude checkbox
-  5. Per-row edit dialog: expense/income toggle, amount, description, counterparty, date
-  6. Target-account dropdown (pre-filled with entry account), import button (shows included count)
-  7. Persist → summary screen: `N importiert / M übersprungen / K Hinweise`
-- Persistence: wired via `TransactionRepository.save`
+  1. `initState` calls `setTargetAccount(widget.accountUuid)` so duplicate scoping is ready before any bytes arrive
+  2. Pick PDF via `file_selector` dialog (single .pdf file)
+  3. Hash bytes computed; `findDocumentMatches` runs
+  4. If document hash seen before: modal shows "Datei schon importiert am [date] · [count] Buchungen" and earlier import counts; **Fortfahren** / **Abbrechen** (cancel leaves flow, bytes dropped)
+  5. Registry ranks parsers; show list with confidence %
+  6. User picks parser (first ranked is pre-selected)
+  7. Click "Auslesen" → per-row list with include/exclude checkbox. Header shows `N neu / M mögliche Duplikate`
+  8. Per-row duplicate marker (copy icon, red) opens modal listing existing bookings; intra-batch duplicates flag **both** copies (user decides which to keep)
+  9. Per-row edit dialog: expense/income toggle, amount, description, counterparty, date
+  10. Target-account dropdown (pre-filled with entry account), import button (shows included count)
+  11. Persist → summary screen: `N importiert / M übersprungen / K Hinweise`
+- Persistence: wired via `TransactionRepository.save` + writes `ImportedSource` row
 
-## Still Missing (owned by ticket 009+)
+## Still Missing
 
-- Duplicate detection: document-level hash before parsing, re-import modal, `ImportedSource` rows, per-row warnings, intra-batch cross-hashing
+- Import-history screen (list + delete `ImportedSource` rows) — ticket 024, needs Settings surface
 - Password-protected PDFs (out of scope)
 - Batch import (out of scope; one file at a time)
 - `valueDate` has nowhere to go — `Transaction` entity lacks Wertstellung field
@@ -115,5 +173,7 @@ Typedef: `PdfParserRanking = ({PdfParser parser, double confidence})`
 - **Parser detection:** `canParse` behaviour and shipped registry contents (`test/features/transaction/import/pdf/ing_giro_can_parse_test.dart`)
 - **Controller:** ranking, parse, toggle, edit, persist, summary (`test/features/transaction/import/domain/import_flow_controller_test.dart`)
 - **Widget:** UI wiring without database (`test/features/transaction/import/import_flow_widget_test.dart`)
+- **Dedupe:** hash units (`dedupe_hash_test.dart`, `content_hash_test.dart`, `core/text/normalize_test.dart`), `duplicate_checker_test.dart`, `imported_source_repository_test.dart`, and `pdf_dedupe_integration_test.dart` for the flow — re-import, row matches, account scoping, intra-batch, `ImportedSource` counts
+- **Not covered:** every path that writes through the UI — confirming a duplicate warning, and an edited booking filtering itself out. Both end in a repository call, and Isar cannot run inside `testWidgets`
 - **Reconciliation harness:** env-gated on `ING_PDF` (`test/tool/ing_geometry_dump_test.dart`); dumps geometry and verifies sum against `Neuer Saldo − Alter Saldo`
 - **Fixtures:** none; no PDF committed; real statements never enter the repo

@@ -7,7 +7,9 @@ import '../../account/data/account.dart';
 import '../../account/domain/account_providers.dart';
 import '../../category/presentation/category_chip.dart';
 import '../../category/presentation/category_picker.dart';
+import '../../import/domain/import_providers.dart';
 import '../data/transaction.dart';
+import '../domain/dedupe_hash.dart';
 import '../domain/transaction_providers.dart';
 import '../domain/transaction_validation.dart';
 
@@ -73,6 +75,63 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
     super.dispose();
   }
 
+  /// Shows existing bookings that would hash the same and asks whether to save
+  /// anyway. Returns false only if the user backs out.
+  ///
+  /// A booking being edited always matches itself, so it is filtered out — the
+  /// warning is about *other* bookings.
+  Future<bool> _confirmDespiteDuplicates(int amountCents) async {
+    final hash = dedupeHashOf(
+      amountCents: amountCents,
+      bookingDate: _bookingDate,
+      counterparty: _counterpartyController.text.trim(),
+    );
+
+    final matches = (await ref
+            .read(duplicateCheckerProvider)
+            .findTransactionMatches(hash, accountUuid: _accountUuid!))
+        .where((match) => match.uuid != widget.existing?.uuid)
+        .toList();
+    if (matches.isEmpty || !mounted) return true;
+
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Möglicher Doppel-Eintrag'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              matches.length == 1
+                  ? 'Es gibt bereits eine Buchung mit gleichem Betrag, Datum '
+                      'und Empfänger:'
+                  : 'Es gibt bereits ${matches.length} Buchungen mit gleichem '
+                      'Betrag, Datum und Empfänger:',
+            ),
+            const SizedBox(height: 8),
+            for (final match in matches)
+              Text(
+                '${formatDateDe(match.bookingDate)} · '
+                '${formatCentsEur(match.amountCents)} · ${match.description}',
+              ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Trotzdem speichern'),
+          ),
+        ],
+      ),
+    );
+    return proceed ?? false;
+  }
+
   Future<void> _chooseCategory() async {
     final pick = await pickCategory(context, selected: _categoryUuid);
     if (pick == null) return;
@@ -105,13 +164,16 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
       return;
     }
 
-    setState(() => _saving = true);
     final magnitude = parseEurosToCents(_amountController.text)!;
+    final amountCents = _isExpense ? -magnitude : magnitude;
+    if (!await _confirmDespiteDuplicates(amountCents)) return;
+
+    setState(() => _saving = true);
     final transaction = widget.existing ?? Transaction();
     transaction
       ..accountUuid = _accountUuid!
       ..categoryUuid = _categoryUuid
-      ..amountCents = _isExpense ? -magnitude : magnitude
+      ..amountCents = amountCents
       ..bookingDate = _bookingDate
       ..description = _descriptionController.text.trim()
       ..counterparty = _counterpartyController.text.trim()

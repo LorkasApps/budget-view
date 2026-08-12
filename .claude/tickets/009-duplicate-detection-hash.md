@@ -6,7 +6,7 @@
 | **Epic** | Import |
 | **Domain** | Import |
 | **Blocked By** | 006, 008 |
-| **Status** | In Progress |
+| **Status** | Done |
 
 ## Description
 Two-layer defence against duplicate imports:
@@ -83,24 +83,42 @@ Same normalization helper serves ticket 009 + 013 (tagging).
 Both layers = **suspicion**, not blocker. User decides.
 
 ## Acceptance Criteria
-- [ ] `dedupeHash` added to `Transaction` (indexed, non-nullable)
-- [ ] `ImportedSource` Isar collection defined in `lib/features/import/data/imported_source.dart`
-- [ ] `ImportedSourceRepository`: `save`, `findByHash(hash) → List<ImportedSource>` (sorted `importedAt DESC`), `findAll`, `delete(uuid)`
-- [ ] Writes to `ImportedSource` route through `syncAdapter.enqueue(...)`
-- [ ] `computeDedupeHash(Transaction)` pure helper in `lib/features/transaction/domain/dedupe_hash.dart` — unit-tested
-- [ ] `computeContentHash(Uint8List bytes)` pure helper in `lib/features/import/domain/content_hash.dart` — unit-tested
-- [ ] `TransactionRepository.save(...)` auto-populates `dedupeHash` if empty
-- [ ] `DuplicateChecker` service in `lib/features/import/domain/`:
-  - `findTransactionMatches(hash, accountUuid, {excludeDeleted: true}) → List<Transaction>`
+- [x] `dedupeHash` added to `Transaction` (indexed, non-nullable)
+- [x] `ImportedSource` Isar collection defined in `lib/features/import/data/imported_source.dart`
+- [x] `ImportedSourceRepository`: `save`, `findByHash(hash) → List<ImportedSource>` (sorted `importedAt DESC`), `findAll`, `findByUuid`, `delete(uuid)`
+- [x] Writes to `ImportedSource` route through `syncAdapter.enqueue(...)`
+- [x] `computeDedupeHash(Transaction)` pure helper in `lib/features/transaction/domain/dedupe_hash.dart` — unit-tested, plus `dedupeHashOf(...)` for preview rows that are not entities yet
+- [x] `computeContentHash(bytes)` pure helper in `lib/features/import/domain/content_hash.dart` — unit-tested
+- [x] `TransactionRepository.save(...)` maintains `dedupeHash` — **recomputed on every write**, not only when empty, so an edited amount or date cannot leave a stale hash
+- [x] `DuplicateChecker` in `lib/features/import/domain/` — an **interface** with `LocalDuplicateChecker` as implementation, mirroring `SyncAdapter`:
+  - `findTransactionMatches(hash, accountUuid:, {excludeDeleted: true}) → List<Transaction>`
   - `findDocumentMatches(hash) → List<ImportedSource>`
-- [ ] `duplicateCheckerProvider` (Riverpod) exposes service
-- [ ] **PDF import (ticket 008 flow):** after file-pick, hash bytes → `findDocumentMatches` → if any, show modal `"Diese Datei wurde am ... schon importiert (N Transaktionen erzeugt). Trotzdem fortfahren?"` with Ja/Nein
-- [ ] On confirm import: create one `ImportedSource` row with `kind=pdf`, hash, filename, counts
-- [ ] **Manual entry (ticket 006 form):** on submit, `findTransactionMatches` → modal shows existing matches with `Save anyway` / `Cancel`
-- [ ] **PDF-import preview list (ticket 008 UI):** each candidate row marked with a warning icon if its `dedupeHash` matches an existing transaction; expandable to show the match
-- [ ] **Intra-batch check:** candidates within one import batch are cross-hashed; internal duplicates flagged
-- [ ] Preview-list header shows `N new / M possible duplicates`
-- [ ] No back-fill needed: there is no app installation, so no pre-009 rows exist. `TransactionRepository.save` populating an empty `dedupeHash` covers everything from here on
+- [x] `duplicateCheckerProvider` (Riverpod) exposes service
+- [x] **PDF import (ticket 008 flow):** after file-pick, hash bytes → `findDocumentMatches` → modal naming the earlier import date and count, with Fortfahren / Abbrechen; cancelling leaves the flow so the bytes are dropped
+- [x] On confirm import: create one `ImportedSource` row with `kind=pdf`, hash, filename, counts — plus a `note` when the document had been seen before
+- [x] **Manual entry (ticket 006 form):** on submit, `findTransactionMatches` → modal lists existing matches with Trotzdem speichern / Abbrechen. An edited booking is filtered out of its own matches
+- [x] **PDF-import preview list (ticket 008 UI):** suspicious rows carry a marker that opens the matching bookings
+- [x] **Intra-batch check:** rows are cross-hashed within one document; **both** copies are flagged, since the user decides which to keep
+- [x] Preview-list header shows `N neu / M mögliche Duplikate`
+- [x] No back-fill needed: there is no app installation, so no pre-009 rows exist
+
+## Deviations from the original spec
+| Spec | Built | Why |
+|------|-------|-----|
+| `save` populates `dedupeHash` "if empty" | Recomputed on every write | Editing an amount, date or counterparty would otherwise leave a hash describing the old booking, and the check would compare against something that no longer exists |
+| `DuplicateChecker` as a plain service | Interface + `LocalDuplicateChecker` | Mirrors `SyncAdapter`; without the seam the database-free widget tests would have to reach into Isar, which hangs in `testWidgets` |
+| `persist({required accountUuid})` | `persist()`, target account in controller state | Duplicate matching is account-scoped, so switching the destination must re-run the check — the account is flow state, not an argument of the final action |
+| "internal duplicates flagged" | **Both** copies flagged | The second copy is not inherently the wrong one; the user decides which to keep |
+
+## Residual gaps
+Two paths are covered only structurally, both because they end in a repository
+write and Isar cannot run inside `testWidgets`:
+- "Trotzdem speichern" actually persisting after the manual-entry warning
+- an edited booking being filtered out of its own match list
+
+Every write-through-UI path in this project now has this shape. Fixing it
+properly means a repository interface in the style of `SyncAdapter` and
+`DuplicateChecker` — worth its own TechDebt ticket, not this one.
 
 ## Out of Scope
 - Photo-scan doc-hash integration — ticket 016 owns it and already specifies it
@@ -122,5 +140,6 @@ No — reuses ING fixtures from 008 + inline builders.
 - Input: ~14k tokens
 - Output: ~5k tokens
 
-## Token Usage
-_Filled after Done._
+## Implementation Tokens (estimate)
+- Input: ~175k tokens
+- Output: ~30k tokens
