@@ -6,7 +6,7 @@
 | **Epic** | Import |
 | **Domain** | Import |
 | **Blocked By** | 006, 008 |
-| **Status** | Ready |
+| **Status** | In Progress |
 
 ## Description
 Two-layer defence against duplicate imports:

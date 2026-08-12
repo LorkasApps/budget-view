@@ -32,6 +32,11 @@ class Transaction implements SyncableEntity {
 
   String note = '';
 
+  /// SHA-256 of amount + booking day + normalised counterparty. Maintained by
+  /// the repository on every write; see `domain/dedupe_hash.dart`.
+  @Index()
+  String dedupeHash = '';
+
   bool deleted = false;
 
   late DateTime createdAt;
@@ -52,6 +57,7 @@ class Transaction implements SyncableEntity {
         'description': description,
         'counterparty': counterparty,
         'note': note,
+        'dedupeHash': dedupeHash,
         'deleted': deleted,
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt.toIso8601String(),

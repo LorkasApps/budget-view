@@ -10,7 +10,7 @@
 | 006-manual-transaction-entry.md | Feature | Import | Transaction | Done | 004, 005 | Manual transaction entry form |
 | 007-pdf-parser-plugin-interface.md | Feature | Import | Transaction | Done | 006 | Abstract PDF parser plug-in contract |
 | 008-first-concrete-pdf-parser.md | Feature | Import | Transaction | Done | 007 | First concrete PDF parser (ING Giro, ephemeral) |
-| 009-duplicate-detection-hash.md | Feature | Import | Import | Ready | 006, 008 | Duplicate detection (tx-level + doc-level SHA-256) |
+| 009-duplicate-detection-hash.md | Feature | Import | Import | In Progress | 006, 008 | Duplicate detection (tx-level + doc-level SHA-256) |
 | 010-category-tree-entity-crud.md | Feature | Categories | Category | Done | 002, 003 | Category tree entity + CRUD |
 | 011-category-assignment.md | Feature | Categories | Category | Done | 010, 006 | Assign one category per transaction |
 | 012-fractal-category-inheritance.md | Feature | Categories | Category | Ready | 011, 015 | Line-item category overrides parent transaction |

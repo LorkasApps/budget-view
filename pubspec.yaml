@@ -60,6 +60,9 @@ dependencies:
   # PDF text extraction for statement parsing (Syncfusion Community License).
   syncfusion_flutter_pdf: ^34.2.3
 
+  # SHA-256 for duplicate detection (transaction + document hashes).
+  crypto: ^3.0.7
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

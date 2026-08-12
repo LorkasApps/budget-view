@@ -4,6 +4,7 @@ import '../../../core/sync/sync_adapter.dart';
 import '../../../core/sync/sync_op.dart';
 import '../../../core/sync/syncable_entity.dart';
 import '../data/transaction.dart';
+import 'dedupe_hash.dart';
 
 /// Persists [Transaction]s and mirrors every write to the sync change-queue,
 /// per the repository-layer contract in docs/sync.md.
@@ -21,6 +22,9 @@ class TransactionRepository {
       transaction.createdAt = now;
     }
     transaction.updatedAt = now;
+    // Recomputed on every write, not just when empty: editing an amount, date
+    // or counterparty would otherwise leave a hash describing the old booking.
+    transaction.dedupeHash = computeDedupeHash(transaction);
 
     await _isar.writeTxn(() async {
       await _isar.transactions.put(transaction);
@@ -62,6 +66,29 @@ class TransactionRepository {
         .deletedEqualTo(false)
         .sortByBookingDateDesc()
         .thenByCreatedAtDesc()
+        .findAll();
+  }
+
+  /// Bookings with the same dedupe hash on one account. Scoped per account on
+  /// purpose: a transfer between two accounts produces two legitimate bookings
+  /// that hash identically.
+  Future<List<Transaction>> findByDedupeHash(
+    String dedupeHash, {
+    required String accountUuid,
+    bool includeDeleted = false,
+  }) {
+    if (includeDeleted) {
+      return _isar.transactions
+          .filter()
+          .dedupeHashEqualTo(dedupeHash)
+          .accountUuidEqualTo(accountUuid)
+          .findAll();
+    }
+    return _isar.transactions
+        .filter()
+        .dedupeHashEqualTo(dedupeHash)
+        .accountUuidEqualTo(accountUuid)
+        .deletedEqualTo(false)
         .findAll();
   }
 
