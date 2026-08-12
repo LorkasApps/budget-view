@@ -5,7 +5,7 @@
 | **Type** | Feature |
 | **Epic** | Drilldown |
 | **Domain** | Drilldown |
-| **Blocked By** | 015 |
+| **Blocked By** | 015, 009 |
 | **Status** | Ready |
 
 ## Description

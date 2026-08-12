@@ -4,7 +4,7 @@
 |-------|-------|
 | **Type** | Feature |
 | **Epic** | Import |
-| **Domain** | Transaction |
+| **Domain** | Import |
 | **Blocked By** | 006, 008 |
 | **Status** | Ready |
 
@@ -15,6 +15,26 @@ Two-layer defence against duplicate imports:
 2. **Transaction-level** — SHA-256 over `amountCents` + `bookingDate` (date-only) + normalized `counterparty` per candidate row, checked in the import preview. Match flagged per row; user may include anyway.
 
 Raw documents are **not persisted** (per project-wide decision). Only `ImportedSource` metadata rows persist for re-import warnings.
+
+## Where things live
+This ticket creates a new `Import` domain for artifacts shared by *every* import
+path, and leaves format-specific code where it already is. Ticket 008's ING
+parser and PDF flow do **not** move.
+
+| Artifact | Home | Why |
+|----------|------|-----|
+| `ImportedSource`, `content_hash.dart`, `DuplicateChecker` | `lib/features/import/` | Needed by PDF import (008) and photo scan (016) alike; belongs to neither |
+| `dedupe_hash.dart` (`computeDedupeHash(Transaction)`) | `lib/features/transaction/domain/` | Hashes a transaction, so it lives with transactions |
+| ING parser, import flow controller, `PdfImportScreen` | `lib/features/transaction/import/` (unchanged) | PDF-specific |
+
+Direction of dependency: `Transaction → Import` and later `Drilldown → Import`.
+Never the reverse. Add both edges to `dependencies.md` during implementation.
+
+## Scope boundary vs ticket 016
+016 owns the **photo** side end to end — its ACs already call
+`duplicateCheckerProvider.findDocumentMatches` and write the `kind=photo`
+`ImportedSource` row. This ticket only has to *provide* the checker and the
+entity. Cut line: **009 provides, 016 consumes.**
 
 ## Entities
 
@@ -76,20 +96,22 @@ Both layers = **suspicion**, not blocker. User decides.
 - [ ] `duplicateCheckerProvider` (Riverpod) exposes service
 - [ ] **PDF import (ticket 008 flow):** after file-pick, hash bytes → `findDocumentMatches` → if any, show modal `"Diese Datei wurde am ... schon importiert (N Transaktionen erzeugt). Trotzdem fortfahren?"` with Ja/Nein
 - [ ] On confirm import: create one `ImportedSource` row with `kind=pdf`, hash, filename, counts
-- [ ] **Photo scan (ticket 016 flow):** after capture / gallery pick, same doc-hash flow with `kind=photo`
 - [ ] **Manual entry (ticket 006 form):** on submit, `findTransactionMatches` → modal shows existing matches with `Save anyway` / `Cancel`
 - [ ] **PDF-import preview list (ticket 008 UI):** each candidate row marked with a warning icon if its `dedupeHash` matches an existing transaction; expandable to show the match
 - [ ] **Intra-batch check:** candidates within one import batch are cross-hashed; internal duplicates flagged
 - [ ] Preview-list header shows `N new / M possible duplicates`
-- [ ] Existing pre-009 transactions get their `dedupeHash` back-filled once at first launch after upgrade (dev-mode: covered by nuke+rebuild)
-- [ ] `ImportedSource` list visible under Settings → Import History; user can delete rows (e.g. to allow legit re-import without warning)
+- [ ] No back-fill needed: there is no app installation, so no pre-009 rows exist. `TransactionRepository.save` populating an empty `dedupeHash` covers everything from here on
+
+## Out of Scope
+- Photo-scan doc-hash integration — ticket 016 owns it and already specifies it
+- Import-history screen (list + delete `ImportedSource` rows) — ticket 024, it needs a Settings surface that does not exist yet
+- Moving ticket 008's PDF code into the new `Import` domain — format-specific code stays put
 
 ## Affected Tests
 - `test/features/transaction/domain/dedupe_hash_test.dart`
 - `test/features/import/domain/content_hash_test.dart` — deterministic per bytes, differs on 1-byte change
 - `test/features/import/domain/duplicate_checker_test.dart` — both `findTransactionMatches` + `findDocumentMatches`
 - `test/features/transaction/import/pdf/pdf_dedupe_integration_test.dart` — doc-hash warning + row-level warnings + intra-batch flagging
-- `test/features/drilldown/import/photo_dedupe_integration_test.dart` — doc-hash warning on photo re-scan
 - `test/features/transaction/presentation/manual_entry_dupe_modal_test.dart` — tx-hash modal appears on hit, absent on miss
 - `test/features/import/data/imported_source_repository_test.dart` + sync-integration
 
