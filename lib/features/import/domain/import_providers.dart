@@ -16,7 +16,7 @@ final importedSourceRepositoryProvider = Provider<ImportedSourceRepository>((
 });
 
 final duplicateCheckerProvider = Provider<DuplicateChecker>((ref) {
-  return DuplicateChecker(
+  return LocalDuplicateChecker(
     ref.watch(transactionRepositoryProvider),
     ref.watch(importedSourceRepositoryProvider),
   );

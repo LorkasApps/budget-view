@@ -3,6 +3,10 @@ import 'dart:typed_data';
 import 'package:budget_view/features/account/data/account.dart';
 import 'package:budget_view/features/account/data/account_type.dart';
 import 'package:budget_view/features/account/domain/account_providers.dart';
+import 'package:budget_view/features/import/data/imported_source.dart';
+import 'package:budget_view/features/import/domain/duplicate_checker.dart';
+import 'package:budget_view/features/import/domain/import_providers.dart';
+import 'package:budget_view/features/transaction/data/transaction.dart';
 import 'package:budget_view/features/transaction/import/domain/import_flow_controller.dart';
 import 'package:budget_view/features/transaction/import/pdf/parse_result.dart';
 import 'package:budget_view/features/transaction/import/pdf/pdf_parser.dart';
@@ -50,6 +54,24 @@ class _StubParser implements PdfParser {
       );
 }
 
+/// Duplicate detection queries Isar, which never completes in the widget zone.
+/// The dedupe behaviour itself is covered by the controller and checker tests.
+class _NoDuplicates implements DuplicateChecker {
+  const _NoDuplicates();
+
+  @override
+  Future<List<Transaction>> findTransactionMatches(
+    String dedupeHash, {
+    required String accountUuid,
+    bool excludeDeleted = true,
+  }) async =>
+      const [];
+
+  @override
+  Future<List<ImportedSource>> findDocumentMatches(String contentHash) async =>
+      const [];
+}
+
 void main() {
   late ProviderContainer container;
 
@@ -67,6 +89,7 @@ void main() {
           PdfParserRegistry()..register(_StubParser()),
         ),
         accountsProvider(false).overrideWith((ref) => Stream.value([account])),
+        duplicateCheckerProvider.overrideWithValue(const _NoDuplicates()),
       ],
     );
   });
@@ -113,7 +136,7 @@ void main() {
     await loadAndParse(tester);
 
     expect(find.text('auszug.pdf'), findsOneWidget);
-    expect(find.text('2 von 2 Buchungen ausgewählt'), findsOneWidget);
+    expect(find.text('2 von 2 ausgewählt'), findsOneWidget);
     expect(find.text('Abschlag Strom'), findsOneWidget);
     expect(find.text('Gehalt'), findsOneWidget);
     expect(find.textContaining('Zeile 42 unlesbar'), findsOneWidget);
@@ -140,7 +163,7 @@ void main() {
     await settle(tester);
 
     expect(find.text('Stub Giro'), findsNothing);
-    expect(find.text('2 von 2 Buchungen ausgewählt'), findsOneWidget);
+    expect(find.text('2 von 2 ausgewählt'), findsOneWidget);
   });
 
   testWidgets('excluding a row updates the count and the import button', (
@@ -152,7 +175,7 @@ void main() {
     await tester.tap(find.byType(Checkbox).first);
     await settle(tester);
 
-    expect(find.text('1 von 2 Buchungen ausgewählt'), findsOneWidget);
+    expect(find.text('1 von 2 ausgewählt'), findsOneWidget);
     expect(find.text('1 Buchungen importieren'), findsOneWidget);
     expect(container.read(importFlowProvider).rows.first.included, isFalse);
   });

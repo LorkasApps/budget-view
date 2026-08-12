@@ -15,11 +15,23 @@ import '../data/transaction.dart';
 /// placeholder, so unrelated bookings of the same amount on the same day do
 /// collide. That is deliberate — the collision surfaces as a warning the user
 /// resolves, never as an automatic rejection.
-String computeDedupeHash(Transaction transaction) {
+String computeDedupeHash(Transaction transaction) => dedupeHashOf(
+      amountCents: transaction.amountCents,
+      bookingDate: transaction.bookingDate,
+      counterparty: transaction.counterparty,
+    );
+
+/// Field-level entry point, for candidates that are not `Transaction`s yet —
+/// import preview rows need their hash before anything is persisted.
+String dedupeHashOf({
+  required int amountCents,
+  required DateTime bookingDate,
+  required String counterparty,
+}) {
   final canonical = [
-    transaction.amountCents,
-    _day(transaction.bookingDate),
-    normalizeForMatching(transaction.counterparty),
+    amountCents,
+    _day(bookingDate),
+    normalizeForMatching(counterparty),
   ].join('|');
 
   return sha256.convert(utf8.encode(canonical)).toString();

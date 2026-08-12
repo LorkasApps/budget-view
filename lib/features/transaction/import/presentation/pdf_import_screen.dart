@@ -8,6 +8,8 @@ import '../../../account/data/account.dart';
 import '../../../account/domain/account_providers.dart';
 import '../../../category/presentation/category_chip.dart';
 import '../../../category/presentation/category_picker.dart';
+import '../../../import/data/imported_source.dart';
+import '../../data/transaction.dart';
 import '../domain/import_flow_controller.dart';
 
 /// Import flow: pick a statement PDF, confirm the detected parser, curate the
@@ -22,13 +24,17 @@ class PdfImportScreen extends ConsumerStatefulWidget {
 }
 
 class _PdfImportScreenState extends ConsumerState<PdfImportScreen> {
-  String? _targetAccountUuid;
   String _pickError = '';
 
   @override
   void initState() {
     super.initState();
-    _targetAccountUuid = widget.accountUuid;
+    // Duplicate scoping needs the target account before anything is parsed.
+    Future.microtask(
+      () => ref
+          .read(importFlowProvider.notifier)
+          .setTargetAccount(widget.accountUuid),
+    );
   }
 
   Future<void> _pickFile() async {
@@ -52,7 +58,82 @@ class _PdfImportScreenState extends ConsumerState<PdfImportScreen> {
       if (mounted) {
         setState(() => _pickError = 'Datei konnte nicht gelesen werden: $e');
       }
+      return;
     }
+
+    if (!mounted) return;
+    final matches = ref.read(importFlowProvider).documentMatches;
+    if (matches.isNotEmpty) await _confirmReimport(matches);
+  }
+
+  Future<void> _confirmReimport(List<ImportedSource> matches) async {
+    final previous = matches.first;
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Datei schon importiert'),
+        content: Text(
+          'Diese Datei wurde am ${formatDateDe(previous.importedAt)} bereits '
+          'importiert und hat damals ${previous.transactionsProduced} '
+          'Buchungen erzeugt'
+          '${matches.length > 1 ? ' (insgesamt ${matches.length} Importe)' : ''}'
+          '.\n\nTrotzdem fortfahren?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Abbrechen'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Fortfahren'),
+          ),
+        ],
+      ),
+    );
+
+    // Cancelling leaves the flow: popping disposes the controller, which drops
+    // the bytes.
+    if (proceed != true && mounted) Navigator.of(context).pop();
+  }
+
+  Future<void> _showRowMatches(int index) async {
+    final state = ref.read(importFlowProvider);
+    final matches = state.rowMatches[index] ?? const <Transaction>[];
+    final intraBatch = state.intraBatchDuplicates.contains(index);
+
+    await showDialog<void>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Möglicher Doppel-Eintrag'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (intraBatch)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 8),
+                child: Text('Kommt in diesem Dokument mehrfach vor.'),
+              ),
+            if (matches.isNotEmpty) ...[
+              const Text('Bereits gebucht:'),
+              const SizedBox(height: 8),
+              for (final match in matches)
+                Text(
+                  '${formatDateCompactDe(match.bookingDate)} · '
+                  '${formatCentsEur(match.amountCents)} · ${match.description}',
+                ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Schließen'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _editRow(int index, ImportRow row) async {
@@ -62,7 +143,7 @@ class _PdfImportScreenState extends ConsumerState<PdfImportScreen> {
     );
     if (edited == null) return;
 
-    ref.read(importFlowProvider.notifier).editRow(
+    await ref.read(importFlowProvider.notifier).editRow(
           index,
           bookingDate: edited.bookingDate,
           amountCents: edited.amountCents,
@@ -85,14 +166,6 @@ class _PdfImportScreenState extends ConsumerState<PdfImportScreen> {
     final pick = await pickCategory(context, allowNone: true);
     if (pick == null) return;
     ref.read(importFlowProvider.notifier).setCategoryForAll(pick.uuid);
-  }
-
-  Future<void> _persist() async {
-    final accountUuid = _targetAccountUuid;
-    if (accountUuid == null) return;
-    await ref.read(importFlowProvider.notifier).persist(
-          accountUuid: accountUuid,
-        );
   }
 
   @override
@@ -160,8 +233,9 @@ class _PdfImportScreenState extends ConsumerState<PdfImportScreen> {
                   FilledButton(
                     onPressed: state.busy || state.selectedParserId == null
                         ? null
-                        : () =>
-                            ref.read(importFlowProvider.notifier).parseDocument(),
+                        : () => ref
+                            .read(importFlowProvider.notifier)
+                            .parseDocument(),
                     child: const Text('Auslesen'),
                   ),
                 ],
@@ -171,7 +245,8 @@ class _PdfImportScreenState extends ConsumerState<PdfImportScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          '${state.includedCount} von ${state.rows.length} Buchungen ausgewählt',
+                          '${state.newCount} neu / '
+                          '${state.suspiciousCount} mögliche Duplikate',
                           style: theme.textTheme.titleMedium,
                         ),
                       ),
@@ -182,16 +257,22 @@ class _PdfImportScreenState extends ConsumerState<PdfImportScreen> {
                       ),
                     ],
                   ),
+                  Text(
+                    '${state.includedCount} von ${state.rows.length} ausgewählt',
+                    style: theme.textTheme.bodySmall,
+                  ),
                   for (var index = 0; index < state.rows.length; index++)
                     _RowTile(
                       row: state.rows[index],
                       enabled: !state.busy,
+                      suspicious: state.isSuspicious(index),
                       onToggle: () => ref
                           .read(importFlowProvider.notifier)
                           .toggleRow(index),
                       onEdit: () => _editRow(index, state.rows[index]),
                       onPickCategory: () =>
                           _pickRowCategory(index, state.rows[index]),
+                      onShowMatches: () => _showRowMatches(index),
                     ),
                 ],
                 if (state.warnings.isNotEmpty) ...[
@@ -209,18 +290,23 @@ class _PdfImportScreenState extends ConsumerState<PdfImportScreen> {
                 if (state.rows.isNotEmpty) ...[
                   const SizedBox(height: 24),
                   _AccountPicker(
-                    selected: _targetAccountUuid,
+                    selected: state.targetAccountUuid,
                     enabled: !state.busy,
-                    onChanged: (uuid) =>
-                        setState(() => _targetAccountUuid = uuid),
+                    onChanged: (uuid) {
+                      if (uuid != null) {
+                        ref
+                            .read(importFlowProvider.notifier)
+                            .setTargetAccount(uuid);
+                      }
+                    },
                   ),
                   const SizedBox(height: 16),
                   FilledButton(
                     onPressed: state.busy ||
                             state.includedCount == 0 ||
-                            _targetAccountUuid == null
+                            state.targetAccountUuid == null
                         ? null
-                        : _persist,
+                        : () => ref.read(importFlowProvider.notifier).persist(),
                     child: Text('${state.includedCount} Buchungen importieren'),
                   ),
                 ],
@@ -234,16 +320,20 @@ class _RowTile extends StatelessWidget {
   const _RowTile({
     required this.row,
     required this.enabled,
+    required this.suspicious,
     required this.onToggle,
     required this.onEdit,
     required this.onPickCategory,
+    required this.onShowMatches,
   });
 
   final ImportRow row;
   final bool enabled;
+  final bool suspicious;
   final VoidCallback onToggle;
   final VoidCallback onEdit;
   final VoidCallback onPickCategory;
+  final VoidCallback onShowMatches;
 
   @override
   Widget build(BuildContext context) {
@@ -283,10 +373,20 @@ class _RowTile extends StatelessWidget {
       secondary: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (suspicious)
+            IconButton(
+              tooltip: 'Möglicher Doppel-Eintrag',
+              icon: Icon(
+                Icons.copy_all_outlined,
+                color: theme.colorScheme.error,
+              ),
+              onPressed: onShowMatches,
+            ),
           Text(
             formatCentsEur(row.amountCents),
             style: theme.textTheme.bodyMedium?.copyWith(
-              color: isExpense ? theme.colorScheme.error : Colors.green.shade700,
+              color:
+                  isExpense ? theme.colorScheme.error : Colors.green.shade700,
             ),
           ),
           IconButton(
@@ -439,7 +539,8 @@ class _RowEditDialogState extends State<_RowEditDialog> {
             const SizedBox(height: 12),
             TextField(
               controller: _amount,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
               decoration: const InputDecoration(labelText: 'Betrag (EUR)'),
             ),
             const SizedBox(height: 12),

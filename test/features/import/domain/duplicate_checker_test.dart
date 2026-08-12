@@ -16,7 +16,7 @@ void main() {
   late Isar isar;
   late TransactionRepository transactions;
   late ImportedSourceRepository sources;
-  late DuplicateChecker checker;
+  late LocalDuplicateChecker checker;
 
   setUpAll(() async {
     await Isar.initializeIsarCore(download: true);
@@ -28,7 +28,7 @@ void main() {
     final sync = LocalSyncAdapter(isar);
     transactions = TransactionRepository(isar, sync);
     sources = ImportedSourceRepository(isar, sync);
-    checker = DuplicateChecker(transactions, sources);
+    checker = LocalDuplicateChecker(transactions, sources);
   });
 
   tearDown(() async {

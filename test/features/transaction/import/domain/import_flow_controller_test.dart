@@ -142,7 +142,7 @@ void main() {
     await controller.loadDocument(bytes, fileName: 'auszug.pdf');
     await controller.parseDocument();
     controller.toggleRow(0);
-    controller.editRow(1, amountCents: -999, description: 'EDEKA');
+    await controller.editRow(1, amountCents: -999, description: 'EDEKA');
 
     final state = container.read(importFlowProvider);
     expect(state.rows[0].included, isFalse);
@@ -164,7 +164,8 @@ void main() {
     await controller.loadDocument(bytes, fileName: 'auszug.pdf');
     await controller.parseDocument();
     controller.toggleRow(1);
-    await controller.persist(accountUuid: 'account-1');
+    await controller.setTargetAccount('account-1');
+    await controller.persist();
 
     final saved = await container
         .read(transactionRepositoryProvider)
@@ -217,7 +218,8 @@ void main() {
     await controller.parseDocument();
     expect(container.read(importFlowProvider).rows.single.categoryUuid, isNull);
 
-    await controller.persist(accountUuid: 'account-1');
+    await controller.setTargetAccount('account-1');
+    await controller.persist();
 
     final saved = await container
         .read(transactionRepositoryProvider)
@@ -256,7 +258,7 @@ void main() {
     await controller.loadDocument(bytes, fileName: 'auszug.pdf');
     await controller.parseDocument();
     controller.setRowCategory(0, 'cat-a');
-    controller.editRow(0, description: 'Drogerie');
+    await controller.editRow(0, description: 'Drogerie');
 
     final row = container.read(importFlowProvider).rows.single;
     expect(row.description, 'Drogerie');
@@ -273,7 +275,8 @@ void main() {
     await controller.parseDocument();
     controller.setRowCategory(0, 'cat-a');
     controller.toggleRow(1);
-    await controller.persist(accountUuid: 'account-1');
+    await controller.setTargetAccount('account-1');
+    await controller.persist();
 
     final saved = await container
         .read(transactionRepositoryProvider)
@@ -289,7 +292,8 @@ void main() {
     await controller.loadDocument(bytes, fileName: 'auszug.pdf');
     await controller.parseDocument();
     controller.toggleRow(0);
-    await controller.persist(accountUuid: 'account-1');
+    await controller.setTargetAccount('account-1');
+    await controller.persist();
 
     final saved = await container
         .read(transactionRepositoryProvider)

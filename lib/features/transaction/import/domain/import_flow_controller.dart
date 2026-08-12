@@ -1,6 +1,12 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../import/data/imported_source.dart';
+import '../../../import/data/imported_source_kind.dart';
+import '../../../import/domain/content_hash.dart';
+import '../../../import/domain/import_providers.dart';
+import '../../data/transaction.dart';
+import '../../domain/dedupe_hash.dart';
 import '../../domain/transaction_providers.dart';
 import '../candidate_conversion.dart';
 import '../pdf/parse_result.dart';
@@ -38,6 +44,21 @@ class ImportRow {
 
   final bool included;
 
+  /// Same hash the repository will store, computed before anything is saved so
+  /// the preview can warn.
+  String get dedupeHash => dedupeHashOf(
+        amountCents: amountCents,
+        bookingDate: bookingDate,
+        counterparty: counterparty,
+      );
+
+  ParsedTransactionCandidate toCandidate() => ParsedTransactionCandidate(
+        bookingDate: bookingDate,
+        amountCents: amountCents,
+        description: description,
+        counterparty: counterparty,
+      );
+
   /// Separate from [copyWith] because copyWith cannot express "set back to
   /// null", and clearing a category has to be possible.
   ImportRow withCategory(String? uuid) {
@@ -50,13 +71,6 @@ class ImportRow {
       included: included,
     );
   }
-
-  ParsedTransactionCandidate toCandidate() => ParsedTransactionCandidate(
-        bookingDate: bookingDate,
-        amountCents: amountCents,
-        description: description,
-        counterparty: counterparty,
-      );
 
   ImportRow copyWith({
     DateTime? bookingDate,
@@ -93,9 +107,14 @@ class ImportSummary {
 class ImportFlowState {
   const ImportFlowState({
     this.fileName,
+    this.contentHash = '',
+    this.documentMatches = const [],
+    this.targetAccountUuid,
     this.ranking = const [],
     this.selectedParserId,
     this.rows = const [],
+    this.rowMatches = const {},
+    this.intraBatchDuplicates = const {},
     this.warnings = const [],
     this.summary,
     this.busy = false,
@@ -103,9 +122,25 @@ class ImportFlowState {
   });
 
   final String? fileName;
+
+  /// SHA-256 of the picked document, kept so the ImportedSource row can record it.
+  final String contentHash;
+
+  /// Earlier imports of this very document. Non-empty means "seen before".
+  final List<ImportedSource> documentMatches;
+
+  final String? targetAccountUuid;
   final List<PdfParserRanking> ranking;
   final String? selectedParserId;
   final List<ImportRow> rows;
+
+  /// Row index → already-persisted bookings with the same hash on the target
+  /// account.
+  final Map<int, List<Transaction>> rowMatches;
+
+  /// Row indexes that duplicate another row within this same document.
+  final Set<int> intraBatchDuplicates;
+
   final List<String> warnings;
   final ImportSummary? summary;
   final bool busy;
@@ -113,12 +148,27 @@ class ImportFlowState {
 
   bool get hasDocument => fileName != null;
 
+  bool get documentSeenBefore => documentMatches.isNotEmpty;
+
   int get includedCount => rows.where((row) => row.included).length;
 
+  bool isSuspicious(int index) =>
+      (rowMatches[index] ?? const []).isNotEmpty ||
+      intraBatchDuplicates.contains(index);
+
+  int get suspiciousCount =>
+      List.generate(rows.length, (index) => index).where(isSuspicious).length;
+
+  int get newCount => rows.length - suspiciousCount;
+
   ImportFlowState copyWith({
+    List<ImportedSource>? documentMatches,
+    String? targetAccountUuid,
     List<PdfParserRanking>? ranking,
     String? selectedParserId,
     List<ImportRow>? rows,
+    Map<int, List<Transaction>>? rowMatches,
+    Set<int>? intraBatchDuplicates,
     List<String>? warnings,
     ImportSummary? summary,
     bool? busy,
@@ -126,9 +176,14 @@ class ImportFlowState {
   }) {
     return ImportFlowState(
       fileName: fileName,
+      contentHash: contentHash,
+      documentMatches: documentMatches ?? this.documentMatches,
+      targetAccountUuid: targetAccountUuid ?? this.targetAccountUuid,
       ranking: ranking ?? this.ranking,
       selectedParserId: selectedParserId ?? this.selectedParserId,
       rows: rows ?? this.rows,
+      rowMatches: rowMatches ?? this.rowMatches,
+      intraBatchDuplicates: intraBatchDuplicates ?? this.intraBatchDuplicates,
       warnings: warnings ?? this.warnings,
       summary: summary ?? this.summary,
       busy: busy ?? this.busy,
@@ -137,7 +192,8 @@ class ImportFlowState {
   }
 }
 
-/// Drives one PDF import: rank parsers, parse, let the user curate rows, persist.
+/// Drives one PDF import: hash the document, rank parsers, parse, let the user
+/// curate rows, persist.
 ///
 /// The raw bytes stay in this controller and nowhere else, so tearing the flow
 /// down drops them; they are never written to disk.
@@ -161,11 +217,24 @@ class ImportFlowController extends AutoDisposeNotifier<ImportFlowState> {
 
   Future<void> loadDocument(Uint8List bytes, {required String fileName}) async {
     _bytes = bytes;
-    state = ImportFlowState(fileName: fileName, busy: true);
-
-    final ranking = await ref.read(pdfParserRegistryProvider).rank(bytes);
+    final target = state.targetAccountUuid;
     state = ImportFlowState(
       fileName: fileName,
+      targetAccountUuid: target,
+      busy: true,
+    );
+
+    final contentHash = computeContentHash(bytes);
+    final documentMatches = await ref
+        .read(duplicateCheckerProvider)
+        .findDocumentMatches(contentHash);
+    final ranking = await ref.read(pdfParserRegistryProvider).rank(bytes);
+
+    state = ImportFlowState(
+      fileName: fileName,
+      contentHash: contentHash,
+      documentMatches: documentMatches,
+      targetAccountUuid: target,
       ranking: ranking,
       selectedParserId: ranking.isEmpty ? null : ranking.first.parser.id,
     );
@@ -173,6 +242,12 @@ class ImportFlowController extends AutoDisposeNotifier<ImportFlowState> {
 
   void selectParser(String parserId) {
     state = state.copyWith(selectedParserId: parserId);
+  }
+
+  /// Target account drives duplicate scoping, so changing it re-runs the check.
+  Future<void> setTargetAccount(String accountUuid) async {
+    state = state.copyWith(targetAccountUuid: accountUuid);
+    await _recheckDuplicates();
   }
 
   Future<void> parseDocument() async {
@@ -183,13 +258,14 @@ class ImportFlowController extends AutoDisposeNotifier<ImportFlowState> {
     state = state.copyWith(busy: true, error: '');
     try {
       final result = await parser.parse(bytes);
-      state = ImportFlowState(
-        fileName: state.fileName,
-        ranking: state.ranking,
-        selectedParserId: state.selectedParserId,
+      state = state.copyWith(
         rows: result.transactions.map(ImportRow.fromCandidate).toList(),
         warnings: result.warnings,
+        rowMatches: const {},
+        intraBatchDuplicates: const {},
+        busy: false,
       );
+      await _recheckDuplicates();
     } catch (e) {
       state = state.copyWith(busy: false, error: 'Parsen fehlgeschlagen: $e');
     }
@@ -201,13 +277,13 @@ class ImportFlowController extends AutoDisposeNotifier<ImportFlowState> {
     state = state.copyWith(rows: rows);
   }
 
-  void editRow(
+  Future<void> editRow(
     int index, {
     DateTime? bookingDate,
     int? amountCents,
     String? description,
     String? counterparty,
-  }) {
+  }) async {
     final rows = [...state.rows];
     rows[index] = rows[index].copyWith(
       bookingDate: bookingDate,
@@ -216,6 +292,9 @@ class ImportFlowController extends AutoDisposeNotifier<ImportFlowState> {
       counterparty: counterparty,
     );
     state = state.copyWith(rows: rows);
+
+    // An edit can move a row onto or off a duplicate hash.
+    await _recheckDuplicates();
   }
 
   void setRowCategory(int index, String? categoryUuid) {
@@ -234,9 +313,10 @@ class ImportFlowController extends AutoDisposeNotifier<ImportFlowState> {
     );
   }
 
-  Future<void> persist({required String accountUuid}) async {
+  Future<void> persist() async {
+    final accountUuid = state.targetAccountUuid;
     final included = state.rows.where((row) => row.included).toList();
-    if (included.isEmpty) return;
+    if (accountUuid == null || included.isEmpty) return;
 
     state = state.copyWith(busy: true, error: '');
     final repository = ref.read(transactionRepositoryProvider);
@@ -247,6 +327,18 @@ class ImportFlowController extends AutoDisposeNotifier<ImportFlowState> {
       );
     }
 
+    await ref.read(importedSourceRepositoryProvider).save(
+          ImportedSource()
+            ..kind = ImportedSourceKind.pdf
+            ..contentHashSha256 = state.contentHash
+            ..filename = state.fileName ?? ''
+            ..importedAt = DateTime.now()
+            ..transactionsProduced = included.length
+            ..note = state.documentSeenBefore
+                ? 'Erneuter Import trotz Warnung'
+                : null,
+        );
+
     _bytes = null;
     state = state.copyWith(
       busy: false,
@@ -255,6 +347,45 @@ class ImportFlowController extends AutoDisposeNotifier<ImportFlowState> {
         skipped: state.rows.length - included.length,
         warnings: state.warnings.length,
       ),
+    );
+  }
+
+  /// Recomputes both duplicate layers over the current rows. Cheap enough to
+  /// re-run on every edit: one indexed query per row plus an in-memory grouping.
+  Future<void> _recheckDuplicates() async {
+    final accountUuid = state.targetAccountUuid;
+    final rows = state.rows;
+    if (rows.isEmpty) return;
+
+    final matches = <int, List<Transaction>>{};
+    if (accountUuid != null) {
+      final checker = ref.read(duplicateCheckerProvider);
+      for (var index = 0; index < rows.length; index++) {
+        final found = await checker.findTransactionMatches(
+          rows[index].dedupeHash,
+          accountUuid: accountUuid,
+        );
+        if (found.isNotEmpty) matches[index] = found;
+      }
+    }
+
+    final seen = <String, int>{};
+    final intraBatch = <int>{};
+    for (var index = 0; index < rows.length; index++) {
+      final hash = rows[index].dedupeHash;
+      final first = seen[hash];
+      if (first == null) {
+        seen[hash] = index;
+      } else {
+        // Flag both copies: the user has to decide which one to keep.
+        intraBatch.add(first);
+        intraBatch.add(index);
+      }
+    }
+
+    state = state.copyWith(
+      rowMatches: matches,
+      intraBatchDuplicates: intraBatch,
     );
   }
 }
