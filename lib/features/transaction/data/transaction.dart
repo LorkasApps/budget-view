@@ -37,6 +37,11 @@ class Transaction implements SyncableEntity {
   @Index()
   String dedupeHash = '';
 
+  /// True while the category came from an accepted auto-suggestion (ticket 014)
+  /// rather than the user. The tagging learn hook skips those, so a suggestion
+  /// cannot reinforce itself. Nothing sets it until 014 lands.
+  bool categoryAutoSuggested = false;
+
   bool deleted = false;
 
   late DateTime createdAt;
@@ -58,6 +63,7 @@ class Transaction implements SyncableEntity {
         'counterparty': counterparty,
         'note': note,
         'dedupeHash': dedupeHash,
+        'categoryAutoSuggested': categoryAutoSuggested,
         'deleted': deleted,
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt.toIso8601String(),

@@ -10,6 +10,7 @@ import '../../category/presentation/category_picker.dart';
 import '../../drilldown/domain/line_item_providers.dart';
 import '../../drilldown/presentation/line_items_section.dart';
 import '../../import/domain/import_providers.dart';
+import '../../tagging/domain/tagging_providers.dart';
 import '../data/transaction.dart';
 import '../domain/dedupe_hash.dart';
 import '../domain/transaction_providers.dart';
@@ -179,9 +180,12 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
       ..bookingDate = _bookingDate
       ..description = _descriptionController.text.trim()
       ..counterparty = _counterpartyController.text.trim()
-      ..note = _noteController.text.trim();
+      ..note = _noteController.text.trim()
+      // The user picked this category by hand, so it is no longer a suggestion.
+      ..categoryAutoSuggested = false;
 
     await ref.read(transactionRepositoryProvider).save(transaction);
+    await ref.read(taggingLearnServiceProvider).learnFrom(transaction);
     // A changed booking amount moves the gap its positions have to close. No-op
     // for a booking without positions, which is the case for every fresh one.
     await ref.read(restpostenReconcilerProvider).reconcile(transaction.uuid);

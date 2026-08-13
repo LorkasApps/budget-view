@@ -6,6 +6,7 @@ import '../../features/account/data/account.dart';
 import '../../features/category/data/category.dart';
 import '../../features/drilldown/data/line_item.dart';
 import '../../features/import/data/imported_source.dart';
+import '../../features/tagging/data/tagging_rule.dart';
 import '../../features/transaction/data/transaction.dart';
 import '../sync/change_queue_entry.dart';
 import 'app_meta.dart';
@@ -23,6 +24,7 @@ const List<CollectionSchema<dynamic>> appIsarSchemas = [
   CategorySchema,
   ImportedSourceSchema,
   LineItemSchema,
+  TaggingRuleSchema,
 ];
 
 /// Opens the app's Isar instance and reconciles [AppMeta] / schema version.

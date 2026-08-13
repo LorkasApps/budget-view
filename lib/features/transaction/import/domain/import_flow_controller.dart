@@ -5,6 +5,7 @@ import '../../../import/data/imported_source.dart';
 import '../../../import/data/imported_source_kind.dart';
 import '../../../import/domain/content_hash.dart';
 import '../../../import/domain/import_providers.dart';
+import '../../../tagging/domain/tagging_providers.dart';
 import '../../data/transaction.dart';
 import '../../domain/dedupe_hash.dart';
 import '../../domain/transaction_providers.dart';
@@ -320,11 +321,15 @@ class ImportFlowController extends AutoDisposeNotifier<ImportFlowState> {
 
     state = state.copyWith(busy: true, error: '');
     final repository = ref.read(transactionRepositoryProvider);
+    final learn = ref.read(taggingLearnServiceProvider);
     for (final row in included) {
-      await repository.save(
-        candidateToTransaction(row.toCandidate(), accountUuid: accountUuid)
-          ..categoryUuid = row.categoryUuid,
-      );
+      final transaction =
+          candidateToTransaction(row.toCandidate(), accountUuid: accountUuid)
+            ..categoryUuid = row.categoryUuid;
+      await repository.save(transaction);
+      // Categories on import rows are user-chosen too, so the statement is a
+      // bulk teaching opportunity.
+      await learn.learnFrom(transaction);
     }
 
     await ref.read(importedSourceRepositoryProvider).save(

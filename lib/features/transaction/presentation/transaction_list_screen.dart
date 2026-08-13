@@ -8,6 +8,7 @@ import '../../account/domain/account_providers.dart';
 import '../../account/presentation/account_form_screen.dart';
 import '../../category/presentation/category_chip.dart';
 import '../../category/presentation/category_picker.dart';
+import '../../tagging/domain/tagging_providers.dart';
 import '../data/transaction.dart';
 import '../domain/transaction_providers.dart';
 import '../import/presentation/pdf_import_screen.dart';
@@ -170,8 +171,11 @@ class _TransactionTile extends ConsumerWidget {
     );
     if (pick == null) return;
 
-    transaction.categoryUuid = pick.uuid;
+    transaction
+      ..categoryUuid = pick.uuid
+      ..categoryAutoSuggested = false;
     await ref.read(transactionRepositoryProvider).save(transaction);
+    await ref.read(taggingLearnServiceProvider).learnFrom(transaction);
   }
 
   @override
