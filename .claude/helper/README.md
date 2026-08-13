@@ -32,6 +32,30 @@ Compacts `make check` output (`flutter analyze` + `flutter test`) down to failur
 
 **Exit codes:** `0` analyze clean and all tests passed, `1` any analyze issue or test failure, `2` input was empty or could not be parsed.
 
+## `line_length.py`
+
+Lists Dart lines over a width limit. A diagnostic, not a gate: nothing in `analysis_options.yaml` enables `lines_longer_than_80_chars`, and the repo has pre-existing long lines (mostly `import 'package:...'`, which `dart format` never rewraps). It exists because `dart format` cannot run in the agent sandbox, so wrapping is otherwise unverifiable from there.
+
+**Prints positions and lengths only, never line content** — the one way a source-touching helper stays compatible with the "no source code in context" rule. Read it as a tally, not as a diff.
+
+**Usage:** `./.claude/helper/line_length.py [paths...] [--max N] [--changed] [--quiet]`
+
+**Args:**
+- `paths` (optional, default `lib test`) — files or directories to scan; `*.g.dart` is always skipped
+- `--max N` (optional, default `80`) — width limit
+- `--changed` (optional) — only files modified against `HEAD`, **including untracked ones** (`git diff` alone never lists new files, which are exactly the ones worth checking). Ignores `paths`
+- `--quiet` (optional) — per-file counts instead of individual positions
+
+**Output:** tab-separated `<path>:<line>\t<length>`, or `<path>\t<count>` with `--quiet`, then a tally line.
+
+**Example:**
+
+    $ ./.claude/helper/line_length.py --changed --quiet
+    lib/features/tagging/data/tagging_rule.dart	1
+    2 line(s) over 80 chars in 12 file(s)
+
+**Exit codes:** `0` nothing over the limit (or nothing to scan), `1` at least one line over the limit.
+
 ## `ticket_status_count.py`
 
 Ticket progress from `.claude/tickets/README.md` — counts per epic/domain/type, or lists the tickets behind one status.
