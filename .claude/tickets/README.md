@@ -16,7 +16,7 @@
 | 012-fractal-category-inheritance.md | Feature | Categories | Category | Ready | 011, 015 | Line-item category overrides parent transaction |
 | 013-tagging-rule-storage.md | Feature | Auto-Tagging | Tagging | Ready | 011 | Store learned rules from user assignments |
 | 014-auto-suggest-on-import.md | Feature | Auto-Tagging | Tagging | Ready | 013 | Suggest category on new imports |
-| 015-line-item-entity.md | Feature | Drilldown | Drilldown | Ready | 006 | Line-item entity (child of transaction) |
+| 015-line-item-entity.md | Feature | Drilldown | Drilldown | In Progress | 006 | Line-item entity (child of transaction) |
 | 016-kassenbon-photo-capture.md | Feature | Drilldown | Drilldown | Ready | 015, 009 | Camera / gallery capture flow (ephemeral, no persistence) |
 | 017-ocr-mlkit.md | Feature | Drilldown | Drilldown | Ready | 016 | OCR via Google ML Kit (in-memory only) |
 | 018-ocr-to-line-items.md | Feature | Drilldown | Drilldown | Ready | 017 | Parse OCR text into line-items (heuristic + user review) |

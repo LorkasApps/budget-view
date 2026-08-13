@@ -6,7 +6,7 @@
 | **Epic** | Drilldown |
 | **Domain** | Drilldown |
 | **Blocked By** | 006 |
-| **Status** | Ready |
+| **Status** | In Progress |
 
 ## Description
 Sub-transaction items enabling drilldown (Kassenbon items). One `Transaction` has N `LineItem`s. Line-items share the **sign of the parent transaction** (expense line-items are negative; refund line-items positive). Quantity + unit price are **optional** — OCR fills what it can, user edits freely. Sum validation + Restposten row belong to ticket 019. Fractal category inheritance belongs to ticket 012.
