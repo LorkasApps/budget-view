@@ -2,21 +2,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/money/money.dart';
+import '../../category/data/category.dart';
+import '../../category/domain/category_providers.dart';
 import '../../category/presentation/category_chip.dart';
 import '../../category/presentation/category_picker.dart';
+import '../../transaction/data/transaction.dart';
 import '../data/line_item.dart';
 import '../domain/line_item_providers.dart';
 import '../domain/line_item_repository.dart';
 import '../domain/line_item_validation.dart';
 
-/// Create (when [existing] is null) or edit one position of a booking.
+/// Create (when [existing] is null) or edit one position of [parent].
 ///
-/// The amount field holds the magnitude; the sign comes from the parent
-/// booking, so [parentIsExpense] decides it — there is no toggle here.
+/// The amount field holds the magnitude; the sign comes from [parent], so there
+/// is no expense/income toggle here.
 Future<void> showLineItemSheet(
   BuildContext context, {
-  required String transactionUuid,
-  required bool parentIsExpense,
+  required Transaction parent,
   LineItem? existing,
 }) {
   return showModalBottomSheet<void>(
@@ -26,24 +28,15 @@ Future<void> showLineItemSheet(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
       ),
-      child: _LineItemSheet(
-        transactionUuid: transactionUuid,
-        parentIsExpense: parentIsExpense,
-        existing: existing,
-      ),
+      child: _LineItemSheet(parent: parent, existing: existing),
     ),
   );
 }
 
 class _LineItemSheet extends ConsumerStatefulWidget {
-  const _LineItemSheet({
-    required this.transactionUuid,
-    required this.parentIsExpense,
-    this.existing,
-  });
+  const _LineItemSheet({required this.parent, this.existing});
 
-  final String transactionUuid;
-  final bool parentIsExpense;
+  final Transaction parent;
   final LineItem? existing;
 
   @override
@@ -127,11 +120,35 @@ class _LineItemSheetState extends ConsumerState<_LineItemSheet> {
     return LineItemValidation.unitPrice(_parsedUnitPrice);
   }
 
+  /// Name of the booking's own category, or null while it is uncategorized.
+  String? _parentCategoryName(List<Category> categories) {
+    final uuid = widget.parent.categoryUuid;
+    if (uuid == null) return null;
+    for (final category in categories) {
+      if (category.uuid == uuid) return category.name;
+    }
+    return null;
+  }
+
+  /// Takes the category list from the caller so `build` can pass a watched
+  /// snapshot while the tap handler passes a freshly read one — watching
+  /// outside build is not allowed, and reading during build would freeze the
+  /// label at the stream's loading state.
+  String _inheritLabel(List<Category> categories) {
+    final name = _parentCategoryName(categories);
+    return name == null
+        ? 'Erbt von der Buchung (ohne Kategorie)'
+        : 'Erbt von der Buchung ($name)';
+  }
+
   Future<void> _chooseCategory() async {
+    final categories =
+        ref.read(categoriesProvider(true)).valueOrNull ?? const <Category>[];
     final pick = await pickCategory(
       context,
       selected: _categoryUuid,
       allowNone: true,
+      noneLabel: _inheritLabel(categories),
     );
     if (pick == null) return;
     setState(() => _categoryUuid = pick.uuid);
@@ -141,10 +158,10 @@ class _LineItemSheetState extends ConsumerState<_LineItemSheet> {
     if (!_formKey.currentState!.validate()) return;
 
     final magnitude = parseEurosToCents(_amountController.text)!;
-    final item = widget.existing ??
-        (LineItem()..transactionUuid = widget.transactionUuid);
+    final item =
+        widget.existing ?? (LineItem()..transactionUuid = widget.parent.uuid);
     item
-      ..amountCents = widget.parentIsExpense ? -magnitude : magnitude
+      ..amountCents = widget.parent.amountCents < 0 ? -magnitude : magnitude
       ..description = _descriptionController.text.trim()
       ..quantity = _parsedQuantity
       ..unitPriceCents = _parsedUnitPrice
@@ -166,6 +183,8 @@ class _LineItemSheetState extends ConsumerState<_LineItemSheet> {
   @override
   Widget build(BuildContext context) {
     final warning = _mismatchWarning;
+    final categories =
+        ref.watch(categoriesProvider(true)).valueOrNull ?? const <Category>[];
 
     return Form(
       key: _formKey,
@@ -250,9 +269,8 @@ class _LineItemSheetState extends ConsumerState<_LineItemSheet> {
           ListTile(
             contentPadding: EdgeInsets.zero,
             title: const Text('Kategorie'),
-            subtitle: _categoryUuid == null
-                ? const Text('Erbt von der Buchung')
-                : null,
+            subtitle:
+                _categoryUuid == null ? Text(_inheritLabel(categories)) : null,
             trailing: _categoryUuid == null
                 ? const Icon(Icons.chevron_right)
                 : CategoryChip(categoryUuid: _categoryUuid),

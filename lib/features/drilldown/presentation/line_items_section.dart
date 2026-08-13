@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/money/money.dart';
 import '../../category/presentation/category_chip.dart';
+import '../../transaction/data/transaction.dart';
 import '../data/line_item.dart';
+import '../domain/category_resolver.dart';
 import '../domain/line_item_providers.dart';
 import '../domain/line_item_validation.dart';
 import 'line_item_edit_sheet.dart';
@@ -13,27 +15,15 @@ import 'line_item_edit_sheet.dart';
 /// Only rendered for a persisted booking — a position needs its parent's uuid.
 /// The subtotal is informational here; ticket 019 owns sum validation.
 class LineItemsSection extends ConsumerWidget {
-  const LineItemsSection({
-    super.key,
-    required this.transactionUuid,
-    required this.parentIsExpense,
-  });
+  const LineItemsSection({super.key, required this.transaction});
 
-  final String transactionUuid;
-  final bool parentIsExpense;
+  final Transaction transaction;
 
-  Future<void> _add(BuildContext context) => showLineItemSheet(
-        context,
-        transactionUuid: transactionUuid,
-        parentIsExpense: parentIsExpense,
-      );
+  Future<void> _add(BuildContext context) =>
+      showLineItemSheet(context, parent: transaction);
 
-  Future<void> _edit(BuildContext context, LineItem item) => showLineItemSheet(
-        context,
-        transactionUuid: transactionUuid,
-        parentIsExpense: parentIsExpense,
-        existing: item,
-      );
+  Future<void> _edit(BuildContext context, LineItem item) =>
+      showLineItemSheet(context, parent: transaction, existing: item);
 
   Future<bool> _confirmDelete(BuildContext context, LineItem item) async {
     final confirmed = await showDialog<bool>(
@@ -56,7 +46,12 @@ class LineItemsSection extends ConsumerWidget {
     return confirmed ?? false;
   }
 
-  void _reorder(WidgetRef ref, List<LineItem> items, int oldIndex, int newIndex) {
+  void _reorder(
+    WidgetRef ref,
+    List<LineItem> items,
+    int oldIndex,
+    int newIndex,
+  ) {
     final reordered = [...items];
     final target = newIndex > oldIndex ? newIndex - 1 : newIndex;
     reordered.insert(target, reordered.removeAt(oldIndex));
@@ -65,7 +60,7 @@ class LineItemsSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final itemsAsync = ref.watch(lineItemsProvider(transactionUuid));
+    final itemsAsync = ref.watch(lineItemsProvider(transaction.uuid));
 
     return itemsAsync.when(
       loading: () => const LinearProgressIndicator(),
@@ -126,6 +121,7 @@ class LineItemsSection extends ConsumerWidget {
                         .softDelete(item.uuid),
                     child: _LineItemRow(
                       item: item,
+                      parent: transaction,
                       index: index,
                       onTap: () => _edit(context, item),
                     ),
@@ -150,11 +146,13 @@ class LineItemsSection extends ConsumerWidget {
 class _LineItemRow extends StatelessWidget {
   const _LineItemRow({
     required this.item,
+    required this.parent,
     required this.index,
     required this.onTap,
   });
 
   final LineItem item;
+  final Transaction parent;
   final int index;
   final VoidCallback onTap;
 
@@ -175,14 +173,22 @@ class _LineItemRow extends StatelessWidget {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       title: Text(item.description),
-      subtitle: quantityLine == null ? null : Text(quantityLine),
+      subtitle: Row(
+        children: [
+          _CategoryBadge(item: item, parent: parent),
+          if (quantityLine != null)
+            Flexible(
+              child: Text(
+                ' · $quantityLine',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+        ],
+      ),
       onTap: onTap,
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (item.categoryUuid != null)
-            CategoryChip(categoryUuid: item.categoryUuid),
-          const SizedBox(width: 8),
           Text(formatCentsEur(item.amountCents)),
           ReorderableDragStartListener(
             index: index,
@@ -191,6 +197,35 @@ class _LineItemRow extends StatelessWidget {
               child: Icon(Icons.drag_handle),
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Shows the position's effective category: dimmed with an inherit arrow when
+/// it falls back to the booking, plain when the position overrides it.
+class _CategoryBadge extends StatelessWidget {
+  const _CategoryBadge({required this.item, required this.parent});
+
+  final LineItem item;
+  final Transaction parent;
+
+  @override
+  Widget build(BuildContext context) {
+    final effective = effectiveCategoryUuid(item, parent);
+    final chip = CategoryChip(categoryUuid: effective);
+
+    if (!inheritsCategory(item)) return chip;
+
+    return Opacity(
+      opacity: 0.55,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.subdirectory_arrow_right, size: 14),
+          const SizedBox(width: 2),
+          chip,
         ],
       ),
     );

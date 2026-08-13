@@ -290,10 +290,7 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
             if (_isEdit) ...[
               const SizedBox(height: 24),
               const Divider(),
-              LineItemsSection(
-                transactionUuid: widget.existing!.uuid,
-                parentIsExpense: widget.existing!.amountCents < 0,
-              ),
+              LineItemsSection(transaction: widget.existing!),
             ],
           ],
         ),

@@ -19,10 +19,14 @@ class CategoryPick {
 
 /// Tree picker over the whole category tree; any node may be chosen, not just
 /// leaves. Set [allowNone] where an empty category is legal.
+///
+/// [noneLabel] renames that first option where "none" means something more
+/// specific — line-items use it to say they inherit from their booking.
 Future<CategoryPick?> pickCategory(
   BuildContext context, {
   String? selected,
   bool allowNone = false,
+  String noneLabel = 'Keine Kategorie',
 }) {
   return showModalBottomSheet<CategoryPick>(
     context: context,
@@ -30,15 +34,21 @@ Future<CategoryPick?> pickCategory(
     builder: (_) => _CategoryPickerSheet(
       selected: selected,
       allowNone: allowNone,
+      noneLabel: noneLabel,
     ),
   );
 }
 
 class _CategoryPickerSheet extends ConsumerWidget {
-  const _CategoryPickerSheet({required this.selected, required this.allowNone});
+  const _CategoryPickerSheet({
+    required this.selected,
+    required this.allowNone,
+    required this.noneLabel,
+  });
 
   final String? selected;
   final bool allowNone;
+  final String noneLabel;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -76,7 +86,7 @@ class _CategoryPickerSheet extends ConsumerWidget {
               if (allowNone)
                 ListTile(
                   leading: const Icon(Icons.block_outlined),
-                  title: const Text('Keine Kategorie'),
+                  title: Text(noneLabel),
                   selected: selected == null,
                   onTap: () =>
                       Navigator.pop(context, const CategoryPick(null)),

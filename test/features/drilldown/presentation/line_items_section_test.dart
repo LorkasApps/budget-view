@@ -1,6 +1,9 @@
+import 'package:budget_view/features/category/data/category.dart';
+import 'package:budget_view/features/category/domain/category_providers.dart';
 import 'package:budget_view/features/drilldown/data/line_item.dart';
 import 'package:budget_view/features/drilldown/domain/line_item_providers.dart';
 import 'package:budget_view/features/drilldown/presentation/line_items_section.dart';
+import 'package:budget_view/features/transaction/data/transaction.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,7 +12,10 @@ import 'package:flutter_test/flutter_test.dart';
 /// completes inside `testWidgets` (see `.claude/docs/errors.md`), so the
 /// repository behaviour (persistence, reorder, sums) is covered by the
 /// domain tests instead. None of these scenarios drag, dismiss or tap "add",
-/// so `lineItemRepositoryProvider` is never reached either.
+/// so `lineItemRepositoryProvider` is never reached either. Category
+/// resolution (own vs. inherited) is covered separately in
+/// `line_item_category_ui_test.dart`; here `categoriesProvider(true)` is only
+/// overridden with an empty list so `_CategoryBadge` has something to watch.
 LineItem _item({
   required String uuid,
   String description = 'Milch',
@@ -29,11 +35,25 @@ LineItem _item({
     ..updatedAt = now;
 }
 
+Transaction _transaction() {
+  final now = DateTime(2026, 8, 1);
+  return Transaction()
+    ..uuid = 'tx-1'
+    ..accountUuid = 'acc-1'
+    ..amountCents = -1000
+    ..bookingDate = now
+    ..description = 'Supermarkt'
+    ..createdAt = now
+    ..updatedAt = now;
+}
+
 void main() {
   ProviderContainer containerWith(List<LineItem> items) {
     final container = ProviderContainer(
       overrides: [
         lineItemsProvider('tx-1').overrideWith((ref) => Stream.value(items)),
+        categoriesProvider(true)
+            .overrideWith((ref) => Stream.value(const <Category>[])),
       ],
     );
     addTearDown(container.dispose);
@@ -48,12 +68,9 @@ void main() {
     await tester.pumpWidget(
       UncontrolledProviderScope(
         container: containerWith(items),
-        child: const MaterialApp(
+        child: MaterialApp(
           home: Scaffold(
-            body: LineItemsSection(
-              transactionUuid: 'tx-1',
-              parentIsExpense: true,
-            ),
+            body: LineItemsSection(transaction: _transaction()),
           ),
         ),
       ),

@@ -1,6 +1,7 @@
 import 'package:budget_view/features/category/data/category.dart';
 import 'package:budget_view/features/category/domain/category_providers.dart';
 import 'package:budget_view/features/drilldown/presentation/line_item_edit_sheet.dart';
+import 'package:budget_view/features/transaction/data/transaction.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,7 +9,19 @@ import 'package:flutter_test/flutter_test.dart';
 /// Field validation only, deliberately without a database: real Isar I/O
 /// never completes inside `testWidgets` (see `.claude/docs/errors.md`). Every
 /// scenario here therefore leaves at least one required field invalid so
-/// `_save` returns before it ever reaches `lineItemRepositoryProvider`.
+/// `_save` returns before it ever reaches `lineItemRepositoryProvider`. The
+/// parent booking is deliberately uncategorized throughout — the resolved
+/// `(<parent category name>)` wording is covered separately in
+/// `line_item_category_ui_test.dart`.
+final _parent = Transaction()
+  ..uuid = 'tx-1'
+  ..accountUuid = 'acc-1'
+  ..amountCents = -500
+  ..bookingDate = DateTime(2026, 8, 1)
+  ..description = 'Supermarkt'
+  ..createdAt = DateTime(2026, 8, 1)
+  ..updatedAt = DateTime(2026, 8, 1);
+
 void main() {
   ProviderContainer buildContainer() {
     final container = ProviderContainer(
@@ -43,11 +56,7 @@ void main() {
           home: Scaffold(
             body: Builder(
               builder: (context) => ElevatedButton(
-                onPressed: () => showLineItemSheet(
-                  context,
-                  transactionUuid: 'tx-1',
-                  parentIsExpense: true,
-                ),
+                onPressed: () => showLineItemSheet(context, parent: _parent),
                 child: const Text('Position hinzufügen'),
               ),
             ),
@@ -82,13 +91,18 @@ void main() {
     await settle(tester);
   }
 
-  testWidgets('the category row shows the inherited placeholder', (
-    tester,
-  ) async {
-    await openSheet(tester);
+  testWidgets(
+    'the category row shows the inherited placeholder for an uncategorized '
+    'booking',
+    (tester) async {
+      await openSheet(tester);
 
-    expect(find.text('Erbt von der Buchung'), findsOneWidget);
-  });
+      expect(
+        find.text('Erbt von der Buchung (ohne Kategorie)'),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('an empty description is refused', (tester) async {
     await openSheet(tester);
