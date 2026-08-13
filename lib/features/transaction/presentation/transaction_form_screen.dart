@@ -7,6 +7,7 @@ import '../../account/data/account.dart';
 import '../../account/domain/account_providers.dart';
 import '../../category/presentation/category_chip.dart';
 import '../../category/presentation/category_picker.dart';
+import '../../drilldown/presentation/line_items_section.dart';
 import '../../import/domain/import_providers.dart';
 import '../data/transaction.dart';
 import '../domain/dedupe_hash.dart';
@@ -284,6 +285,16 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
               onPressed: _saving ? null : _save,
               child: Text(_isEdit ? 'Speichern' : 'Anlegen'),
             ),
+            // Positions hang off a persisted booking, so they only appear once
+            // the transaction has a uuid.
+            if (_isEdit) ...[
+              const SizedBox(height: 24),
+              const Divider(),
+              LineItemsSection(
+                transactionUuid: widget.existing!.uuid,
+                parentIsExpense: widget.existing!.amountCents < 0,
+              ),
+            ],
           ],
         ),
       ),

@@ -48,10 +48,12 @@ class LineItemValidation {
     final expected = (quantity * unitPriceCents).round();
     if ((expected - amountCents.abs()).abs() <= 1) return null;
     return '${formatCentsEur(expected)} erwartet '
-        '(${_quantityLabel(quantity)} × ${formatCentsEur(unitPriceCents)})';
+        '(${quantityLabel(quantity)} × ${formatCentsEur(unitPriceCents)})';
   }
 
-  static String _quantityLabel(double quantity) {
+  /// Trailing `.0` dropped, decimal comma — for both the warning text and the
+  /// edit sheet's prefilled field.
+  static String quantityLabel(double quantity) {
     if (quantity == quantity.roundToDouble()) {
       return quantity.toStringAsFixed(0);
     }
