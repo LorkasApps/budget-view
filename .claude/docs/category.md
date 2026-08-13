@@ -66,7 +66,7 @@ Non-obvious details:
 
 **`CategoryFormScreen`**: full screen (not bottom sheet), create/edit fields: name (validated), parent picker (blocked set excludes category + descendants), icon grid (24 icons from `categoryIcons` map), color grid (12 from palette). Reads all non-archived categories to build parent picker and determine ineligible set. FAB to create.
 
-**`category_picker.dart`**: `pickCategory(context, {selected, allowNone})` returns `Future<CategoryPick?>`. Bottom sheet over whole tree with every node expanded, any node selectable (leaf or non-leaf). Returning null means dismissed; returning `CategoryPick(null)` means deliberately cleared—this distinction is load-bearing. `allowNone` controls whether a "Keine Kategorie" option appears.
+**`category_picker.dart`**: `pickCategory(context, {selected, allowNone, noneLabel})` returns `Future<CategoryPick?>`. `noneLabel` renames the first option where "none" carries a specific meaning — line-items pass "Erbt von der Buchung (…)". Bottom sheet over whole tree with every node expanded, any node selectable (leaf or non-leaf). Returning null means dismissed; returning `CategoryPick(null)` means deliberately cleared—this distinction is load-bearing. `allowNone` controls whether a "Keine Kategorie" option appears.
 
 **`category_chip.dart`**: `CategoryChip({categoryUuid, onTap})` compact label for transaction rows and import previews. Reads the archived list so a transaction pointing at an archived category still renders. Shows `—` when uncategorized, `?` if uuid points nowhere.
 
@@ -79,5 +79,5 @@ Non-obvious details:
 From `AccountListScreen` app bar: category icon button → `CategoryTreeScreen`.
 
 ## Not in scope here
-- Fractal line-item category override (ticket 012)
+- Fractal line-item category override — the resolver lives in `drilldown.md` (ticket 012)
 - Import/export of category presets

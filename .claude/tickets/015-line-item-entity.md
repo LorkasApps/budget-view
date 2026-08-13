@@ -60,7 +60,7 @@ Sub-transaction items enabling drilldown (Kassenbon items). One `Transaction` ha
 
 Suite after the ticket: 190 passed, 0 failed, 2 skipped (was 157).
 
-Not verified: the section was never driven in an emulator (Flutter does not run in the agent sandbox). Drag-reorder and swipe-delete need one manual pass.
+Manually verified in the emulator on 2026-08-13: add / edit / reorder / swipe-delete, sign inheritance on both an expense and a refund booking, the mismatch warning, and persistence across an app restart.
 
 ## Fixtures Needed
 No — inline builders.

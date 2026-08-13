@@ -44,23 +44,38 @@ Pure statics: `description`, `amount` (magnitude — unsigned, ≠ 0), `quantity
 - `amountMismatch({quantity, unitPriceCents, amountCents})` — warning text when `quantity × unitPrice` misses the amount by more than 1 cent, else null. **Warning only, never a rejection**: discount rows break the product on purpose. Lives in the sheet, not the repository.
 - `quantityLabel(double)` — drops a trailing `.0`, decimal comma.
 
+## Category resolution (`domain/category_resolver.dart`)
+Fractal rule, pure, no repo access:
+
+| Function | Returns |
+|----------|---------|
+| `effectiveCategoryUuid(LineItem, Transaction)` | position's own `categoryUuid`, else the parent booking's; null when both are null |
+| `resolveTransactionCategories(Transaction, List<LineItem>)` | `Map<lineItemUuid, categoryUuid?>`; takes the list as given, caller filters soft-deleted rows |
+| `inheritsCategory(LineItem)` | true while the position carries no own category |
+
+**Integration point for analytics:** tickets 020 (monthly report) and 022 (item price trends) MUST resolve through `effectiveCategoryUuid` before aggregating line-items, so the rule cannot drift between call sites. A transaction without positions keeps its own category as the authoritative one.
+
+Lives in Drilldown, not Category, although the rule is about categories: the functions take a `LineItem`, and `Category` depends only on Infra plus the narrow Transaction edge — see decisions.md.
+
 ## Providers (`domain/line_item_providers.dart`)
 - `lineItemRepositoryProvider`
 - `lineItemsProvider` (`StreamProvider.family<List<LineItem>, String>`) — per transaction uuid, re-queries on `isar.lineItems.watchLazy()`
 
 ## UI (`presentation/`)
-**`LineItemsSection({transactionUuid, parentIsExpense})`** — mounted inside `TransactionFormScreen` **in edit mode only** (a position needs its parent's uuid). Header with title + live `Σ` subtotal, empty-state text, reorderable list, `+ Position` button.
+**`LineItemsSection({transaction})`** — mounted inside `TransactionFormScreen` **in edit mode only** (a position needs its parent's uuid). Takes the whole parent entity because the badge and the inherit label both need its category. Header with title + live `Σ` subtotal, empty-state text, reorderable list, `+ Position` button.
 
 Non-obvious details:
 - `buildDefaultDragHandles: false` with an explicit `ReorderableDragStartListener`; the default handle would swallow the horizontal delete swipe.
 - `shrinkWrap: true` + `NeverScrollableScrollPhysics` because the section sits inside the form's `ListView`.
 - Swipe end-to-start → confirm dialog → `softDelete`.
-- The category chip renders only when `categoryUuid` is set; an inherited category shows nothing rather than `—`.
+- Each row's subtitle carries the category badge (and the quantity line after a `·`), not the trailing slot — a long category name next to amount and drag handle overflowed.
+- Badge = effective category either way: dimmed to 55 % behind a `subdirectory_arrow_right` arrow when inherited, plain when the position overrides.
 
-**`showLineItemSheet(context, {transactionUuid, parentIsExpense, existing})`** — bottom sheet, saves itself and pops. Fields: description, amount (magnitude — the sign comes from the parent, so there is no expense/income toggle), optional quantity + price per unit side by side, category row (`allowNone: true`, "Erbt von der Buchung" when unset). The mismatch warning renders inline under the two optional fields. `LineItemInvalid` from the repository surfaces as a snackbar.
+**`showLineItemSheet(context, {parent, existing})`** — bottom sheet, saves itself and pops. Fields: description, amount (magnitude — the sign comes from `parent`, so there is no expense/income toggle), optional quantity + price per unit side by side, category row (`allowNone: true`, `noneLabel` = "Erbt von der Buchung (<name>)", or "(ohne Kategorie)" while the booking itself has none). The mismatch warning renders inline under the two optional fields. `LineItemInvalid` from the repository surfaces as a snackbar.
+
+The inherit label is built from a **watched** category list. Reading it during build froze the wording at the stream's loading state and rendered every booking as uncategorized; the tap handler reads instead, because watching outside build is not allowed.
 
 ## Not in scope here
 - Photo capture / OCR (tickets 016–018)
 - Sum validation + auto-managed Restposten row (ticket 019)
-- Fractal category resolution (ticket 012)
 - Analytics over positions (tickets 020, 022)

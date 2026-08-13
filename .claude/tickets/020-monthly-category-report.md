@@ -35,7 +35,7 @@ Rendering: donut chart on top, sorted table beneath. Filters: month picker, acco
   - `Future<MonthlyCategoryReport> compute({required int year, required int month, String? accountUuid, required ReportDirection direction})`
   - Reads `TransactionRepository.findByAccount` (or all accounts when `accountUuid == null`) filtered by `bookingDate` in `[monthStart, monthEnd]` and `deleted == false`
   - For each transaction: if it has line-items → walk line-items (excluding `deleted`); otherwise → use transaction directly
-  - Applies `effectiveCategoryUuid` from ticket 012's resolver
+  - Applies `effectiveCategoryUuid` from ticket 012's resolver — **shipped** at `lib/features/drilldown/domain/category_resolver.dart` (not the `features/category/` path 012 originally named, see decisions.md): `effectiveCategoryUuid(LineItem, Transaction)`, plus `resolveTransactionCategories(Transaction, List<LineItem>)` for a whole booking at once. Both are pure; filtering soft-deleted positions stays this service's job. Aggregating `LineItem.categoryUuid` directly instead of going through the resolver is the bug this note exists to prevent
   - Filters by direction: Ausgaben = `amountCents < 0`, Einnahmen = `amountCents > 0`, magnitudes shown as absolute values in the report
   - Rolls up into the category tree (uses `CategoryRepository`)
   - Returns `MonthlyCategoryReport { rows: List<CategoryRow>, uncategorizedCents: int, totalCents: int }`
