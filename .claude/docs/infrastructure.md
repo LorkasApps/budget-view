@@ -28,7 +28,7 @@ lib/
 Per-feature `{presentation,domain,data}` folders are created by each feature ticket, not upfront.
 
 ## Entry Point
-`lib/main.dart` (async): `WidgetsFlutterBinding.ensureInitialized()` → `openAppIsar()` → `runApp(ProviderScope(overrides: [isarProvider.overrideWithValue(isar)], child: BudgetViewApp()))`. `BudgetViewApp` → `MaterialApp` (Material 3, teal seed) → `HomeScreen` placeholder.
+`lib/main.dart` (async): `WidgetsFlutterBinding.ensureInitialized()` → `openAppIsar()` → `runApp(ProviderScope(overrides: [isarProvider.overrideWithValue(isar)], child: BudgetViewApp()))`. `BudgetViewApp` → `MaterialApp` (Material 3, teal seed) → `AccountListScreen` (the `HomeScreen` placeholder from ticket 001 is gone; ticket 004 replaced it).
 
 ## Persistence (`lib/core/persistence/`)
 | File | Role |

@@ -27,3 +27,5 @@
 | 023-unit-price-normalization.md | Feature | Analytics | Analytics | Draft (post-V1) | 015, 018, 022 | Weight-based unit-price for variable-weight items (€/kg, €/l) |
 | 024-import-history-screen.md | Feature | Import | Import | Draft | 009 | ImportedSource list + delete, split out of 009 (needs a Settings surface) |
 | 025-tagging-rule-management.md | Feature | Auto-Tagging | Tagging | Draft | 013 | Rule list + edit/delete + stale handling, split out of 013 (shares the Settings surface with 024) |
+| 026-quick-create-category-in-picker.md | Feature | Categories | Category | Draft | None | Quick-create a category from inside pickCategory (name + prefilled parent, defaults for the rest) |
+| 027-app-icon-and-branding.md | Feature | Setup | Infra | Ready | None | Money-bag launcher icon (adaptive + monochrome) and launch screen via flutter_native_splash |
