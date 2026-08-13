@@ -264,4 +264,14 @@ void main() {
 
     expect(await repo.sumForTransaction(parent.uuid), -469);
   });
+
+  test('soft-deleting the parent leaves its positions in place', () async {
+    final parent = await expenseParent();
+    final item = await repo.save(_item(transactionUuid: parent.uuid));
+
+    await transactions.softDelete(parent.uuid);
+
+    expect((await repo.findByUuid(item.uuid))!.deleted, isFalse);
+    expect(await repo.findByTransaction(parent.uuid), hasLength(1));
+  });
 }
