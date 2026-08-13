@@ -8,4 +8,5 @@
 | category.md | Category | Category tree entity, repository (sync-wired, exceptions), tree helpers, providers, validation, tree/form UI (expandable, drag-reorder, icon/color pickers) |
 | transaction.md | Transaction | Transaction entity, repository (+sumForAccount), providers, validation, list/form UI, balance integration |
 | drilldown.md | Drilldown | LineItem entity, repository (sign follows parent, reorder), validation + mismatch warning, section/sheet inside the booking form |
+| tagging.md | Tagging | TaggingRule entity, repository (upsert/hit-count, hard delete, remap), learn service + its three UI call sites |
 | import.md | Transaction | PDF import layer: PdfParser interface, registry (IngGiroParser), ING layout parsing, import flow (preview, edit, persist via controller) |

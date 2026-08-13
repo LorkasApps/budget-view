@@ -13,6 +13,11 @@ Split out of ticket 009, which specified this list "under Settings" — but no
 Settings surface exists in the app, so it was a hidden second feature inside a
 dedupe ticket.
 
+Ticket 025 (tagging rule management) was split off for the very same reason and
+needs the same container. Whichever of the two lands first builds the Settings
+surface; the second one adds a row. Refine them together if possible — the
+entry-point question below is one decision, not two.
+
 Shows the `ImportedSource` rows written by every import (PDF today, receipt
 photos from ticket 016 onwards) and lets the user delete them. Deleting a row is
 the escape hatch for the re-import warning: after a legitimate re-import, the
