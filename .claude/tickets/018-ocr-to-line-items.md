@@ -68,6 +68,7 @@ abstract class ReceiptLineItemParser {
 - [ ] Header/total skip list applied case-insensitively after normalization (lower, trim)
 - [ ] Preview screen (`ScanReviewScreen`) integrated into the scan flow after OCR (016) succeeds
 - [ ] Confirm action applies parent transaction's sign, then calls `LineItemRepository.save` for each included candidate
+- [ ] Confirm action calls `restpostenReconcilerProvider.reconcile(transactionUuid)` **once, after the last candidate is saved** (shipped in ticket 019). Reconciling per candidate would rewrite the managed row on every single row; skipping it leaves the booking's positions not adding up. This AC replaces the `scan_confirm_reconcile_test.dart` that 019 could not write, because the scan flow did not exist yet
 - [ ] Unparsed candidates block save until description + amount set (include-toggle disabled)
 - [ ] Categorization on preview writes to candidate; on save it becomes the `LineItem.categoryUuid` (null → later resolved via ticket 012)
 - [ ] Post-confirm flow signals ticket 016 to write the `ImportedSource` row with correct `lineItemsProduced` count
