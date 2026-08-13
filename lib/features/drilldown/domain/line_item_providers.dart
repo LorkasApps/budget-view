@@ -5,11 +5,19 @@ import '../../../core/sync/sync_provider.dart';
 import '../../transaction/domain/transaction_providers.dart';
 import '../data/line_item.dart';
 import 'line_item_repository.dart';
+import 'restposten_reconciler.dart';
 
 final lineItemRepositoryProvider = Provider<LineItemRepository>((ref) {
   return LineItemRepository(
     ref.watch(isarProvider),
     ref.watch(syncAdapterProvider),
+    ref.watch(transactionRepositoryProvider),
+  );
+});
+
+final restpostenReconcilerProvider = Provider<RestpostenReconciler>((ref) {
+  return LocalRestpostenReconciler(
+    ref.watch(lineItemRepositoryProvider),
     ref.watch(transactionRepositoryProvider),
   );
 });

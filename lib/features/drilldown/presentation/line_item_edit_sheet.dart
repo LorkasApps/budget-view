@@ -54,6 +54,11 @@ class _LineItemSheetState extends ConsumerState<_LineItemSheet> {
 
   bool get _isEdit => widget.existing != null;
 
+  /// The auto-managed Restposten row: description and category are the user's,
+  /// everything else belongs to the reconciler.
+  bool get _isManaged =>
+      widget.existing?.kind == LineItemKind.restposten;
+
   @override
   void initState() {
     super.initState();
@@ -157,6 +162,11 @@ class _LineItemSheetState extends ConsumerState<_LineItemSheet> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
+    if (_isManaged) {
+      await _saveManagedDetails();
+      return;
+    }
+
     final magnitude = parseEurosToCents(_amountController.text)!;
     final item =
         widget.existing ?? (LineItem()..transactionUuid = widget.parent.uuid);
@@ -170,6 +180,27 @@ class _LineItemSheetState extends ConsumerState<_LineItemSheet> {
     setState(() => _saving = true);
     try {
       await ref.read(lineItemRepositoryProvider).save(item);
+    } on LineItemInvalid catch (error) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.message)));
+      return;
+    }
+    // The gap moved, so the managed row has to follow.
+    await ref.read(restpostenReconcilerProvider).reconcile(widget.parent.uuid);
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  /// Restposten edit: no reconcile needed, neither field moves the sum.
+  Future<void> _saveManagedDetails() async {
+    setState(() => _saving = true);
+    try {
+      await ref.read(lineItemRepositoryProvider).updateRestpostenDetails(
+            widget.existing!.uuid,
+            description: _descriptionController.text,
+            categoryUuid: _categoryUuid,
+          );
     } on LineItemInvalid catch (error) {
       if (!mounted) return;
       setState(() => _saving = false);
@@ -193,7 +224,11 @@ class _LineItemSheetState extends ConsumerState<_LineItemSheet> {
         padding: const EdgeInsets.all(16),
         children: [
           Text(
-            _isEdit ? 'Position bearbeiten' : 'Neue Position',
+            _isManaged
+                ? 'Restposten bearbeiten'
+                : _isEdit
+                    ? 'Position bearbeiten'
+                    : 'Neue Position',
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 16),
@@ -205,65 +240,73 @@ class _LineItemSheetState extends ConsumerState<_LineItemSheet> {
           const SizedBox(height: 16),
           TextFormField(
             controller: _amountController,
-            decoration: const InputDecoration(
-              labelText: 'Betrag (€)',
-              hintText: 'z. B. 1,19',
+            // Managed field: the reconciler writes it, so it is shown read-only
+            // rather than hidden — the number is what the row is about.
+            enabled: !_isManaged,
+            decoration: InputDecoration(
+              labelText: _isManaged ? 'Betrag (automatisch)' : 'Betrag (€)',
+              hintText: _isManaged ? null : 'z. B. 1,19',
+              helperText: _isManaged
+                  ? 'Ergibt sich aus Buchung minus Positionen.'
+                  : null,
             ),
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            validator: _validateAmount,
+            validator: _isManaged ? null : _validateAmount,
             onChanged: (_) => setState(() {}),
           ),
-          const SizedBox(height: 16),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: TextFormField(
-                  controller: _quantityController,
-                  decoration: const InputDecoration(
-                    labelText: 'Menge (optional)',
-                    hintText: 'z. B. 1,5',
-                  ),
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  validator: _validateQuantity,
-                  onChanged: (_) => setState(() {}),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: TextFormField(
-                  controller: _unitPriceController,
-                  decoration: const InputDecoration(
-                    labelText: 'Preis / Einheit (optional)',
-                    hintText: 'z. B. 0,89',
-                  ),
-                  keyboardType:
-                      const TextInputType.numberWithOptions(decimal: true),
-                  validator: _validateUnitPrice,
-                  onChanged: (_) => setState(() {}),
-                ),
-              ),
-            ],
-          ),
-          if (warning != null) ...[
-            const SizedBox(height: 8),
+          if (!_isManaged) ...[
+            const SizedBox(height: 16),
             Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  Icons.warning_amber,
-                  size: 18,
-                  color: Theme.of(context).colorScheme.tertiary,
-                ),
-                const SizedBox(width: 6),
                 Expanded(
-                  child: Text(
-                    warning,
-                    style: Theme.of(context).textTheme.bodySmall,
+                  child: TextFormField(
+                    controller: _quantityController,
+                    decoration: const InputDecoration(
+                      labelText: 'Menge (optional)',
+                      hintText: 'z. B. 1,5',
+                    ),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    validator: _validateQuantity,
+                    onChanged: (_) => setState(() {}),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: _unitPriceController,
+                    decoration: const InputDecoration(
+                      labelText: 'Preis / Einheit (optional)',
+                      hintText: 'z. B. 0,89',
+                    ),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    validator: _validateUnitPrice,
+                    onChanged: (_) => setState(() {}),
                   ),
                 ),
               ],
             ),
+            if (warning != null) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(
+                    Icons.warning_amber,
+                    size: 18,
+                    color: Theme.of(context).colorScheme.tertiary,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      warning,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
           const SizedBox(height: 8),
           ListTile(

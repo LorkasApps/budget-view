@@ -46,16 +46,27 @@ class LineItemsSection extends ConsumerWidget {
     return confirmed ?? false;
   }
 
-  void _reorder(
+  /// Reorders the user's positions only; the reconciler re-pins the Restposten
+  /// row to the bottom afterwards.
+  Future<void> _reorder(
     WidgetRef ref,
     List<LineItem> items,
     int oldIndex,
     int newIndex,
-  ) {
+  ) async {
     final reordered = [...items];
     final target = newIndex > oldIndex ? newIndex - 1 : newIndex;
     reordered.insert(target, reordered.removeAt(oldIndex));
-    ref.read(lineItemRepositoryProvider).reorder(reordered);
+
+    await ref.read(lineItemRepositoryProvider).reorder(
+          reordered.where((item) => item.kind == LineItemKind.regular).toList(),
+        );
+    await ref.read(restpostenReconcilerProvider).reconcile(transaction.uuid);
+  }
+
+  Future<void> _delete(WidgetRef ref, LineItem item) async {
+    await ref.read(lineItemRepositoryProvider).softDelete(item.uuid);
+    await ref.read(restpostenReconcilerProvider).reconcile(transaction.uuid);
   }
 
   @override
@@ -71,20 +82,9 @@ class LineItemsSection extends ConsumerWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Positionen',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-                if (items.isNotEmpty)
-                  Text(
-                    'Σ ${formatCentsEur(subtotal)}',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-              ],
+            Text(
+              'Positionen',
+              style: Theme.of(context).textTheme.titleMedium,
             ),
             if (items.isEmpty)
               Padding(
@@ -106,6 +106,18 @@ class LineItemsSection extends ConsumerWidget {
                     _reorder(ref, items, oldIndex, newIndex),
                 itemBuilder: (context, index) {
                   final item = items[index];
+                  final row = _LineItemRow(
+                    item: item,
+                    parent: transaction,
+                    index: index,
+                    onTap: () => _edit(context, item),
+                  );
+                  // The managed row has no swipe: the repository would refuse
+                  // the delete anyway, and an animating-away row that comes
+                  // back reads as a bug.
+                  if (item.kind == LineItemKind.restposten) {
+                    return KeyedSubtree(key: ValueKey(item.uuid), child: row);
+                  }
                   return Dismissible(
                     key: ValueKey(item.uuid),
                     direction: DismissDirection.endToStart,
@@ -116,17 +128,19 @@ class LineItemsSection extends ConsumerWidget {
                       child: const Icon(Icons.delete),
                     ),
                     confirmDismiss: (_) => _confirmDelete(context, item),
-                    onDismissed: (_) => ref
-                        .read(lineItemRepositoryProvider)
-                        .softDelete(item.uuid),
-                    child: _LineItemRow(
-                      item: item,
-                      parent: transaction,
-                      index: index,
-                      onTap: () => _edit(context, item),
-                    ),
+                    onDismissed: (_) => _delete(ref, item),
+                    child: row,
                   );
                 },
+              ),
+            if (items.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  'Σ ${formatCentsEur(subtotal)} von '
+                  '${formatCentsEur(transaction.amountCents)}',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
               ),
             Align(
               alignment: Alignment.centerLeft,
@@ -169,10 +183,30 @@ class _LineItemRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final quantityLine = _quantityLine;
+    final managed = item.kind == LineItemKind.restposten;
+    final theme = Theme.of(context);
 
     return ListTile(
       contentPadding: EdgeInsets.zero,
-      title: Text(item.description),
+      textColor: managed ? theme.colorScheme.outline : null,
+      title: Row(
+        children: [
+          Flexible(
+            child: Text(item.description, overflow: TextOverflow.ellipsis),
+          ),
+          if (managed) ...[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text('Restposten', style: theme.textTheme.labelSmall),
+            ),
+          ],
+        ],
+      ),
       subtitle: Row(
         children: [
           _CategoryBadge(item: item, parent: parent),
@@ -190,13 +224,15 @@ class _LineItemRow extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(formatCentsEur(item.amountCents)),
-          ReorderableDragStartListener(
-            index: index,
-            child: const Padding(
-              padding: EdgeInsets.only(left: 8),
-              child: Icon(Icons.drag_handle),
+          // No handle on the managed row: its position is the reconciler's.
+          if (!managed)
+            ReorderableDragStartListener(
+              index: index,
+              child: const Padding(
+                padding: EdgeInsets.only(left: 8),
+                child: Icon(Icons.drag_handle),
+              ),
             ),
-          ),
         ],
       ),
     );

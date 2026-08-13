@@ -7,6 +7,7 @@ import '../../account/data/account.dart';
 import '../../account/domain/account_providers.dart';
 import '../../category/presentation/category_chip.dart';
 import '../../category/presentation/category_picker.dart';
+import '../../drilldown/domain/line_item_providers.dart';
 import '../../drilldown/presentation/line_items_section.dart';
 import '../../import/domain/import_providers.dart';
 import '../data/transaction.dart';
@@ -181,6 +182,9 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
       ..note = _noteController.text.trim();
 
     await ref.read(transactionRepositoryProvider).save(transaction);
+    // A changed booking amount moves the gap its positions have to close. No-op
+    // for a booking without positions, which is the case for every fresh one.
+    await ref.read(restpostenReconcilerProvider).reconcile(transaction.uuid);
     if (mounted) Navigator.of(context).pop();
   }
 

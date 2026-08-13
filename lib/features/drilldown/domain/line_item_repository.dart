@@ -18,6 +18,17 @@ class LineItemInvalid implements Exception {
   String toString() => 'LineItemInvalid: $message';
 }
 
+/// Thrown when a UI path tries to write or delete the auto-managed Restposten
+/// row. Only the reconciler may, through its own doors on the repository.
+class RestpostenNotManuallyModifiable implements Exception {
+  const RestpostenNotManuallyModifiable();
+
+  String get message => 'Der Restposten wird automatisch verwaltet.';
+
+  @override
+  String toString() => 'RestpostenNotManuallyModifiable: $message';
+}
+
 /// Persists [LineItem]s and mirrors every write to the sync change-queue, per
 /// the repository-layer contract in docs/sync.md.
 ///
@@ -33,7 +44,33 @@ class LineItemRepository {
 
   static const _orderIndexGap = 1000;
 
-  Future<LineItem> save(LineItem item) async {
+  /// Persists a user-owned position. Refuses the auto-managed Restposten row —
+  /// the reconciler owns that one via [saveRestposten].
+  Future<LineItem> save(LineItem item) {
+    if (item.kind == LineItemKind.restposten) {
+      throw const RestpostenNotManuallyModifiable();
+    }
+    return _write(item, enforceParentSign: true);
+  }
+
+  /// Reconciler-only door for the Restposten row.
+  ///
+  /// Skips the parent-sign rule on purpose: when the user's positions overshoot
+  /// the booking total, the closing gap legitimately points the other way (−50
+  /// booking, −55 in positions → +5 Restposten).
+  ///
+  /// Dart has no package-private visibility, so this cannot be locked to the
+  /// reconciler by the compiler — [save] refusing `restposten` is what keeps UI
+  /// paths out, and a test guards it.
+  Future<LineItem> saveRestposten(LineItem item) {
+    assert(item.kind == LineItemKind.restposten);
+    return _write(item, enforceParentSign: false);
+  }
+
+  Future<LineItem> _write(
+    LineItem item, {
+    required bool enforceParentSign,
+  }) async {
     final descriptionError = LineItemValidation.description(item.description);
     if (descriptionError != null) throw LineItemInvalid(descriptionError);
     if (item.amountCents == 0) {
@@ -48,7 +85,8 @@ class LineItemRepository {
     if (parent == null) {
       throw LineItemInvalid('Buchung existiert nicht');
     }
-    if (parent.amountCents.isNegative != item.amountCents.isNegative) {
+    if (enforceParentSign &&
+        parent.amountCents.isNegative != item.amountCents.isNegative) {
       throw LineItemInvalid(
         parent.amountCents.isNegative
             ? 'Position einer Ausgabe muss negativ sein'
@@ -78,6 +116,42 @@ class LineItemRepository {
   Future<void> softDelete(String uuid) async {
     final item = await findByUuid(uuid);
     if (item == null || item.deleted) return;
+    if (item.kind == LineItemKind.restposten) {
+      throw const RestpostenNotManuallyModifiable();
+    }
+    await _markDeleted(item);
+  }
+
+  /// Reconciler-only door: the Restposten row disappears once the gap closes.
+  Future<void> removeRestposten(String uuid) async {
+    final item = await findByUuid(uuid);
+    if (item == null || item.deleted) return;
+    await _markDeleted(item);
+  }
+
+  /// The two fields a user may own on the auto-managed row. Amount, quantity,
+  /// unit price and order stay with the reconciler.
+  Future<void> updateRestpostenDetails(
+    String uuid, {
+    required String description,
+    String? categoryUuid,
+  }) async {
+    final item = await findByUuid(uuid);
+    if (item == null) return;
+    final error = LineItemValidation.description(description);
+    if (error != null) throw LineItemInvalid(error);
+
+    item
+      ..description = description.trim()
+      ..categoryUuid = categoryUuid
+      ..updatedAt = DateTime.now();
+    await _isar.writeTxn(() async {
+      await _isar.lineItems.put(item);
+    });
+    await _sync.enqueue(SyncOp.update, item);
+  }
+
+  Future<void> _markDeleted(LineItem item) async {
     item.deleted = true;
     item.updatedAt = DateTime.now();
     await _isar.writeTxn(() async {
@@ -85,6 +159,14 @@ class LineItemRepository {
     });
     await _sync.enqueue(SyncOp.delete, item);
   }
+
+  /// The active Restposten row of one booking, if the reconciler created one.
+  Future<LineItem?> findRestposten(String transactionUuid) => _isar.lineItems
+      .filter()
+      .transactionUuidEqualTo(transactionUuid)
+      .kindEqualTo(LineItemKind.restposten)
+      .deletedEqualTo(false)
+      .findFirst();
 
   Future<LineItem?> findByUuid(String uuid) =>
       _isar.lineItems.filter().uuidEqualTo(uuid).findFirst();
