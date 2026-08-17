@@ -15,6 +15,8 @@ Sign of amounts: line-items inherit the parent transaction's sign (rule from tic
 
 The `ReceiptLineItemParser` interface and `LineItemCandidate` type already exist at `lib/features/drilldown/scan/domain/receipt_line_item_parser.dart`, with a `NoReceiptLineItemParser` stub. This ticket replaces the implementation only. Wire through `receiptLineItemParserProvider` in `photo_scan_providers.dart`. The review step integrates with `PhotoScanFlowController.confirm(edited:)`, which is the seam for passing back the user's edits. Restposten reconcile is already wired in 016's confirm path; this ticket inherits it.
 
+Inherited verification from 017: ML Kit has no binding in the test VM, so nobody has confirmed on a device yet that Latin-script recognition returns `Käse` / `Öl` / `Süß` / `Brühe` with correct umlauts. 017 shipped no surface that displays recognized text; this ticket's preview is that surface, so the check belongs here — scan a real receipt on a device and read the candidates.
+
 ## Types
 
 ```dart
