@@ -82,3 +82,29 @@ Ticket progress from `.claude/tickets/README.md` — counts per epic/domain/type
     009     Import  Transaction     006, 008        Duplicate detection (tx-level + doc-level SHA-256)
 
 **Exit codes:** `0` OK, `1` tickets README not found, `2` table malformed or no ticket rows, `3` no ticket matched `--status`.
+
+## `doc_section.py`
+
+Extract one section from a doc under `.claude/docs/` instead of reading the whole file — the cheap path once a doc passes ~150 lines (`receipt-scan.md`, `import.md`).
+
+**Usage:** `./.claude/helper/doc_section.py <file> <heading> [--depth N]` or `./.claude/helper/doc_section.py <file> --list`
+
+**Args:**
+- `file` (required) — name relative to `.claude/docs/`, or any path
+- `heading` (required unless `--list`) — case-insensitive substring of the heading text
+- `--depth N` (optional, default 6) — deeper nested headings end the section instead of being included
+- `--list` (optional) — print every heading instead of extracting: `<line>\t<level>\t<text>`
+
+**Output:** raw markdown of the matched section — heading plus body up to the next same-or-higher-level heading.
+
+**Example:**
+
+    $ ./.claude/helper/doc_section.py import.md --list
+    1       1       Import
+    7       3       ImportedSource Entity (`data/imported_source.dart`)
+
+    $ ./.claude/helper/doc_section.py receipt-scan.md "Providers"
+    ## Providers
+    ...
+
+**Exit codes:** `0` OK, `1` file not found, `2` heading not found, `3` ambiguous match (prints the candidates and their line numbers).

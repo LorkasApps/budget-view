@@ -8,6 +8,7 @@ import '../data/line_item.dart';
 import '../domain/category_resolver.dart';
 import '../domain/line_item_providers.dart';
 import '../domain/line_item_validation.dart';
+import '../scan/presentation/photo_scan_flow.dart';
 import 'line_item_edit_sheet.dart';
 
 /// Positions of one booking: reorderable list, live subtotal, add button.
@@ -21,6 +22,9 @@ class LineItemsSection extends ConsumerWidget {
 
   Future<void> _add(BuildContext context) =>
       showLineItemSheet(context, parent: transaction);
+
+  Future<void> _scan(BuildContext context, WidgetRef ref) =>
+      startPhotoScan(context, ref, transaction);
 
   Future<void> _edit(BuildContext context, LineItem item) =>
       showLineItemSheet(context, parent: transaction, existing: item);
@@ -142,13 +146,20 @@ class LineItemsSection extends ConsumerWidget {
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: () => _add(context),
-                icon: const Icon(Icons.add),
-                label: const Text('Position'),
-              ),
+            Wrap(
+              spacing: 8,
+              children: [
+                TextButton.icon(
+                  onPressed: () => _add(context),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Position'),
+                ),
+                TextButton.icon(
+                  onPressed: () => _scan(context, ref),
+                  icon: const Icon(Icons.document_scanner_outlined),
+                  label: const Text('Kassenbon scannen'),
+                ),
+              ],
             ),
           ],
         );

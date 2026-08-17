@@ -11,6 +11,8 @@
 ## Description
 On-device OCR via Google ML Kit Text Recognition (Latin script — covers German Umlauts). Called from the scan flow (ticket 016) with raw JPEG/PNG bytes. Returns a structured `OcrResult` with block/line/word positions so ticket 018 can reason about layout. **No persistence** — the result lives in memory for the duration of the flow, then is discarded together with the source bytes.
 
+The `OcrService` interface and `OcrResult` type already exist at `lib/features/drilldown/scan/domain/ocr_service.dart`, with a `NoOcrService` stub. This ticket replaces the implementation only, not the contract. Wire through `ocrServiceProvider` in `photo_scan_providers.dart`.
+
 ## Types
 
 ```dart

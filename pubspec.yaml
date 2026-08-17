@@ -63,6 +63,13 @@ dependencies:
   # SHA-256 for duplicate detection (transaction + document hashes).
   crypto: ^3.0.7
 
+  # Camera / gallery capture for receipt scanning (no manifest permission
+  # needed: Photo Picker on API 33+, camera via intent).
+  image_picker: ^1.2.3
+
+  # In-memory downscale of a capture before OCR.
+  image: ^4.9.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
