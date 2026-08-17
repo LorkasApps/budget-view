@@ -6,16 +6,16 @@
 | **Epic** | Drilldown |
 | **Domain** | Drilldown |
 | **Blocked By** | 017 |
-| **Status** | In Progress |
+| **Status** | Done |
 
 ## Description
 Convert an `OcrResult` (ticket 017) into a list of editable `LineItemCandidate`s and present them to the user in a preview screen (part of the scan flow from ticket 016). Parser uses simple heuristics (regex + row grouping by y-position). Rows the parser cannot decompose cleanly are surfaced as **unparsed** candidates showing the raw OCR text — the user completes them by hand before save. Rows detected as headers / totals / VAT lines are skipped.
 
 Sign of amounts: line-items inherit the parent transaction's sign (rule from ticket 015) — the parser produces unsigned magnitudes, the flow applies the sign on convert.
 
-The `ReceiptLineItemParser` interface and `LineItemCandidate` type already exist at `lib/features/drilldown/scan/domain/receipt_line_item_parser.dart`, with a `NoReceiptLineItemParser` stub. This ticket replaces the implementation only. Wire through `receiptLineItemParserProvider` in `photo_scan_providers.dart`. The review step integrates with `PhotoScanFlowController.confirm(edited:)`, which is the seam for passing back the user's edits. Restposten reconcile is already wired in 016's confirm path; this ticket inherits it.
+The `ReceiptLineItemParser` interface and `LineItemCandidate` type already exist at `lib/features/drilldown/scan/domain/receipt_line_item_parser.dart` (016's `NoReceiptLineItemParser` stub was deleted here, since nothing referenced it once the heuristic landed). Wire through `receiptLineItemParserProvider` in `photo_scan_providers.dart`. The review step integrates with `PhotoScanFlowController.confirm(edited:)`, which is the seam for passing back the user's edits. Restposten reconcile is already wired in 016's confirm path; this ticket inherits it.
 
-Inherited verification from 017: ML Kit has no binding in the test VM, so nobody has confirmed on a device yet that Latin-script recognition returns `Käse` / `Öl` / `Süß` / `Brühe` with correct umlauts. 017 shipped no surface that displays recognized text; this ticket's preview is that surface, so the check belongs here — scan a real receipt on a device and read the candidates.
+Device verification (umlauts from 017, plus this ticket's heuristic accuracy) moved to **028**, on request: app testing happens once the feature set is written, in one pass rather than per ticket.
 
 ## Re-verify after blocker 017 (2026-08-17)
 Kept as one ticket on request, parser and review surface together. Seven points against what 016/017 shipped:
@@ -79,23 +79,22 @@ abstract interface class ReceiptLineItemParser {
 - Confirm → for each `includeInSave = true` and valid candidate: build `LineItem` with parent transaction's sign applied, persist via `LineItemRepository.save`.
 
 ## Acceptance Criteria
-- [ ] `LineItemCandidate` + `LineItemParseState` in `lib/features/drilldown/scan/domain/receipt_line_item_parser.dart` (next to the contract, as 016 placed them), unsigned amounts, immutable with `copyWith`
-- [ ] `HeuristicReceiptLineItemParser` in `lib/features/drilldown/scan/data/heuristic_receipt_line_item_parser.dart`
-- [ ] `receiptLineItemParserProvider` yields the heuristic parser, still overridable in tests
-- [ ] Rows built by grouping `OcrLine`s across all blocks by vertical overlap (tolerance ≈ half line height), ordered top to bottom, then left to right within a row
-- [ ] Currency token handles `1,23`, `1.23`, `1234,56`, `1.234,56`, with and without `€`, with and without a space; the rightmost token in a row wins; parsing goes through `parseEurosToCents` after stripping thousands separators
-- [ ] Quantity prefix handles `2x`, `2 x`, `1,5 kg`, `0.5 kg`, `3 Stk`, case-insensitive; matched prefix is removed from the description
-- [ ] `unitPriceCents` derived only when quantity and amount are both present and the division lands within a cent — a mismatch stays a warning in the UI, never a silent value
-- [ ] Header/total skip list applied case-insensitively after normalization; a skipped row produces no candidate
-- [ ] No amount in a row → `parseState = unparsed`, `rawOcrText` kept, `includeInSave = false`; amount without description → `ambiguous`
-- [ ] `ScanReviewScreen` pushed from the scan flow after OCR, returns the edited candidate list into `PhotoScanFlowController.confirm(edited:)`; 016's placeholder confirm dialog is removed
-- [ ] Review rows: `ok` plain, `ambiguous` highlighted, `unparsed` shows `rawOcrText` in monospace; include-toggle disabled while a row is not savable
-- [ ] Row edit sheet mirrors `line_item_edit_sheet.dart` (description, magnitude, optional quantity + unit price, mismatch warning, category row) and reuses `LineItemValidation`
-- [ ] "Zeile hinzufügen" appends an empty candidate; per-row and "alle kategorisieren" both go through `pickCategory` (`allowNone: true`, inherit label like the position sheet)
-- [ ] Footer shows the live sum of included candidates against the booking total (rendering only — 019 owns the invariant)
-- [ ] Confirm persists only `includeInSave` candidates, applying the booking's sign, category included (null → inherits per 012)
-- [ ] Already shipped in 016, to be verified rather than rebuilt: one `reconcile` call after the last save, and one `ImportedSource` row whose `lineItemsProduced` counts the *included* candidates
-- [ ] Verified on a device: a real receipt round-trips `Käse`, `Öl`, `Süß`, `Brühe` with correct umlauts (the check inherited from 017)
+- [x] `LineItemCandidate` + `LineItemParseState` in `lib/features/drilldown/scan/domain/receipt_line_item_parser.dart` (next to the contract, as 016 placed them), unsigned amounts, immutable with `copyWith`
+- [x] `HeuristicReceiptLineItemParser` in `lib/features/drilldown/scan/data/heuristic_receipt_line_item_parser.dart`
+- [x] `receiptLineItemParserProvider` yields the heuristic parser, still overridable in tests
+- [x] Rows built by grouping `OcrLine`s across all blocks by vertical overlap (tolerance ≈ half line height), ordered top to bottom, then left to right within a row
+- [x] Currency token handles `1,23`, `1.23`, `1234,56`, `1.234,56`, with and without `€`, with and without a space; the rightmost token in a row wins; parsing goes through `parseEurosToCents` after stripping thousands separators
+- [x] Quantity prefix handles `2x`, `2 x`, `1,5 kg`, `0.5 kg`, `3 Stk`, case-insensitive; matched prefix is removed from the description
+- [x] `unitPriceCents` derived only when quantity and amount are both present and the division lands within a cent — a mismatch stays a warning in the UI, never a silent value
+- [x] Header/total skip list applied case-insensitively after normalization; a skipped row produces no candidate
+- [x] No amount in a row → `parseState = unparsed`, `rawOcrText` kept, `includeInSave = false`; amount without description → `ambiguous`
+- [x] `ScanReviewScreen` pushed from the scan flow after OCR, returns the edited candidate list into `PhotoScanFlowController.confirm(edited:)`; 016's placeholder confirm dialog is removed
+- [x] Review rows: `ok` plain, `ambiguous` highlighted, `unparsed` shows `rawOcrText` in monospace; include-toggle disabled while a row is not savable
+- [x] Row edit sheet mirrors `line_item_edit_sheet.dart` (description, magnitude, optional quantity + unit price, mismatch warning, category row) and reuses `LineItemValidation`
+- [x] "Zeile hinzufügen" appends an empty candidate; per-row and "alle kategorisieren" both go through `pickCategory` (`allowNone: true`, inherit label like the position sheet)
+- [x] Footer shows the live sum of included candidates against the booking total (rendering only — 019 owns the invariant)
+- [x] Confirm persists only `includeInSave` candidates, applying the booking's sign, category included (null → inherits per 012)
+- [x] Already shipped in 016, to be verified rather than rebuilt: one `reconcile` call after the last save, and one `ImportedSource` row whose `lineItemsProduced` counts the *included* candidates
 
 ## Test Strategy
 - Parser tests use crafted `OcrResult` fixtures built inline — no image round-trip needed. Each test asserts candidate list, parseState, and field extraction.
@@ -114,5 +113,6 @@ No — inline OCR result builders.
 - Input: ~12k tokens
 - Output: ~4k tokens
 
-## Token Usage
-_Filled after Done._
+### Implementation Tokens (estimate)
+- Input: ~130k tokens
+- Output: ~20k tokens

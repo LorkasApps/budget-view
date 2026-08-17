@@ -19,7 +19,7 @@
 | 015-line-item-entity.md | Feature | Drilldown | Drilldown | Done | 006 | Line-item entity (child of transaction) |
 | 016-kassenbon-photo-capture.md | Feature | Drilldown | Drilldown | Done | 015, 009 | Camera / gallery capture flow (ephemeral, no persistence) |
 | 017-ocr-mlkit.md | Feature | Drilldown | Drilldown | Done | 016 | OCR via Google ML Kit (in-memory only) |
-| 018-ocr-to-line-items.md | Feature | Drilldown | Drilldown | In Progress | 017 | Parse OCR text into line-items (heuristic + user review) |
+| 018-ocr-to-line-items.md | Feature | Drilldown | Drilldown | Done | 017 | Parse OCR text into line-items (heuristic + user review) |
 | 019-sum-validation.md | Feature | Drilldown | Drilldown | Done | 015 | Auto-managed Restposten (invariant sum) |
 | 020-monthly-category-report.md | Feature | Analytics | Analytics | Ready | 006, 011, 012, 015 | Monthly report: donut + tree-aware table |
 | 021-forecast-linear-regression.md | Feature | Analytics | Analytics | Ready | 020 | Forecast (LR, user-picked window + horizon) |
@@ -29,3 +29,4 @@
 | 025-tagging-rule-management.md | Feature | Auto-Tagging | Tagging | Draft | 013 | Rule list + edit/delete + stale handling, split out of 013 (shares the Settings surface with 024) |
 | 026-quick-create-category-in-picker.md | Feature | Categories | Category | Draft | None | Quick-create a category from inside pickCategory (name + prefilled parent, defaults for the rest) |
 | 027-app-icon-and-branding.md | Feature | Setup | Infra | Ready | None | Money-bag launcher icon (adaptive + monochrome) and launch screen via flutter_native_splash |
+| 028-scan-device-verification.md | TechDebt | Drilldown | Drilldown | Draft | None | One device pass over the scan pipeline (016–018): umlauts, rotation, heuristic accuracy, temp-file cleanup |
