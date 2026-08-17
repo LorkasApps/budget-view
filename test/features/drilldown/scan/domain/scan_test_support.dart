@@ -52,7 +52,7 @@ class IdentityReceiptImagePreprocessor implements ReceiptImagePreprocessor {
 
 /// Recognizes a canned result regardless of input.
 class FakeOcrService implements OcrService {
-  const FakeOcrService([this.result = const OcrResult(lines: ['REWE'])]);
+  const FakeOcrService([this.result = const OcrResult(fullText: 'REWE')]);
 
   final OcrResult result;
 

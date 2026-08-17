@@ -1,23 +1,66 @@
 import 'dart:typed_data';
+import 'dart:ui';
+
+/// One recognized line of a receipt.
+class OcrLine {
+  const OcrLine({
+    required this.text,
+    required this.boundingBox,
+    this.confidence,
+  });
+
+  final String text;
+
+  /// In source-image pixels. Receipt heuristics lean on the x-axis: prices sit
+  /// right-aligned, quantities left, discount rows indented.
+  final Rect boundingBox;
+
+  final double? confidence;
+}
+
+/// A paragraph-ish cluster of lines, as ML Kit groups them.
+class OcrBlock {
+  const OcrBlock({
+    required this.text,
+    required this.boundingBox,
+    this.lines = const [],
+  });
+
+  final String text;
+  final Rect boundingBox;
+  final List<OcrLine> lines;
+}
 
 /// Text of one recognized receipt, handed from OCR to the line-item parser.
-///
-/// Ticket 017 owns the recognizer; the shape lives here because the scan flow
-/// is its only caller.
 class OcrResult {
-  const OcrResult({this.lines = const []});
+  const OcrResult({this.fullText = '', this.blocks = const []});
 
-  /// Recognized text, one entry per receipt line, top to bottom.
-  final List<String> lines;
+  /// The recognizer's own concatenation of everything it found.
+  final String fullText;
 
-  bool get isEmpty => lines.isEmpty;
+  final List<OcrBlock> blocks;
+
+  bool get isEmpty => blocks.isEmpty;
+}
+
+/// The recognizer itself failed. An empty result is not an error — it travels
+/// on and the user decides in the confirm step.
+class OcrEngineException implements Exception {
+  OcrEngineException(this.message);
+
+  /// German and user-facing.
+  final String message;
+
+  @override
+  String toString() => 'OcrEngineException: $message';
 }
 
 abstract interface class OcrService {
   Future<OcrResult> recognize(Uint8List bytes);
 }
 
-/// Recognizes nothing — placeholder until ticket 017 wires Google ML Kit.
+/// Recognizes nothing. Kept as the override used by tests and as the fallback
+/// when a build ships without the ML Kit model.
 class NoOcrService implements OcrService {
   const NoOcrService();
 

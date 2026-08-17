@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../data/image_picker_receipt_image_source.dart';
 import '../data/jpeg_receipt_image_preprocessor.dart';
+import '../data/mlkit_ocr_service.dart';
 import 'ocr_service.dart';
 import 'photo_scan_flow_controller.dart';
 import 'receipt_image_source.dart';
@@ -15,8 +16,13 @@ final receiptImagePreprocessorProvider = Provider<ReceiptImagePreprocessor>(
   (_) => const JpegReceiptImagePreprocessor(),
 );
 
-/// Replaced by ticket 017's ML Kit recognizer.
-final ocrServiceProvider = Provider<OcrService>((_) => const NoOcrService());
+final ocrServiceProvider = Provider<OcrService>((ref) {
+  // One native recognizer for the app's lifetime instead of one per photo,
+  // which is what ML Kit recommends; released with the provider.
+  final service = MlKitOcrService(TextRecognizerReader());
+  ref.onDispose(service.close);
+  return service;
+});
 
 /// Replaced by ticket 018's heuristics.
 final receiptLineItemParserProvider = Provider<ReceiptLineItemParser>(

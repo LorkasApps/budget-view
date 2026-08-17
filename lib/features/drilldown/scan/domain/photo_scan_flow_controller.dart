@@ -9,6 +9,7 @@ import '../../../transaction/data/transaction.dart';
 import '../../data/line_item.dart';
 import '../../domain/line_item_providers.dart';
 import '../../domain/line_item_repository.dart';
+import 'ocr_service.dart';
 import 'photo_scan_providers.dart';
 import 'receipt_image_source.dart';
 import 'receipt_line_item_parser.dart';
@@ -269,7 +270,11 @@ class PhotoScanFlowController extends AutoDisposeNotifier<PhotoScanFlowState> {
       holdsImage: false,
       candidates: const [],
       documentMatches: const [],
-      errorMessage: error is LineItemInvalid ? error.message : '$error',
+      errorMessage: switch (error) {
+        LineItemInvalid() => error.message,
+        OcrEngineException() => error.message,
+        _ => '$error',
+      },
     );
   }
 

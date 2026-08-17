@@ -31,7 +31,7 @@ seams → user confirm → line-items persisted + ImportedSource row + bytes dis
 
 | Contract | Stub |
 |----------|------|
-| `OcrService.recognize(Uint8List) → Future<OcrResult>` (field `lines`) | `NoOcrService` — returns empty `OcrResult` |
+| `OcrService.recognize(Uint8List) → Future<OcrResult>` — `OcrResult(fullText, blocks)`, `OcrBlock(text, boundingBox, lines)`, `OcrLine(text, boundingBox, confidence?)`; throws `OcrEngineException` | `MlKitOcrService` (ticket 017) via `google_mlkit_text_recognition` 0.16.0; `NoOcrService` remains as the test override and the recognizer-less fallback |
 | `ReceiptLineItemParser.parse(OcrResult, transactionSign) → List<LineItemCandidate>` | `NoReceiptLineItemParser` — returns empty list |
 | `CapturedReceiptImage` — `bytes` + `filename` (empty for camera) | — |
 | `ScanSource` enum: `camera` \| `gallery` | — |
@@ -91,7 +91,7 @@ holds a `listenManual` subscription for the flow's duration.
 |----------|---------|
 | `receiptImageSourceProvider` | `ImagePickerReceiptImageSource` instance |
 | `receiptImagePreprocessorProvider` | `JpegReceiptImagePreprocessor` instance |
-| `ocrServiceProvider` | `NoOcrService` stub (ticket 017 replaces impl) |
+| `ocrServiceProvider` | `MlKitOcrService`; the native recognizer is long-lived and closed via `ref.onDispose` |
 | `receiptLineItemParserProvider` | `NoReceiptLineItemParser` stub (ticket 018 replaces impl) |
 | `photoScanFlowProvider` | `AutoDisposeNotifier<PhotoScanFlowState>` — **autoDispose on purpose** |
 
@@ -130,11 +130,30 @@ not the process.
 `ACTION_IMAGE_CAPTURE` for camera (no `CAMERA` permission). Declaring `CAMERA`
 would trigger a runtime permission prompt; our code avoids it.
 
-**Plugin temp files are opaque to this ticket.**
-`image_picker` writes camera captures to a plugin-owned temp file on disk. Our code
-never learns that path, never persists it, and never deletes it — temp cleanup is
-the plugin's responsibility. The rule "no path is ever written to disk by this
-ticket" refers to our code only.
+**Two temp files exist, neither is persistence.**
+`image_picker` writes camera captures to a plugin-owned temp file whose path our code
+never learns. And OCR needs one of its own: ML Kit refuses encoded images —
+`InputImage.fromBytes` wants raw NV21 plus a rotation on Android — so
+`MlKitOcrService` writes the downscaled bytes into the cache dir, recognizes from
+that path, and deletes the file in a `finally`, including when the recognizer
+throws. The alternative was owning YUV conversion *and* EXIF rotation in Dart, where
+a mistake reads as garbage text rather than crashing. Nothing survives the flow;
+"the photo is not kept" holds, "our code touches no file" does not.
+
+**OCR error handling splits engine failure from an unreadable receipt.**
+Every ML Kit failure is wrapped in `OcrEngineException` (German `message`), which the
+controller's `failed` phase surfaces — `_fail` unwraps it like `LineItemInvalid`. An
+empty result is *not* an error: it flows to `awaitingConfirm` with zero candidates,
+where the confirm dialog already offers Abbrechen or "nur vermerken". A dedicated
+retry loop is left to ticket 018, which builds the review surface anyway.
+
+**German umlauts are not covered by `make check`.**
+ML Kit has no binding in the test VM, so only our own seams are unit-tested: the
+mapping, the error wrapping and the temp-file lifecycle (behind an injectable
+`MlKitTextReader` port and an injectable cache directory). That Latin-script
+recognition returns `Käse` / `Öl` / `Süß` / `Brühe` correctly is a device check —
+same reasoning as the "no fixture PDFs" decision: a synthetically rendered image
+would exercise a path no real receipt takes.
 
 **Rejected candidate mid-`confirm()` leaves partial state.**
 If `LineItemRepository.save()` rejects a candidate, earlier candidates stay persisted
@@ -162,8 +181,9 @@ On `confirm()`, exactly one row is written:
 - `note = 'Erneuter Scan trotz Warnung'` only when `documentSeenBefore` is true
 
 **Zero items is a valid scan.**
-With stubs in place a pass can propose zero line-items; `confirm()` still writes the
-`ImportedSource` row, so a re-scan of the same photo warns.
+A pass can propose zero line-items — an unreadable receipt, or the parser stub still
+in place until 018. `confirm()` writes the `ImportedSource` row anyway, so a re-scan
+of the same photo warns.
 
 ## Testing
 
@@ -174,3 +194,6 @@ With stubs in place a pass can propose zero line-items; `confirm()` still writes
 | `photo_scan_imported_source_test.dart` | `test/features/drilldown/scan/domain/` | ImportedSource row creation, correct field mapping, counts, no row on cancel, note only when warned |
 | `photo_scan_multi_test.dart` | `test/features/drilldown/scan/domain/` | "Scan another" within a flow: two passes produce two rows, each with correct counts |
 | `scan_test_support.dart` | `test/features/drilldown/scan/domain/` | Shared fakes: `FakeReceiptImageSource`, `FakeOcrService`, `FakeReceiptLineItemParser`, synthetic receipt bytes, test container builder |
+| `mlkit_ocr_service_test.dart` | `test/features/drilldown/scan/data/` | OCR mapping (blocks, lines, boxes, confidence, `fullText`), bytes reach the temp file, empty result travels on, engine failure wrapped, temp file deleted on success and on throw |
+
+Not covered automatically: real ML Kit recognition (native plugin, device check).

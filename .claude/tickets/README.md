@@ -18,7 +18,7 @@
 | 014-auto-suggest-on-import.md | Feature | Auto-Tagging | Tagging | Ready | 013 | Suggest category on new imports |
 | 015-line-item-entity.md | Feature | Drilldown | Drilldown | Done | 006 | Line-item entity (child of transaction) |
 | 016-kassenbon-photo-capture.md | Feature | Drilldown | Drilldown | Done | 015, 009 | Camera / gallery capture flow (ephemeral, no persistence) |
-| 017-ocr-mlkit.md | Feature | Drilldown | Drilldown | Ready | 016 | OCR via Google ML Kit (in-memory only) |
+| 017-ocr-mlkit.md | Feature | Drilldown | Drilldown | In Progress | 016 | OCR via Google ML Kit (in-memory only) |
 | 018-ocr-to-line-items.md | Feature | Drilldown | Drilldown | Ready | 017 | Parse OCR text into line-items (heuristic + user review) |
 | 019-sum-validation.md | Feature | Drilldown | Drilldown | Done | 015 | Auto-managed Restposten (invariant sum) |
 | 020-monthly-category-report.md | Feature | Analytics | Analytics | Ready | 006, 011, 012, 015 | Monthly report: donut + tree-aware table |
