@@ -60,6 +60,16 @@ class FakeOcrService implements OcrService {
   Future<OcrResult> recognize(Uint8List bytes) async => result;
 }
 
+/// Fails during recognition, exactly like the engine going dark mid-scan.
+class ThrowingOcrService implements OcrService {
+  const ThrowingOcrService(this.error);
+
+  final Object error;
+
+  @override
+  Future<OcrResult> recognize(Uint8List bytes) async => throw error;
+}
+
 /// Proposes a fixed, mutable list of candidates regardless of the OCR input.
 /// Mutable so the multi-scan test can vary the count between passes.
 class FakeReceiptLineItemParser implements ReceiptLineItemParser {
@@ -68,23 +78,22 @@ class FakeReceiptLineItemParser implements ReceiptLineItemParser {
   List<LineItemCandidate> candidates;
 
   @override
-  List<LineItemCandidate> parse(
-    OcrResult result, {
-    required int transactionSign,
-  }) =>
-      candidates;
+  List<LineItemCandidate> parse(OcrResult result) => candidates;
 }
 
-/// Two negative positions, matching an expense parent's sign.
-List<LineItemCandidate> defaultCandidates() => const [
-      LineItemCandidate(description: 'Milch', amountCents: -119),
-      LineItemCandidate(description: 'Brot', amountCents: -249),
+/// Two positions as the parser produces them: unsigned magnitudes, the flow
+/// applies the booking's sign.
+List<LineItemCandidate> defaultCandidates() => [
+      LineItemCandidate(description: 'Milch', amountCents: 119),
+      LineItemCandidate(description: 'Brot', amountCents: 249),
     ];
 
-/// A candidate `LineItemRepository.save` must reject (empty description) —
-/// used to force the controller's failure path.
-LineItemCandidate invalidCandidate() =>
-    const LineItemCandidate(description: '', amountCents: -100);
+/// A row OCR could not decompose. Not savable, so `confirm` skips it instead
+/// of letting the repository reject it.
+LineItemCandidate unparsedCandidate() => LineItemCandidate(
+      rawOcrText: 'PFAND 0,25 25 A',
+      parseState: LineItemParseState.unparsed,
+    );
 
 /// An unsaved expense booking. Callers persist it via
 /// `transactionRepositoryProvider` before starting a scan against it.
@@ -92,6 +101,20 @@ Transaction expenseTransaction({
   String accountUuid = 'acc-1',
   int amountCents = -4732,
   String description = 'REWE Einkauf',
+}) {
+  return Transaction()
+    ..accountUuid = accountUuid
+    ..amountCents = amountCents
+    ..bookingDate = DateTime(2026, 8, 1)
+    ..description = description;
+}
+
+/// An unsaved income booking, the counterpart to [expenseTransaction] for the
+/// sign-of-persisted-amount tests.
+Transaction incomeTransaction({
+  String accountUuid = 'acc-1',
+  int amountCents = 4732,
+  String description = 'Gehalt',
 }) {
   return Transaction()
     ..accountUuid = accountUuid

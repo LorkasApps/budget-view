@@ -6,7 +6,7 @@
 | **Epic** | Drilldown |
 | **Domain** | Drilldown |
 | **Blocked By** | 017 |
-| **Status** | Ready |
+| **Status** | In Progress |
 
 ## Description
 Convert an `OcrResult` (ticket 017) into a list of editable `LineItemCandidate`s and present them to the user in a preview screen (part of the scan flow from ticket 016). Parser uses simple heuristics (regex + row grouping by y-position). Rows the parser cannot decompose cleanly are surfaced as **unparsed** candidates showing the raw OCR text — the user completes them by hand before save. Rows detected as headers / totals / VAT lines are skipped.
@@ -17,28 +17,43 @@ The `ReceiptLineItemParser` interface and `LineItemCandidate` type already exist
 
 Inherited verification from 017: ML Kit has no binding in the test VM, so nobody has confirmed on a device yet that Latin-script recognition returns `Käse` / `Öl` / `Süß` / `Brühe` with correct umlauts. 017 shipped no surface that displays recognized text; this ticket's preview is that surface, so the check belongs here — scan a real receipt on a device and read the candidates.
 
+## Re-verify after blocker 017 (2026-08-17)
+Kept as one ticket on request, parser and review surface together. Seven points against what 016/017 shipped:
+
+1. **`LineItemCandidate` switches from signed to unsigned, and `parse` loses `transactionSign`.** 016 shipped a signed amount and pushed the parent's sign into the parser. But a receipt has no signs, `LineItemValidation.amount` rejects negatives outright ("Betrag ohne Vorzeichen eingeben"), and 015 puts the sign on the parent. So the parser reads magnitudes and the flow applies the sign at persist time — one transformation point instead of two. 016's controller and the test fakes follow.
+2. **Candidate stays immutable with `copyWith`.** The review surface edits rows, but a mutable DTO inside Riverpod state would mutate under the widget tree. The review screen owns a local list and swaps entries.
+3. **Paths** follow 016's split: DTO plus contract in `scan/domain/`, `HeuristicReceiptLineItemParser` in `scan/data/`, review surface in `scan/presentation/` — not the flat `scan/` paths this ticket originally named.
+4. **Two ACs are already satisfied by 016** and only need verification, not code: the single reconcile call after the last save, and the `ImportedSource` row carrying `lineItemsProduced`. What does change: both must count *included* candidates only, so the filter runs before either.
+5. **The review surface is a pushed screen, not another dialog.** 016's `startPhotoScan` drives a modal chain; the screen returns `List<LineItemCandidate>?` into the existing `confirm(edited:)` seam, replacing 016's placeholder confirm dialog. The flow's `listenManual` subscription outlives the push, so the photo bytes survive the detour.
+6. **Amount parsing reuses `parseEurosToCents`** after normalizing thousands separators — `"1.234,56"` breaks it as-is, since it swaps every comma for a dot. No second money parser.
+7. **Device check for umlauts lands here**, inherited from 017: this screen is the first surface that shows recognized text.
+
 ## Types
 
 ```dart
 enum LineItemParseState { ok, ambiguous, unparsed }
 
 class LineItemCandidate {
-  String description;                 // may be empty when parseState == unparsed
-  int? amountCentsUnsigned;           // null when unparsed
-  double? quantity;                   // optional
-  int? unitPriceCentsUnsigned;        // optional
-  String rawOcrText;                  // always set, source line(s) from OCR
-  LineItemParseState parseState;
-  bool includeInSave;                 // default: (parseState != unparsed)
+  final String description;           // empty when parseState == unparsed
+  final int? amountCents;             // unsigned magnitude, null when unparsed
+  final double? quantity;             // optional
+  final int? unitPriceCents;          // unsigned magnitude, optional
+  final String rawOcrText;            // always set, source row text from OCR
+  final LineItemParseState parseState;
+  final bool includeInSave;           // default: parseState == ok
+  final String? categoryUuid;         // null → inherits from the booking (012)
+
+  bool get isSavable;                 // description + amount present
+  LineItemCandidate copyWith({...});
 }
 ```
 
 ## Parser
 
 ```dart
-abstract class ReceiptLineItemParser {
-  /// Convert an OCR result into candidate line-items.
-  /// Empty output is valid (nothing on receipt looked like an item).
+abstract interface class ReceiptLineItemParser {
+  /// Empty output is valid — nothing on the receipt looked like an item.
+  /// Amounts are unsigned; the scan flow applies the booking's sign.
   List<LineItemCandidate> parse(OcrResult ocr);
 }
 ```
@@ -64,27 +79,33 @@ abstract class ReceiptLineItemParser {
 - Confirm → for each `includeInSave = true` and valid candidate: build `LineItem` with parent transaction's sign applied, persist via `LineItemRepository.save`.
 
 ## Acceptance Criteria
-- [ ] `LineItemCandidate` DTO defined in `lib/features/drilldown/scan/line_item_candidate.dart`
-- [ ] `ReceiptLineItemParser` abstract interface + `HeuristicReceiptLineItemParser` concrete impl in `lib/features/drilldown/scan/receipt_line_item_parser.dart`
-- [ ] `receiptLineItemParserProvider` (Riverpod) exposes parser, overridable in tests
-- [ ] Currency regex handles `1,23`, `1.23`, `1234,56`, `1.234,56`, with/without `€`, with/without leading space
-- [ ] Quantity regex handles `2x`, `2 x`, `1,5 kg`, `0.5 kg`, `3 Stk`, case-insensitive
-- [ ] Header/total skip list applied case-insensitively after normalization (lower, trim)
-- [ ] Preview screen (`ScanReviewScreen`) integrated into the scan flow after OCR (016) succeeds
-- [ ] Confirm action applies parent transaction's sign, then calls `LineItemRepository.save` for each included candidate
-- [ ] Confirm action calls `restpostenReconcilerProvider.reconcile(transactionUuid)` **once, after the last candidate is saved** (shipped in ticket 019). Reconciling per candidate would rewrite the managed row on every single row; skipping it leaves the booking's positions not adding up. This AC replaces the `scan_confirm_reconcile_test.dart` that 019 could not write, because the scan flow did not exist yet
-- [ ] Unparsed candidates block save until description + amount set (include-toggle disabled)
-- [ ] Categorization on preview writes to candidate; on save it becomes the `LineItem.categoryUuid` (null → later resolved via ticket 012)
-- [ ] Post-confirm flow signals ticket 016 to write the `ImportedSource` row with correct `lineItemsProduced` count
+- [ ] `LineItemCandidate` + `LineItemParseState` in `lib/features/drilldown/scan/domain/receipt_line_item_parser.dart` (next to the contract, as 016 placed them), unsigned amounts, immutable with `copyWith`
+- [ ] `HeuristicReceiptLineItemParser` in `lib/features/drilldown/scan/data/heuristic_receipt_line_item_parser.dart`
+- [ ] `receiptLineItemParserProvider` yields the heuristic parser, still overridable in tests
+- [ ] Rows built by grouping `OcrLine`s across all blocks by vertical overlap (tolerance ≈ half line height), ordered top to bottom, then left to right within a row
+- [ ] Currency token handles `1,23`, `1.23`, `1234,56`, `1.234,56`, with and without `€`, with and without a space; the rightmost token in a row wins; parsing goes through `parseEurosToCents` after stripping thousands separators
+- [ ] Quantity prefix handles `2x`, `2 x`, `1,5 kg`, `0.5 kg`, `3 Stk`, case-insensitive; matched prefix is removed from the description
+- [ ] `unitPriceCents` derived only when quantity and amount are both present and the division lands within a cent — a mismatch stays a warning in the UI, never a silent value
+- [ ] Header/total skip list applied case-insensitively after normalization; a skipped row produces no candidate
+- [ ] No amount in a row → `parseState = unparsed`, `rawOcrText` kept, `includeInSave = false`; amount without description → `ambiguous`
+- [ ] `ScanReviewScreen` pushed from the scan flow after OCR, returns the edited candidate list into `PhotoScanFlowController.confirm(edited:)`; 016's placeholder confirm dialog is removed
+- [ ] Review rows: `ok` plain, `ambiguous` highlighted, `unparsed` shows `rawOcrText` in monospace; include-toggle disabled while a row is not savable
+- [ ] Row edit sheet mirrors `line_item_edit_sheet.dart` (description, magnitude, optional quantity + unit price, mismatch warning, category row) and reuses `LineItemValidation`
+- [ ] "Zeile hinzufügen" appends an empty candidate; per-row and "alle kategorisieren" both go through `pickCategory` (`allowNone: true`, inherit label like the position sheet)
+- [ ] Footer shows the live sum of included candidates against the booking total (rendering only — 019 owns the invariant)
+- [ ] Confirm persists only `includeInSave` candidates, applying the booking's sign, category included (null → inherits per 012)
+- [ ] Already shipped in 016, to be verified rather than rebuilt: one `reconcile` call after the last save, and one `ImportedSource` row whose `lineItemsProduced` counts the *included* candidates
+- [ ] Verified on a device: a real receipt round-trips `Käse`, `Öl`, `Süß`, `Brühe` with correct umlauts (the check inherited from 017)
 
 ## Test Strategy
 - Parser tests use crafted `OcrResult` fixtures built inline — no image round-trip needed. Each test asserts candidate list, parseState, and field extraction.
 - UI tests use a mocked parser to isolate preview behavior from heuristic tuning.
 
 ## Affected Tests
-- `test/features/drilldown/scan/heuristic_line_item_parser_test.dart` — currency variants, quantity variants, skip list, unparsed fallback
-- `test/features/drilldown/scan/scan_review_screen_test.dart` — include-toggle disabled for unparsed, batch categorize, add manual row
-- `test/features/drilldown/scan/scan_review_persist_test.dart` — confirm persists with correct sign + counts
+- `test/features/drilldown/scan/data/heuristic_receipt_line_item_parser_test.dart` — row grouping by y-overlap, currency variants, quantity variants, unit-price derivation, skip list, unparsed and ambiguous fallbacks
+- `test/features/drilldown/scan/presentation/scan_review_screen_test.dart` — toggle disabled while a row is not savable, edit makes an unparsed row savable, add row, categorize all
+- `test/features/drilldown/scan/domain/photo_scan_confirm_test.dart` — confirm persists only included candidates with the booking's sign and the chosen category, reconciles once, and counts the included rows in `ImportedSource`
+- `test/features/drilldown/scan/domain/scan_test_support.dart` — fakes follow the unsigned, `transactionSign`-free contract
 
 ## Fixtures Needed
 No — inline OCR result builders.

@@ -179,11 +179,8 @@ class PhotoScanFlowController extends AutoDisposeNotifier<PhotoScanFlowState> {
     if (_bytes == null) return;
 
     state = state.copyWith(phase: PhotoScanPhase.parsing);
-    final sign = _transaction!.amountCents.isNegative ? -1 : 1;
-    final candidates = ref.read(receiptLineItemParserProvider).parse(
-          recognized,
-          transactionSign: sign,
-        );
+    final candidates =
+        ref.read(receiptLineItemParserProvider).parse(recognized);
 
     state = state.copyWith(
       phase: PhotoScanPhase.awaitingConfirm,
@@ -203,8 +200,13 @@ class PhotoScanFlowController extends AutoDisposeNotifier<PhotoScanFlowState> {
       return;
     }
 
-    final items = edited ?? state.candidates;
+    // Only rows the user kept, and only rows the repository would accept —
+    // an unparsed row that was never completed is skipped, not rejected.
+    final items = (edited ?? state.candidates)
+        .where((candidate) => candidate.includeInSave && candidate.isSavable)
+        .toList();
     final seenBefore = state.documentSeenBefore;
+    final sign = transaction.amountCents.isNegative ? -1 : 1;
     state = state.copyWith(phase: PhotoScanPhase.persisting);
 
     try {
@@ -214,9 +216,10 @@ class PhotoScanFlowController extends AutoDisposeNotifier<PhotoScanFlowState> {
           LineItem()
             ..transactionUuid = transaction.uuid
             ..description = candidate.description
-            ..amountCents = candidate.amountCents
+            ..amountCents = sign * candidate.amountCents!
             ..quantity = candidate.quantity
-            ..unitPriceCents = candidate.unitPriceCents,
+            ..unitPriceCents = candidate.unitPriceCents
+            ..categoryUuid = candidate.categoryUuid,
         );
       }
       // Fresh positions move the sum, so the managed Restposten row has to

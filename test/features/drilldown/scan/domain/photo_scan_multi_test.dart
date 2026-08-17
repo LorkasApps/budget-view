@@ -62,8 +62,8 @@ void main() {
       // Different bytes so the second pass gets its own content hash and
       // does not trip the duplicate warning against the first pass.
       imageSource.setNext(CapturedReceiptImage(bytes: receiptBytes(2)));
-      parser.candidates = const [
-        LineItemCandidate(description: 'Käse', amountCents: -299),
+      parser.candidates = [
+        LineItemCandidate(description: 'Käse', amountCents: 299),
       ];
 
       await controller.startScan(
@@ -86,6 +86,12 @@ void main() {
           items.where((i) => i.kind == LineItemKind.regular).toList();
       // 2 positions from the first pass, 1 from the second.
       expect(regular, hasLength(3));
+      // The booking is an expense; persisted amounts carry its sign even
+      // though every candidate above is an unsigned magnitude.
+      expect(
+        regular.map((i) => i.amountCents).toSet(),
+        {-119, -249, -299},
+      );
 
       final repo = container.read(importedSourceRepositoryProvider);
       final sources = await repo.findAll();

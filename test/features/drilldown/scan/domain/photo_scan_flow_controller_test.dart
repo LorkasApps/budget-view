@@ -1,8 +1,8 @@
 import 'dart:io';
 
 import 'package:budget_view/core/persistence/isar_db.dart';
-import 'package:budget_view/features/drilldown/data/line_item.dart';
 import 'package:budget_view/features/drilldown/domain/line_item_providers.dart';
+import 'package:budget_view/features/drilldown/scan/domain/ocr_service.dart';
 import 'package:budget_view/features/drilldown/scan/domain/photo_scan_flow_controller.dart';
 import 'package:budget_view/features/drilldown/scan/domain/photo_scan_providers.dart';
 import 'package:budget_view/features/drilldown/scan/domain/receipt_image_source.dart';
@@ -125,13 +125,33 @@ void main() {
     expect(saved, isEmpty);
   });
 
-  test('a rejected candidate fails the scan and drops the held image',
+  test('a failing OCR engine fails the scan and drops the held image',
       () async {
     final container = containerWith(
       isar: isar,
-      parser: FakeReceiptLineItemParser([invalidCandidate()]),
+      ocr: ThrowingOcrService(
+        OcrEngineException('Texterkennung fehlgeschlagen: boom'),
+      ),
     );
     final transaction = await savedExpense(container);
+    final controller = container.read(photoScanFlowProvider.notifier);
+
+    await controller.startScan(
+      transaction: transaction,
+      source: ScanSource.gallery,
+    );
+
+    final state = container.read(photoScanFlowProvider);
+    expect(state.phase, PhotoScanPhase.failed);
+    expect(state.holdsImage, isFalse);
+    expect(state.errorMessage, 'Texterkennung fehlgeschlagen: boom');
+  });
+
+  test('confirming against a booking that was never persisted fails',
+      () async {
+    final container = containerWith(isar: isar);
+    // Built, deliberately not saved: the repository has no matching parent.
+    final transaction = expenseTransaction();
     final controller = container.read(photoScanFlowProvider.notifier);
 
     await controller.startScan(
@@ -142,12 +162,6 @@ void main() {
 
     final state = container.read(photoScanFlowProvider);
     expect(state.phase, PhotoScanPhase.failed);
-    expect(state.holdsImage, isFalse);
-    expect(state.errorMessage, 'Beschreibung erforderlich');
-
-    final saved = await container
-        .read(lineItemRepositoryProvider)
-        .findByTransaction(transaction.uuid);
-    expect(saved.where((i) => i.kind == LineItemKind.regular), isEmpty);
+    expect(state.errorMessage, 'Buchung existiert nicht');
   });
 }

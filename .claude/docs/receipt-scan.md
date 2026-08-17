@@ -22,7 +22,9 @@ seams → user confirm → line-items persisted + ImportedSource row + bytes dis
         ↓
 [Parse: hand OcrResult to ReceiptLineItemParser (ticket 018)]
         ↓
-[Confirm / Cancel]
+[Review screen: user edits → returns edited list or null (ticket 018)]
+        ↓         ↓ user discard: bytes dropped, exit
+      proceed
         ↓
 [Persist line-items → write ImportedSource → drop bytes]
 ```
@@ -31,8 +33,8 @@ seams → user confirm → line-items persisted + ImportedSource row + bytes dis
 
 | Contract | Stub |
 |----------|------|
-| `OcrService.recognize(Uint8List) → Future<OcrResult>` — `OcrResult(fullText, blocks)`, `OcrBlock(text, boundingBox, lines)`, `OcrLine(text, boundingBox, confidence?)`; throws `OcrEngineException` | `MlKitOcrService` (ticket 017) via `google_mlkit_text_recognition` 0.16.0; `NoOcrService` remains as the test override and the recognizer-less fallback |
-| `ReceiptLineItemParser.parse(OcrResult, transactionSign) → List<LineItemCandidate>` | `NoReceiptLineItemParser` — returns empty list |
+| `OcrService.recognize(Uint8List) → Future<OcrResult>` — `OcrResult(fullText, blocks)`, `OcrBlock(text, boundingBox, lines)`, `OcrLine(text, boundingBox, confidence?)`; throws `OcrEngineException` | `MlKitOcrService` (ticket 017) via `google_mlkit_text_recognition` 0.16.0 |
+| `ReceiptLineItemParser.parse(OcrResult) → List<LineItemCandidate>` — `LineItemCandidate(description, amountCents?, quantity?, unitPriceCents?, rawOcrText, parseState, includeInSave, categoryUuid?)`, unsigned magnitudes | `HeuristicReceiptLineItemParser` — groups lines by vertical overlap across block boundaries, skips rows by prefix, rightmost price, quantity prefix parsing |
 | `CapturedReceiptImage` — `bytes` + `filename` (empty for camera) | — |
 | `ScanSource` enum: `camera` \| `gallery` | — |
 | `ReceiptImageSource.pick(ScanSource) → Future<CapturedReceiptImage?>` | `ImagePickerReceiptImageSource` via `image_picker` 1.2.3 |
@@ -68,7 +70,7 @@ State fields:
 | `filename` | `String` | Display name; empty for camera captures |
 | `holdsImage` | `bool` | Mirrors the private `_bytes` reference; observable from UI + tests |
 | `lineItemsPersisted` | `int` | Count of successfully saved items |
-| `scansCompleted` | `int` | "Scan another" counter; reset to 0 on `startScan()` for the first pass |
+| `scansCompleted` | `int` | "Scan another" counter; the one field `startScan()` carries over between passes |
 | `errorMessage` | `String?` | Error text when `phase == failed` |
 
 Methods:
@@ -92,10 +94,68 @@ holds a `listenManual` subscription for the flow's duration.
 | `receiptImageSourceProvider` | `ImagePickerReceiptImageSource` instance |
 | `receiptImagePreprocessorProvider` | `JpegReceiptImagePreprocessor` instance |
 | `ocrServiceProvider` | `MlKitOcrService`; the native recognizer is long-lived and closed via `ref.onDispose` |
-| `receiptLineItemParserProvider` | `NoReceiptLineItemParser` stub (ticket 018 replaces impl) |
+| `receiptLineItemParserProvider` | `HeuristicReceiptLineItemParser` instance |
 | `photoScanFlowProvider` | `AutoDisposeNotifier<PhotoScanFlowState>` — **autoDispose on purpose** |
 
 All wired in `domain/photo_scan_providers.dart`.
+
+## Parser — `HeuristicReceiptLineItemParser`
+
+**Row grouping.** Lines are extracted from all blocks, sorted by vertical position,
+then grouped into rows: two lines belong to the same row if their vertical centers
+are within `(line height + row's max height) / 4` of each other. This merges a
+description column and a price column that ML Kit often splits across blocks while
+keeping unrelated text rows separate. Rows are sorted left-to-right and joined with
+spaces.
+
+**Skip list.** Rows whose normalized (lowercase, leading whitespace trimmed) start
+matches any prefix in the skip set are discarded: `summe`, `zwischensumme`,
+`total`, `mwst`, `ust`, `netto`, `brutto`, `gegeben`, `zurück`, `rückgeld`,
+`saldo`, `datum`, `uhrzeit`, `bon`, `filiale`, `kunden`, `karte`, `kasse`,
+`beleg`, `ec-cash`, `eur` — covering totals, taxes, payment lines, and metadata.
+
+**Money tokens.** The parser searches for price patterns: one to three digits per
+group, groups separated by `,`, `.`, or space (e.g., `1,23`, `1.23`, `1.234,56`,
+`1 234,56`), always ending in `,DD` (two decimal places). Optional `€` or `EUR` on
+either side. The rightmost match in a row is the price.
+
+**Quantity and unit price.** If a row starts with a count pattern (`2x`, `3 Stk`,
+`3 Stk.`) or measure pattern (`1,5 kg`, `0.5 l`), it is parsed: count units (`x`,
+`stk`, `stk.`, `stück`) are fully consumed from the description; measure units
+(`kg`, `g`, `l`, `ml`) are left in the description because `LineItem` has no unit
+field. `unitPriceCents` is derived only when the division `amountCents / quantity`
+lands within a cent; otherwise it stays null — a mismatch is flagged by the UI's
+warning instead of being invented.
+
+**Parse states.** A row can land in `ok` (description and amount both read cleanly),
+`ambiguous` (amount but no description), or `unparsed` (no amount). `includeInSave`
+defaults to true for `ok` rows, false for `ambiguous` and `unparsed`.
+
+## Review screen
+
+`pushScanReview(context, transaction:, candidates:)` presents the parser's output
+for editing and returns the reviewed list, or null if the user discards.
+
+**Row states and rendering.**
+- `ok`: plain `ListTile` — description, category chip once set, amount, quantity line
+- `ambiguous`: same layout on a `tertiaryContainer` background, subtitle "Beschreibung fehlt"
+- `unparsed`: the `rawOcrText` as the title in monospace, subtitle "Nicht erkannt"
+
+The include-checkbox is **disabled for non-savable rows** — those lacking a
+non-empty trimmed description or a positive amount. Disabled rows are skipped at
+`confirm()`.
+
+**Row actions:** tap opens `showCandidateSheet`, a trailing icon deletes the row,
+"Zeile hinzufügen" appends an empty one. Deliberately no swipe-to-delete: the rows
+are not persisted yet, so the confirmation dance of `LineItemsSection` would be
+theatre. An app-bar action categorizes every included, savable row at once.
+
+**Footer.** Shows the included sum (rows with `includeInSave && isSavable`) against
+the transaction's booking total.
+
+**Return contract.** When the user taps the confirm button the return value is
+`List<LineItemCandidate>?` — the edited list or null to discard. The flow passes
+this into `confirm(edited:)`, which filters to `includeInSave && isSavable` rows.
 
 ## Non-obvious details
 
@@ -155,13 +215,26 @@ recognition returns `Käse` / `Öl` / `Süß` / `Brühe` correctly is a device c
 same reasoning as the "no fixture PDFs" decision: a synthetically rendered image
 would exercise a path no real receipt takes.
 
+**Unsigned candidates, signed on persist.**
+`LineItemCandidate` carries unsigned magnitudes: a receipt has no signs, so the
+parser cannot know whether an item is expense or income. The transaction's sign is
+applied in `confirm(edited:)` (`sign * amountCents`). This keeps the parser
+receipt-focused and the validation rule simple. `LineItemValidation.amount` rejects
+negatives, and ticket 015 owns the sign domain.
+
+**Non-savable rows skipped at confirm, not rejected.**
+If a row is `!isSavable` (empty description or non-positive amount), it is filtered
+out during `confirm()` rather than being passed to the repository and rejected
+there. This keeps the user's edits — an incomplete row survives to be finished later
+— but prevents partial persistence in case `save()` rejects it mid-loop.
+
 **Rejected candidate mid-`confirm()` leaves partial state.**
 If `LineItemRepository.save()` rejects a candidate, earlier candidates stay persisted
 and no `ImportedSource` row is written — and since the reconcile call sits behind the
 loop, the managed Restposten row stays stale until the next write path on that
-booking reconciles. No cross-repository transaction exists to roll this back. Ticket
-018's review step validates all candidates before returning, which is what keeps the
-case unreachable in practice.
+booking reconciles. No cross-repository transaction exists to roll this back. Only
+savable rows are passed, so this case is now much harder to reach — it would require
+a concurrent modification of the booking's sign after filtering.
 
 **Restposten reconcile happens after all candidates saved.**
 When `confirm()` persists one or more items, it calls
@@ -181,9 +254,9 @@ On `confirm()`, exactly one row is written:
 - `note = 'Erneuter Scan trotz Warnung'` only when `documentSeenBefore` is true
 
 **Zero items is a valid scan.**
-A pass can propose zero line-items — an unreadable receipt, or the parser stub still
-in place until 018. `confirm()` writes the `ImportedSource` row anyway, so a re-scan
-of the same photo warns.
+A pass can propose zero line-items — the OCR found nothing item-like, or the user
+discarded every row. `confirm()` writes the `ImportedSource` row anyway, so a
+re-scan of the same photo warns.
 
 ## Testing
 
@@ -193,7 +266,10 @@ of the same photo warns.
 | `photo_scan_dochash_test.dart` | `test/features/drilldown/scan/domain/` | Doc-hash miss vs hit, user proceed, user cancel, warning modal, no ImportedSource on cancel |
 | `photo_scan_imported_source_test.dart` | `test/features/drilldown/scan/domain/` | ImportedSource row creation, correct field mapping, counts, no row on cancel, note only when warned |
 | `photo_scan_multi_test.dart` | `test/features/drilldown/scan/domain/` | "Scan another" within a flow: two passes produce two rows, each with correct counts |
+| `photo_scan_confirm_test.dart` | `test/features/drilldown/scan/domain/` | Confirm logic: sign application, filtering to savable rows, reconcile call, count in ImportedSource |
 | `scan_test_support.dart` | `test/features/drilldown/scan/domain/` | Shared fakes: `FakeReceiptImageSource`, `FakeOcrService`, `FakeReceiptLineItemParser`, synthetic receipt bytes, test container builder |
 | `mlkit_ocr_service_test.dart` | `test/features/drilldown/scan/data/` | OCR mapping (blocks, lines, boxes, confidence, `fullText`), bytes reach the temp file, empty result travels on, engine failure wrapped, temp file deleted on success and on throw |
+| `heuristic_receipt_line_item_parser_test.dart` | `test/features/drilldown/scan/data/` | Row grouping across block boundaries, skip list, money tokens, quantity/unit parsing, parse states, candidates |
+| `scan_review_screen_test.dart` | `test/features/drilldown/scan/presentation/` | UI: row states rendering, include-checkbox disabled rule, edit/add/delete/categorize, footer, return contract |
 
 Not covered automatically: real ML Kit recognition (native plugin, device check).

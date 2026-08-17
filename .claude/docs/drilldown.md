@@ -98,5 +98,5 @@ Non-obvious details:
 The inherit label is built from a **watched** category list. Reading it during build froze the wording at the stream's loading state and rendered every booking as uncategorized; the tap handler reads instead, because watching outside build is not allowed.
 
 ## Not in scope here
-- Photo capture (ticket 016 done, see `receipt-scan.md`); OCR (ticket 017) and line-item parsing (ticket 018) still open
+- Photo capture workflow: see `receipt-scan.md` (tickets 016, 017, 018 done)
 - Analytics over positions (tickets 020, 022)

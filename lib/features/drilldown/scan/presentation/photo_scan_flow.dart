@@ -6,7 +6,7 @@ import '../../../import/data/imported_source.dart';
 import '../../../transaction/data/transaction.dart';
 import '../domain/photo_scan_flow_controller.dart';
 import '../domain/photo_scan_providers.dart';
-import '../domain/receipt_line_item_parser.dart';
+import 'scan_review_screen.dart';
 import 'scan_source_sheet.dart';
 
 /// Drives one or more receipt scans for [transaction] through modal steps.
@@ -47,11 +47,16 @@ Future<void> startPhotoScan(
       }
       if (state.phase != PhotoScanPhase.awaitingConfirm) return;
 
-      if (!await _confirmCandidates(context, state.candidates)) {
+      final reviewed = await pushScanReview(
+        context,
+        transaction: transaction,
+        candidates: state.candidates,
+      );
+      if (reviewed == null) {
         controller.cancel();
         return;
       }
-      await controller.confirm();
+      await controller.confirm(edited: reviewed);
 
       if (!context.mounted) return;
       state = ref.read(photoScanFlowProvider);
@@ -95,36 +100,6 @@ Future<bool> _confirmRescan(
     ),
   );
   return proceed ?? false;
-}
-
-/// Ticket 018 replaces this with an editable review of the candidates.
-Future<bool> _confirmCandidates(
-  BuildContext context,
-  List<LineItemCandidate> candidates,
-) async {
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: const Text('Positionen übernehmen?'),
-      content: Text(
-        candidates.isEmpty
-            ? 'Es wurden keine Positionen erkannt. Der Scan wird nur '
-                'vermerkt, damit dasselbe Foto später warnt.'
-            : '${candidates.length} Positionen erkannt.',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(dialogContext, false),
-          child: const Text('Abbrechen'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(dialogContext, true),
-          child: const Text('Übernehmen'),
-        ),
-      ],
-    ),
-  );
-  return confirmed ?? false;
 }
 
 Future<bool> _askScanAnother(BuildContext context, int persisted) async {

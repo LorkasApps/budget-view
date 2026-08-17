@@ -58,12 +58,3 @@ class OcrEngineException implements Exception {
 abstract interface class OcrService {
   Future<OcrResult> recognize(Uint8List bytes);
 }
-
-/// Recognizes nothing. Kept as the override used by tests and as the fallback
-/// when a build ships without the ML Kit model.
-class NoOcrService implements OcrService {
-  const NoOcrService();
-
-  @override
-  Future<OcrResult> recognize(Uint8List bytes) async => const OcrResult();
-}
