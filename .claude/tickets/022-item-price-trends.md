@@ -5,7 +5,7 @@
 | **Type** | Feature |
 | **Epic** | Analytics |
 | **Domain** | Analytics |
-| **Blocked By** | 015, 018 |
+| **Blocked By** | 015, 018, 029 |
 | **Status** | Ready |
 
 ## Description
@@ -25,6 +25,14 @@ Priority order:
 3. Else if `amountCents != null` → use `abs(amountCents)` (treated as unit price, i.e. quantity=1 assumption)
 
 Data-point date = parent transaction's `bookingDate`.
+
+## Entry point (settled by 029, 2026-08-18)
+The screen is a **tile in `MenuScreen`**, not a fourth nav tab — a price search is
+a rare surface, and the bar stays at three (decisions.md).
+
+Still open, to answer at start: whether a position row in `LineItemsSection` also
+long-presses straight into that item's price history. It would skip the search
+for the case where the user is already looking at the item.
 
 ## Acceptance Criteria
 - [ ] `ItemPriceTrendService` in `lib/features/analytics/domain/item_price_trend_service.dart`:

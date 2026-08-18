@@ -23,10 +23,11 @@
 | 019-sum-validation.md | Feature | Drilldown | Drilldown | Done | 015 | Auto-managed Restposten (invariant sum) |
 | 020-monthly-category-report.md | Feature | Analytics | Analytics | Done | 006, 011, 012, 015 | Monthly report: donut + tree-aware table |
 | 021-forecast-linear-regression.md | Feature | Analytics | Analytics | Done | 020 | Forecast (LR, user-picked window + horizon) |
-| 022-item-price-trends.md | Feature | Analytics | Analytics | Ready | 015, 018 | Item price trends (auto-group by normalized description) |
+| 022-item-price-trends.md | Feature | Analytics | Analytics | Ready | 015, 018, 029 | Item price trends (auto-group by normalized description) |
 | 023-unit-price-normalization.md | Feature | Analytics | Analytics | Draft (post-V1) | 015, 018, 022 | Weight-based unit-price for variable-weight items (€/kg, €/l) |
 | 024-import-history-screen.md | Feature | Import | Import | Draft | 009 | ImportedSource list + delete, split out of 009 (needs a Settings surface) |
 | 025-tagging-rule-management.md | Feature | Auto-Tagging | Tagging | Draft | 013 | Rule list + edit/delete + stale handling, split out of 013 (shares the Settings surface with 024) |
 | 026-quick-create-category-in-picker.md | Feature | Categories | Category | Draft | None | Quick-create a category from inside pickCategory (name + prefilled parent, defaults for the rest) |
 | 027-app-icon-and-branding.md | Feature | Setup | Infra | Ready | None | Money-bag launcher icon (adaptive + monochrome) and launch screen via flutter_native_splash |
+| 029-menu-tab-for-rare-surfaces.md | Feature | None | Infra | Done | None | Bottom nav stays at Konten \| Report \| Mehr; rare surfaces (Prognose, later 022/024/025) live behind a menu screen |
 | 028-milestone-1-verification-pass.md | TechDebt | None | Infra | Draft | None | One device + visual pass over all of milestone 1 — collects every check `make check` cannot make (native halves, rendering, gestures) |

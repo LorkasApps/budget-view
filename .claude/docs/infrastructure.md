@@ -19,7 +19,7 @@ Current state of the project foundation. Updated as Setup-epic tickets complete.
 ```
 lib/
   main.dart              # ProviderScope + BudgetViewApp root
-  app/                   # app-level composition root (AppShell)
+  app/                   # app-level composition root (AppShell, MenuScreen)
   core/                  # shared cross-feature code (persistence, sync, utils)
   features/
     <feature>/
@@ -30,7 +30,9 @@ lib/
 Per-feature `{presentation,domain,data}` folders are created by each feature ticket, not upfront.
 
 ## Entry Point
-`lib/main.dart` (async): `WidgetsFlutterBinding.ensureInitialized()` → `openAppIsar()` → `runApp(ProviderScope(overrides: [isarProvider.overrideWithValue(isar)], child: BudgetViewApp()))`. `BudgetViewApp` → `MaterialApp` (Material 3, teal seed) → `AppShell` (`lib/app/app_shell.dart`): a `NavigationBar` with tabs `Konten` | `Report` | `Prognose` over an `IndexedStack` (`AccountListScreen`, `MonthlyCategoryReportScreen`, `ForecastScreen`) — the `IndexedStack` is what keeps each tab's state across switches.
+`lib/main.dart` (async): `WidgetsFlutterBinding.ensureInitialized()` → `openAppIsar()` → `runApp(ProviderScope(overrides: [isarProvider.overrideWithValue(isar)], child: BudgetViewApp()))`. `BudgetViewApp` → `MaterialApp` (Material 3, teal seed) → `AppShell` (`lib/app/app_shell.dart`): a `NavigationBar` with tabs `Konten` | `Report` | `Mehr` over an `IndexedStack` (`AccountListScreen`, `MonthlyCategoryReportScreen`, `MenuScreen`) — the `IndexedStack` is what keeps each tab's state across switches.
+
+`MenuScreen` (`lib/app/menu_screen.dart`) holds every surface that is opened rarely or reached from context anyway. Each is one `ListTile` that **pushes** a route, so back returns to the menu. A tab is earned by frequency, which keeps the bar at three however many surfaces arrive (decisions.md). Currently one tile: `Prognose`.
 
 ## Persistence (`lib/core/persistence/`)
 | File | Role |

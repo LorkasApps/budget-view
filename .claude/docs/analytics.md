@@ -104,7 +104,7 @@ Below the chart: `Trend +12,34 € pro Monat` (`slopeCentsPerMonth`) with subtit
 Controls: category chip (`CategoryChip`, tap → `pickCategory`), account chip (`pickAccount`), direction `SegmentedButton`, `Fenster` (3/6/12/Alle) and `Horizont` (3/6/12) `ChoiceChip` rows. Every control except the category picker is disabled until a category is chosen. Empty state when `hasForecast` is false: `Zu wenige Daten für Prognose (mindestens 3 Monate)`.
 
 **Entry points**
-- Shell's third tab `Prognose` — anchor = current month, category picked in the screen.
+- `Mehr` tab → `Prognose` tile (`MenuScreen`, see infrastructure.md) — pushed without a filter, so the anchor is the current month and the category is picked in the screen.
 - Deep link from the report — **long-press** a category row in `ReportLevelView`, or the `Prognose` app-bar action in `CategorySubtreeReportScreen`. Both call `ReportLevelView.openForecast(context, reportFilter:, categoryUuid:)`, which copies category, account, direction and the report's month into a `ForecastFilter`.
 - The `(direkt)` pseudo row and the `Ohne Kategorie` row have no long-press — neither stands for a category.
 

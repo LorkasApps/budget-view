@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../features/account/presentation/account_list_screen.dart';
-import '../features/analytics/presentation/forecast_screen.dart';
 import '../features/analytics/presentation/monthly_category_report_screen.dart';
+import 'menu_screen.dart';
 
 /// Root surface of the app. The tabs live in an [IndexedStack] so switching
 /// away and back keeps each screen's scroll position and filter state.
@@ -23,7 +23,7 @@ class _AppShellState extends State<AppShell> {
       children: const [
         AccountListScreen(),
         MonthlyCategoryReportScreen(),
-        ForecastScreen(),
+        MenuScreen(),
       ],
     ),
     bottomNavigationBar: NavigationBar(
@@ -41,9 +41,9 @@ class _AppShellState extends State<AppShell> {
           label: 'Report',
         ),
         NavigationDestination(
-          icon: Icon(Icons.trending_up_outlined),
-          selectedIcon: Icon(Icons.trending_up),
-          label: 'Prognose',
+          icon: Icon(Icons.more_horiz_outlined),
+          selectedIcon: Icon(Icons.more_horiz),
+          label: 'Mehr',
         ),
       ],
     ),
