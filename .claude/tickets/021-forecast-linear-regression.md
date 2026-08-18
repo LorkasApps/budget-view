@@ -85,7 +85,6 @@ No — inline arithmetic fixtures.
 - The row-level entry point is a **long-press**, not a visible per-row action: a third widget in `ListTile.trailing` is the overflow that errors.md already records.
 
 ## Open verification
-Device pass outstanding, together with 020's: the `LineChart` has never rendered
-a frame — widget tests assert bar data only. Check axis labels at 3 vs. 12
-months of history, and that the `Fenster`/`Horizont` chip rows do not overflow
-on a narrow screen.
+The `LineChart` has never rendered a frame — widget tests assert bar data only.
+Axis crowding, chip-row overflow and whether the long-press entry point is
+discoverable are checked in **028** (milestone-1 verification pass).

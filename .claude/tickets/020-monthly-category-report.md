@@ -75,7 +75,7 @@ No — inline builders.
 - Output: ~42k tokens
 
 ## Open verification
-Device pass outstanding: the donut is the first `fl_chart` usage in the app, and
-widget tests only assert the section data, never a rendered frame. Check on
-device that the chart paints, that slice labels stay legible, and that the
-filter bar survives a narrow screen.
+Nothing rendered a frame — the donut is the app's first `fl_chart` usage and
+widget tests assert section data only. The concrete checks live in **028**
+(milestone-1 verification pass), which collects the visual round for the whole
+app instead of spending one device session per ticket.

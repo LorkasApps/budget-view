@@ -69,7 +69,7 @@ Non-obvious facts about the ING text layer. Each of these broke a first attempt.
 | Registration bootstrapped in `main.dart` | Registration inside `pdfParserRegistryProvider` | Lets a plain test assert the shipped parser set without booting the widget tree. |
 | Preview persisted through a widget test | Widget test is database-free; persistence asserted in `import_flow_controller_test.dart` | Real Isar I/O never completes inside `testWidgets`' fake-async zone — the run hangs instead of failing and `--timeout` does not fire. See `.claude/docs/errors.md`. |
 
-**Residual gap:** the wiring from the import button to `persist` is the one step no automated test covers (controller test calls `persist` directly, widget test stops before it). Verify on device.
+**Residual gap:** the wiring from the import button to `persist` is the one step no automated test covers (controller test calls `persist` directly, widget test stops before it). Carried into **028** (milestone-1 verification pass).
 
 ## Out of Scope (owned by ticket 009)
 - Document-level hash check before parsing + re-import modal

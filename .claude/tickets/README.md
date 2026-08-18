@@ -29,4 +29,4 @@
 | 025-tagging-rule-management.md | Feature | Auto-Tagging | Tagging | Draft | 013 | Rule list + edit/delete + stale handling, split out of 013 (shares the Settings surface with 024) |
 | 026-quick-create-category-in-picker.md | Feature | Categories | Category | Draft | None | Quick-create a category from inside pickCategory (name + prefilled parent, defaults for the rest) |
 | 027-app-icon-and-branding.md | Feature | Setup | Infra | Ready | None | Money-bag launcher icon (adaptive + monochrome) and launch screen via flutter_native_splash |
-| 028-scan-device-verification.md | TechDebt | Drilldown | Drilldown | Draft | None | One device pass over the scan pipeline (016–018): umlauts, rotation, heuristic accuracy, temp-file cleanup |
+| 028-milestone-1-verification-pass.md | TechDebt | None | Infra | Draft | None | One device + visual pass over all of milestone 1 — collects every check `make check` cannot make (native halves, rendering, gestures) |
