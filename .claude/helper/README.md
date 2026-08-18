@@ -2,6 +2,29 @@
 
 Python 3, stdlib only. Read-only unless prefixed `mutate_`. Operate on `.claude/` + git metadata only. Never scan source code.
 
+## `check.py`
+
+Wraps `make check`: runs it, writes the **full** output to `.claude/tmp/check.log` (gitignored), pipes the same output through `test_summary.py`, and prints the log path. Preferred entry point — `test_summary.py` alone throws the detail away, and a hand-written `tee "$TMPDIR/check.log"` lands in the shell's `$TMPDIR`, which is **not** the agent's, so the agent cannot read it back.
+
+**Usage:** `./.claude/helper/check.py [target] [--context N]`
+
+**Args:**
+- `target` (optional, default `check`) — make target to run, e.g. `test`
+- `--context N` (optional, default `3`) — forwarded to `test_summary.py`
+
+**Output:** the `test_summary.py` report, then `full log: .claude/tmp/check.log`. stderr is merged in, as `test_summary.py` requires.
+
+**Example:**
+
+    $ ./.claude/helper/check.py
+    322 passed, 0 failed, 2 skipped
+
+    full log: .claude/tmp/check.log
+
+**Exit codes:** `0` clean, non-zero from `test_summary.py` or from `make` otherwise.
+
+**Note:** Flutter cannot run in the agent sandbox — the user runs this and pastes the summary; the agent then reads `.claude/tmp/check.log` directly when the summary is not enough.
+
 ## `test_summary.py`
 
 Compacts `make check` output (`flutter analyze` + `flutter test`) down to failures only, so raw passing-test noise never has to be dumped into an LLM context.
