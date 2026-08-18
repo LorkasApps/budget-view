@@ -11,3 +11,4 @@
 | receipt-scan.md | Drilldown | Ephemeral receipt photo capture: source picker, doc-hash check, OCR/parser seams, confirm → line-items + ImportedSource |
 | tagging.md | Tagging | TaggingRule entity, repository (upsert/hit-count, hard delete, remap), learn service + its three UI call sites |
 | import.md | Transaction | PDF import layer: PdfParser interface, registry (IngGiroParser), ING layout parsing, import flow (preview, edit, persist via controller) |
+| analytics.md | Analytics | Monthly category report: rollup service, donut + tree table, month/account/direction filters, subtree drilldown |

@@ -249,6 +249,60 @@ void main() {
     expect(ordered.map((i) => i.description), ['A', 'B', 'C']);
   });
 
+  test('findByTransactions collects several bookings in one query', () async {
+    final first = await expenseParent();
+    final second = await expenseParent();
+    await repo.save(_item(transactionUuid: first.uuid, description: 'A'));
+    await repo.save(_item(transactionUuid: second.uuid, description: 'B'));
+    await repo.save(_item(transactionUuid: second.uuid, description: 'C'));
+
+    final all = await repo.findByTransactions([first.uuid, second.uuid]);
+
+    expect(all, hasLength(3));
+    expect(
+      all
+          .where((i) => i.transactionUuid == second.uuid)
+          .map((i) => i.description),
+      ['B', 'C'],
+    );
+  });
+
+  test('findByTransactions skips bookings that were not asked for', () async {
+    final asked = await expenseParent();
+    final other = await expenseParent();
+    await repo.save(_item(transactionUuid: asked.uuid, description: 'A'));
+    await repo.save(_item(transactionUuid: other.uuid, description: 'B'));
+
+    final found = await repo.findByTransactions([asked.uuid]);
+
+    expect(found.map((i) => i.description), ['A']);
+  });
+
+  test('findByTransactions honours the deleted flag like its sibling', () async {
+    final parent = await expenseParent();
+    final dropped = await repo.save(
+      _item(transactionUuid: parent.uuid, description: 'A'),
+    );
+    await repo.save(_item(transactionUuid: parent.uuid, description: 'B'));
+    await repo.softDelete(dropped.uuid);
+
+    expect(
+      (await repo.findByTransactions([parent.uuid])).map((i) => i.description),
+      ['B'],
+    );
+    expect(
+      await repo.findByTransactions([parent.uuid], includeDeleted: true),
+      hasLength(2),
+    );
+  });
+
+  test('findByTransactions on an empty list queries nothing', () async {
+    final parent = await expenseParent();
+    await repo.save(_item(transactionUuid: parent.uuid));
+
+    expect(await repo.findByTransactions([]), isEmpty);
+  });
+
   test('sumForTransaction sums active rows only', () async {
     final parent = await expenseParent();
     await repo.save(

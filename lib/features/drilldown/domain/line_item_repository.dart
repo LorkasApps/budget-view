@@ -193,6 +193,26 @@ class LineItemRepository {
         .findAll();
   }
 
+  /// Positions of many bookings in one query, for callers that would otherwise
+  /// loop [findByTransaction] — analytics reads a whole month at once.
+  Future<List<LineItem>> findByTransactions(
+    List<String> transactionUuids, {
+    bool includeDeleted = false,
+  }) {
+    if (transactionUuids.isEmpty) return Future.value(const []);
+    final matching = _isar.lineItems
+        .filter()
+        .anyOf(transactionUuids, (q, uuid) => q.transactionUuidEqualTo(uuid));
+    if (includeDeleted) {
+      return matching.sortByOrderIndex().thenByCreatedAt().findAll();
+    }
+    return matching
+        .deletedEqualTo(false)
+        .sortByOrderIndex()
+        .thenByCreatedAt()
+        .findAll();
+  }
+
   /// Rewrites [ordered] into evenly spaced [LineItem.orderIndex] values. Only
   /// rows whose index actually changes are written and enqueued.
   Future<void> reorder(List<LineItem> ordered) async {

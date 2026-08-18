@@ -29,6 +29,7 @@ No unit or currency field — EUR/cents like everywhere; the quantity's unit liv
 | `softDelete(uuid)` | delete (`deleted=true`) |
 | `findByUuid(uuid)` | — |
 | `findByTransaction(uuid, {includeDeleted})` | — sorted `orderIndex`, then `createdAt` |
+| `findByTransactions(uuids, {includeDeleted})` | — positions of many bookings in one `anyOf` query; analytics reads a whole month at once |
 | `reorder(ordered)` | update — rewrites `orderIndex` to `(i+1)*1000`, **only changed rows written** |
 | `sumForTransaction(uuid)` | — sum of active `amountCents` |
 | `saveRestposten(item)` | create / update — **reconciler only** |

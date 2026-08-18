@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'app/app_shell.dart';
 import 'core/persistence/isar_db.dart';
 import 'core/persistence/isar_provider.dart';
-import 'features/account/presentation/account_list_screen.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,7 +27,7 @@ class BudgetViewApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,
       ),
-      home: const AccountListScreen(),
+      home: const AppShell(),
     );
   }
 }

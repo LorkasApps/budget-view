@@ -11,6 +11,7 @@ Current state of the project foundation. Updated as Setup-epic tickets complete.
 | Local persistence | `isar_community` 3.3.2 (+ `_flutter_libs`, `_generator`) — **no DB encryption** |
 | Codegen | `build_runner` + `isar_community_generator` (`make gen`) |
 | Linter | `flutter_lints` (default rules) |
+| Charts | `fl_chart` ^1.2.0 |
 | Package / applicationId | `de.lorkaps_apps.budget_view` |
 | App display name | `BudgetView` (Android manifest `android:label`) |
 
@@ -18,6 +19,7 @@ Current state of the project foundation. Updated as Setup-epic tickets complete.
 ```
 lib/
   main.dart              # ProviderScope + BudgetViewApp root
+  app/                   # app-level composition root (AppShell)
   core/                  # shared cross-feature code (persistence, sync, utils)
   features/
     <feature>/
@@ -28,7 +30,7 @@ lib/
 Per-feature `{presentation,domain,data}` folders are created by each feature ticket, not upfront.
 
 ## Entry Point
-`lib/main.dart` (async): `WidgetsFlutterBinding.ensureInitialized()` → `openAppIsar()` → `runApp(ProviderScope(overrides: [isarProvider.overrideWithValue(isar)], child: BudgetViewApp()))`. `BudgetViewApp` → `MaterialApp` (Material 3, teal seed) → `AccountListScreen` (the `HomeScreen` placeholder from ticket 001 is gone; ticket 004 replaced it).
+`lib/main.dart` (async): `WidgetsFlutterBinding.ensureInitialized()` → `openAppIsar()` → `runApp(ProviderScope(overrides: [isarProvider.overrideWithValue(isar)], child: BudgetViewApp()))`. `BudgetViewApp` → `MaterialApp` (Material 3, teal seed) → `AppShell` (`lib/app/app_shell.dart`): a `NavigationBar` with tabs `Konten` | `Report` over an `IndexedStack` (`AccountListScreen`, `MonthlyCategoryReportScreen`) — the `IndexedStack` is what keeps each tab's state across switches.
 
 ## Persistence (`lib/core/persistence/`)
 | File | Role |

@@ -21,7 +21,7 @@
 | 017-ocr-mlkit.md | Feature | Drilldown | Drilldown | Done | 016 | OCR via Google ML Kit (in-memory only) |
 | 018-ocr-to-line-items.md | Feature | Drilldown | Drilldown | Done | 017 | Parse OCR text into line-items (heuristic + user review) |
 | 019-sum-validation.md | Feature | Drilldown | Drilldown | Done | 015 | Auto-managed Restposten (invariant sum) |
-| 020-monthly-category-report.md | Feature | Analytics | Analytics | Ready | 006, 011, 012, 015 | Monthly report: donut + tree-aware table |
+| 020-monthly-category-report.md | Feature | Analytics | Analytics | Done | 006, 011, 012, 015 | Monthly report: donut + tree-aware table |
 | 021-forecast-linear-regression.md | Feature | Analytics | Analytics | Ready | 020 | Forecast (LR, user-picked window + horizon) |
 | 022-item-price-trends.md | Feature | Analytics | Analytics | Ready | 015, 018 | Item price trends (auto-group by normalized description) |
 | 023-unit-price-normalization.md | Feature | Analytics | Analytics | Draft (post-V1) | 015, 018, 022 | Weight-based unit-price for variable-weight items (€/kg, €/l) |

@@ -20,7 +20,8 @@ void main() {
     await tester.pump();
     await tester.pump();
 
-    expect(find.text('Konten'), findsOneWidget);
+    // 'Konten' is both the list's app-bar title and the shell's tab label.
+    expect(find.text('Konten'), findsWidgets);
     expect(find.text('Noch keine Konten. Lege eins an.'), findsOneWidget);
   });
 }
