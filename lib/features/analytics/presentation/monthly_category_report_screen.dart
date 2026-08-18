@@ -7,8 +7,10 @@ import '../../../core/money/money.dart';
 import '../../account/domain/account_providers.dart';
 import '../../category/presentation/category_style.dart';
 import '../domain/analytics_providers.dart';
+import '../domain/forecast.dart';
 import '../domain/monthly_category_report.dart';
 import 'account_filter_sheet.dart';
+import 'forecast_screen.dart';
 
 /// Month → category breakdown, donut on top and the same numbers as a table
 /// beneath. Owns the filter state; drilldowns inherit it unchanged.
@@ -86,6 +88,7 @@ class ReportLevelView extends StatelessWidget {
           iconName: parent.iconName,
           colorHex: parent.colorHex,
           cents: parent.ownCents,
+          categoryUuid: null,
           drilldownUuid: null,
         ),
       for (final row in report.childrenOf(parentUuid))
@@ -94,6 +97,7 @@ class ReportLevelView extends StatelessWidget {
           iconName: row.iconName,
           colorHex: row.colorHex,
           cents: row.rollupCents,
+          categoryUuid: row.categoryUuid,
           drilldownUuid: report.hasChildren(row.categoryUuid)
               ? row.categoryUuid
               : null,
@@ -154,10 +158,40 @@ class ReportLevelView extends StatelessWidget {
                       ),
                     ),
                   ),
+            // Long-press for the forecast, following the category tree's
+            // long-press-to-archive: a third trailing widget next to amount and
+            // chevron overflows the row.
+            onLongPress: slice.categoryUuid == null
+                ? null
+                : () => openForecast(
+                    context,
+                    reportFilter: filter,
+                    categoryUuid: slice.categoryUuid!,
+                  ),
           ),
       ],
     );
   }
+
+  /// Opens the forecast with everything the report already knows, so the two
+  /// screens cannot disagree about the numbers behind one category.
+  static void openForecast(
+    BuildContext context, {
+    required MonthlyReportFilter reportFilter,
+    required String categoryUuid,
+  }) => Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => ForecastScreen(
+        initialFilter: ForecastFilter(
+          categoryUuid: categoryUuid,
+          anchorYear: reportFilter.year,
+          anchorMonth: reportFilter.month,
+          accountUuid: reportFilter.accountUuid,
+          direction: reportFilter.direction,
+        ),
+      ),
+    ),
+  );
 
   /// Slices under 8 % stay unlabelled — the text would not fit the arc.
   static String _shareTitle(int cents, int total) {
@@ -189,6 +223,17 @@ class CategorySubtreeReportScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: Text(row?.name ?? 'Kategorie'),
+        actions: [
+          IconButton(
+            tooltip: 'Prognose',
+            icon: const Icon(Icons.trending_up),
+            onPressed: () => ReportLevelView.openForecast(
+              context,
+              reportFilter: filter,
+              categoryUuid: categoryUuid,
+            ),
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(24),
           child: Padding(
@@ -347,11 +392,13 @@ class _SliceTile extends StatelessWidget {
     required this.slice,
     required this.share,
     required this.onTap,
+    required this.onLongPress,
   });
 
   final _Slice slice;
   final double share;
   final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
 
   @override
   Widget build(BuildContext context) => ListTile(
@@ -374,6 +421,7 @@ class _SliceTile extends StatelessWidget {
       ],
     ),
     onTap: onTap,
+    onLongPress: onLongPress,
   );
 }
 
@@ -383,6 +431,7 @@ class _Slice {
     required this.iconName,
     required this.colorHex,
     required this.cents,
+    required this.categoryUuid,
     required this.drilldownUuid,
   });
 
@@ -390,6 +439,10 @@ class _Slice {
   final String iconName;
   final String colorHex;
   final int cents;
+
+  /// `null` on the `(direkt)` pseudo row — it stands for a slice of a category,
+  /// not for a category of its own.
+  final String? categoryUuid;
 
   /// `null` for a leaf category and for the `(direkt)` pseudo row — neither has
   /// a level below it.

@@ -19,12 +19,19 @@ Named ctor `.of(DateTime)`, getter `monthStart`, and copies `shiftMonths(int)`, 
 
 **`MonthlyCategoryReport`** — `rows` (flat, every category with a non-zero rollup, sorted `rollupCents` DESC), `uncategorizedCents`, `totalCents` (everything in scope, including uncategorized). Helpers: `empty`, `isEmpty`, `categorizedCents`, `childrenOf(String? parentUuid)`, `hasChildren(uuid)`, `rowFor(uuid)`. Flat on purpose: the screen slices it per drilldown level.
 
-## Service — `domain/monthly_category_report_service.dart`
-`MonthlyCategoryReportService(transactionRepo, lineItemRepo, categoryRepo, accountRepo)`, one method:
-`Future<MonthlyCategoryReport> compute({required int year, required int month, String? accountUuid, required ReportDirection direction})`.
+`MonthlyReportPoint` — one month of a series: `year`, `month`, `report`, getter `monthStart`. Travels next to the report (not inside it) so `MonthlyCategoryReport.empty` can stay `const`.
 
+## Service — `domain/monthly_category_report_service.dart`
+`MonthlyCategoryReportService(transactionRepo, lineItemRepo, categoryRepo, accountRepo)`.
+
+`Future<MonthlyCategoryReport> compute({required int year, required int month, String? accountUuid, required ReportDirection direction})` — now a thin wrapper: delegates to `computeSeries` with `windowMonths: 1` and returns its single point's report (`MonthlyCategoryReport.empty` if the series comes back empty).
+
+`Future<List<MonthlyReportPoint>> computeSeries({required DateTime anchorMonth, required int? windowMonths, String? accountUuid, required ReportDirection direction})` — the months `[anchor − (windowMonths − 1) … anchor]`, oldest first.
+
+- Bookings, positions and the category tree each load **once** for the whole span; the per-month loop only re-aggregates.
 - Bookings come from `TransactionRepository.findByAccount`; with `accountUuid == null` it loops `AccountRepository.findAll()` (non-archived only, so an archived account drops out).
-- Month window is `[monthStart, nextMonthStart)`, filtered in Dart — the repository has no date-range query.
+- `windowMonths == null` starts the series at the first month with anything in scope, and returns `[]` when there is none. Otherwise the window is exactly `windowMonths` long regardless of data.
+- A month with no bookings still gets a point, carrying `MonthlyCategoryReport.empty` — the forecast needs a contiguous series, and a gap is a real zero.
 - Direction is decided on the **booking's** sign, not per position, so an opposing Restposten stays with its booking.
 - Counting unit: a position when the booking has any active ones, otherwise the booking itself.
 - A position's category always comes from `effectiveCategoryUuid` (drilldown resolver), never from `LineItem.categoryUuid` directly.
@@ -35,9 +42,41 @@ Named ctor `.of(DateTime)`, getter `monthStart`, and copies `shiftMonths(int)`, 
 - Rollup walks `buildCategoryTree`; a parent netting to zero keeps its row while a descendant has one, or that descendant would have no level to sit on.
 - The report trusts the Restposten invariant from ticket 019: positions add up to their booking, so replacing a booking by its positions loses nothing.
 
+## Forecast — `domain/forecast.dart`
+`minimumForecastMonths = 3` — fewer filled months than this and a line is not fit.
+
+**`MonthValue`** — one month, magnitude only: `year`, `month`, `cents`, getter `monthStart`.
+
+**`LinearFit`** — `slope` (cents/month), `intercept` (value at `x = 0`), `r2`, `valueAt(int x)`. `fitLinear(List<int> values)` is ordinary least squares over `x = 0 … n−1`; `r2` is `0` for a series with no variance (a flat series is not a perfect fit, and `0/0` must not surface as `NaN`).
+
+**`ForecastResult`** — `history`, `forecast` (both `List<MonthValue>`), `slopeCentsPerMonth`, `interceptCents` (fitted value at the first history month), `r2`. `.insufficient(history)` sets an empty `forecast` and zeroed slope/intercept/r2; `.empty` is `.insufficient(<MonthValue>[])`. `hasForecast` = `forecast.isNotEmpty`. `fittedCentsAt(int x)` = the fitted line at month index `x` counted from the first history month.
+
+**`ForecastFilter`** — value-equal (provider family key). Ctor + `.of(DateTime anchor, {categoryUuid, ...})`.
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `categoryUuid` | String | |
+| `anchorYear` / `anchorMonth` | int | getter `anchor` |
+| `accountUuid` | String? | `null` = all non-archived accounts |
+| `direction` | `ReportDirection` | default `expenses` |
+| `windowMonths` | int? | default `12`; `null` = all history |
+| `horizonMonths` | int | default `6` |
+
+Copy helpers: `withCategory`, `withAccount`, `withDirection`, `withWindow`, `withHorizon`.
+
+## Forecast service — `domain/forecast_service.dart`
+`ForecastService(monthlyCategoryReportService)`, one method:
+`Future<ForecastResult> compute({required String categoryUuid, required DateTime anchorMonth, required int? windowMonths, required int horizonMonths, String? accountUuid, required ReportDirection direction})`.
+
+- Calls `computeSeries` for the history, then reads each point's value as `rowFor(categoryUuid)?.rollupCents ?? 0` — same rollup the report shows, so forecast and report can never disagree about what a month was worth.
+- History shorter than `minimumForecastMonths` → `ForecastResult.insufficient(history)`.
+- Otherwise `fitLinear` over the history's cents, then one `MonthValue` per horizon month, each floored at `0` (a falling trend runs through zero eventually; negative spending is not a thing).
+
 ## Providers — `domain/analytics_providers.dart`
-- `monthlyCategoryReportServiceProvider`
-- `monthlyCategoryReportProvider` — `StreamProvider.family<MonthlyCategoryReport, MonthlyReportFilter>`; emits an initial snapshot, then recomputes on a `StreamGroup.merge` of `watchLazy()` over `transactions`, `lineItems`, `categorys`, `accounts`. Mirrors `LocalBalanceService`.
+- `monthlyCategoryReportServiceProvider`, `forecastServiceProvider` (built on top of it).
+- `monthlyCategoryReportProvider` — `StreamProvider.family<MonthlyCategoryReport, MonthlyReportFilter>`.
+- `forecastProvider` — `StreamProvider.family<ForecastResult, ForecastFilter>`.
+- Both emit an initial snapshot, then recompute on the shared private `_dataChanges(isar)` — a `StreamGroup.merge` of `watchLazy()` over `transactions`, `lineItems`, `categorys`, `accounts`. Mirrors `LocalBalanceService`.
 
 The file imports the four entity libraries because the Isar collection getters are extensions from their `.g.dart` parts.
 
@@ -52,6 +91,27 @@ The file imports the four entity libraries because the Isar collection getters a
 
 Amounts render through `formatCentsEur`; month labels through `formatMonthYearDe` (`lib/core/format/date_format.dart`), which spells German month names out rather than pulling intl locale data.
 
+**`ForecastScreen({initialFilter})`** — no filter → `Kategorie wählen, um eine Prognose zu sehen`. With one, an `fl_chart` `LineChart` carrying three bars, in order:
+
+| Bar | Style | Content |
+|-----|-------|---------|
+| Fitted line | thin, no dots | `fittedCentsAt(0)` → `fittedCentsAt(lastHistoryIndex)` |
+| History | dots | one spot per history month |
+| Projection | dashed | repeats the last history spot first, so it connects, then one spot per forecast month |
+
+Below the chart: `Trend +12,34 € pro Monat` (`slopeCentsPerMonth`) with subtitle `Anpassungsgüte NN %` (`r2 * 100`, rounded); one row per projected month labelled `MM/YYYY`.
+
+Controls: category chip (`CategoryChip`, tap → `pickCategory`), account chip (`pickAccount`), direction `SegmentedButton`, `Fenster` (3/6/12/Alle) and `Horizont` (3/6/12) `ChoiceChip` rows. Every control except the category picker is disabled until a category is chosen. Empty state when `hasForecast` is false: `Zu wenige Daten für Prognose (mindestens 3 Monate)`.
+
+**Entry points**
+- Shell's third tab `Prognose` — anchor = current month, category picked in the screen.
+- Deep link from the report — **long-press** a category row in `ReportLevelView`, or the `Prognose` app-bar action in `CategorySubtreeReportScreen`. Both call `ReportLevelView.openForecast(context, reportFilter:, categoryUuid:)`, which copies category, account, direction and the report's month into a `ForecastFilter`.
+- The `(direkt)` pseudo row and the `Ohne Kategorie` row have no long-press — neither stands for a category.
+
+**Behaviour**
+- The value per month is that category's `rollupCents` (own + descendants) — identical to the report.
+- A projection below zero is floored at `0`.
+- `r2` is `0` for a series with no variance (a flat series is not a perfect fit, and `0/0` must not surface as `NaN`).
+
 ## Not in scope here
-- Forecast (ticket 021)
 - Item price trends (ticket 022)

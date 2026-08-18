@@ -3,6 +3,7 @@ import 'package:budget_view/features/account/domain/account_providers.dart';
 import 'package:budget_view/features/account/presentation/account_list_screen.dart';
 import 'package:budget_view/features/analytics/domain/analytics_providers.dart';
 import 'package:budget_view/features/analytics/domain/monthly_category_report.dart';
+import 'package:budget_view/features/analytics/presentation/forecast_screen.dart';
 import 'package:budget_view/features/analytics/presentation/monthly_category_report_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -36,6 +37,7 @@ void main() {
     );
     expect(find.text('Konten'), findsWidgets);
     expect(find.text('Report'), findsWidgets);
+    expect(find.text('Prognose'), findsWidgets);
   });
 
   testWidgets('tapping Report selects the second tab', (tester) async {
@@ -52,7 +54,21 @@ void main() {
     );
   });
 
-  testWidgets('both tabs stay mounted, so their state survives a switch', (
+  testWidgets('tapping Prognose selects the third tab', (tester) async {
+    await pumpShell(tester);
+
+    await tester.tap(find.byIcon(Icons.trending_up_outlined));
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    expect(
+      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      2,
+    );
+  });
+
+  testWidgets('all tabs stay mounted, so their state survives a switch', (
     tester,
   ) async {
     await pumpShell(tester);
@@ -62,5 +78,6 @@ void main() {
       find.byType(MonthlyCategoryReportScreen, skipOffstage: false),
       findsOneWidget,
     );
+    expect(find.byType(ForecastScreen, skipOffstage: false), findsOneWidget);
   });
 }

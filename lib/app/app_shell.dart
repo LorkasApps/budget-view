@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../features/account/presentation/account_list_screen.dart';
+import '../features/analytics/presentation/forecast_screen.dart';
 import '../features/analytics/presentation/monthly_category_report_screen.dart';
 
 /// Root surface of the app. The tabs live in an [IndexedStack] so switching
@@ -19,7 +20,11 @@ class _AppShellState extends State<AppShell> {
   Widget build(BuildContext context) => Scaffold(
     body: IndexedStack(
       index: _index,
-      children: const [AccountListScreen(), MonthlyCategoryReportScreen()],
+      children: const [
+        AccountListScreen(),
+        MonthlyCategoryReportScreen(),
+        ForecastScreen(),
+      ],
     ),
     bottomNavigationBar: NavigationBar(
       selectedIndex: _index,
@@ -34,6 +39,11 @@ class _AppShellState extends State<AppShell> {
           icon: Icon(Icons.donut_small_outlined),
           selectedIcon: Icon(Icons.donut_small),
           label: 'Report',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.trending_up_outlined),
+          selectedIcon: Icon(Icons.trending_up),
+          label: 'Prognose',
         ),
       ],
     ),

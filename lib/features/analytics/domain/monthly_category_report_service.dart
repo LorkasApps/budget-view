@@ -1,4 +1,5 @@
 import '../../account/domain/account_repository.dart';
+import '../../category/data/category.dart';
 import '../../category/domain/category_repository.dart';
 import '../../category/domain/category_tree.dart';
 import '../../drilldown/data/line_item.dart';
@@ -8,7 +9,7 @@ import '../../transaction/data/transaction.dart';
 import '../../transaction/domain/transaction_repository.dart';
 import 'monthly_category_report.dart';
 
-/// Aggregates one month of bookings into the category tree.
+/// Aggregates bookings into the category tree, one month at a time.
 ///
 /// The smallest unit is a position when the booking has any, otherwise the
 /// booking itself — and a position's category always comes from
@@ -33,8 +34,33 @@ class MonthlyCategoryReportService {
     String? accountUuid,
     required ReportDirection direction,
   }) async {
-    final monthStart = DateTime(year, month);
-    final nextMonthStart = DateTime(year, month + 1);
+    final series = await computeSeries(
+      anchorMonth: DateTime(year, month),
+      windowMonths: 1,
+      accountUuid: accountUuid,
+      direction: direction,
+    );
+    return series.isEmpty ? MonthlyCategoryReport.empty : series.first.report;
+  }
+
+  /// The months `[anchor − (windowMonths − 1) … anchor]`, oldest first. A
+  /// `null` window starts at the first month that has anything in scope, and
+  /// yields nothing at all when there is no such month.
+  ///
+  /// Months without bookings are present as [MonthlyCategoryReport.empty]: the
+  /// forecast needs a contiguous series, and a gap is a real zero.
+  ///
+  /// Bookings, positions and the category tree are each loaded once for the
+  /// whole span — the per-month loop only re-aggregates.
+  Future<List<MonthlyReportPoint>> computeSeries({
+    required DateTime anchorMonth,
+    required int? windowMonths,
+    String? accountUuid,
+    required ReportDirection direction,
+  }) async {
+    assert(windowMonths == null || windowMonths > 0);
+    final anchor = DateTime(anchorMonth.year, anchorMonth.month);
+    final afterAnchor = DateTime(anchor.year, anchor.month + 1);
 
     final bookings = <Transaction>[];
     if (accountUuid != null) {
@@ -44,15 +70,36 @@ class MonthlyCategoryReportService {
         bookings.addAll(await _transactions.findByAccount(account.uuid));
       }
     }
-
-    final inScope = [
+    final directional = [
       for (final booking in bookings)
-        if (!booking.bookingDate.isBefore(monthStart) &&
-            booking.bookingDate.isBefore(nextMonthStart) &&
+        if (booking.bookingDate.isBefore(afterAnchor) &&
             _matchesDirection(booking.amountCents, direction))
           booking,
     ];
-    if (inScope.isEmpty) return MonthlyCategoryReport.empty;
+
+    final DateTime start;
+    if (windowMonths != null) {
+      start = DateTime(anchor.year, anchor.month - (windowMonths - 1));
+    } else {
+      DateTime? earliest;
+      for (final booking in directional) {
+        if (earliest == null || booking.bookingDate.isBefore(earliest)) {
+          earliest = booking.bookingDate;
+        }
+      }
+      if (earliest == null) return const [];
+      start = DateTime(earliest.year, earliest.month);
+    }
+
+    final inScope = [
+      for (final booking in directional)
+        if (!booking.bookingDate.isBefore(start)) booking,
+    ];
+    final byMonth = <int, List<Transaction>>{};
+    for (final booking in inScope) {
+      final key = _monthKey(booking.bookingDate.year, booking.bookingDate.month);
+      (byMonth[key] ??= []).add(booking);
+    }
 
     final positions = await _lineItems.findByTransactions([
       for (final booking in inScope) booking.uuid,
@@ -64,7 +111,32 @@ class MonthlyCategoryReportService {
 
     final categories = await _categories.findAll(includeArchived: true);
     final known = {for (final category in categories) category.uuid: category};
+    final roots = buildCategoryTree(categories);
 
+    final points = <MonthlyReportPoint>[];
+    var cursor = start;
+    while (!cursor.isAfter(anchor)) {
+      final monthBookings = byMonth[_monthKey(cursor.year, cursor.month)];
+      points.add(
+        MonthlyReportPoint(
+          year: cursor.year,
+          month: cursor.month,
+          report: monthBookings == null
+              ? MonthlyCategoryReport.empty
+              : _reportFrom(monthBookings, byBooking, roots, known),
+        ),
+      );
+      cursor = DateTime(cursor.year, cursor.month + 1);
+    }
+    return points;
+  }
+
+  MonthlyCategoryReport _reportFrom(
+    List<Transaction> bookings,
+    Map<String, List<LineItem>> positionsByBooking,
+    List<CategoryNode> roots,
+    Map<String, Category> known,
+  ) {
     final ownCents = <String, int>{};
     var uncategorizedCents = 0;
     var totalCents = 0;
@@ -78,8 +150,8 @@ class MonthlyCategoryReportService {
       ownCents[categoryUuid] = (ownCents[categoryUuid] ?? 0) + amountCents;
     }
 
-    for (final booking in inScope) {
-      final items = byBooking[booking.uuid];
+    for (final booking in bookings) {
+      final items = positionsByBooking[booking.uuid];
       if (items == null || items.isEmpty) {
         addUnit(booking.categoryUuid, booking.amountCents);
         continue;
@@ -90,7 +162,7 @@ class MonthlyCategoryReportService {
     }
 
     final rows = <CategoryRow>[];
-    for (final root in buildCategoryTree(categories)) {
+    for (final root in roots) {
       _collect(root, ownCents, null, rows);
     }
     rows.sort((a, b) => b.rollupCents.compareTo(a.rollupCents));
@@ -148,4 +220,6 @@ class MonthlyCategoryReportService {
         ReportDirection.expenses => amountCents < 0,
         ReportDirection.income => amountCents > 0,
       };
+
+  static int _monthKey(int year, int month) => year * 12 + month;
 }

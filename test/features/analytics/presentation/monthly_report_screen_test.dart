@@ -5,7 +5,11 @@ import 'package:budget_view/features/account/data/account_type.dart';
 import 'package:budget_view/features/account/domain/account_providers.dart';
 import 'package:budget_view/features/analytics/domain/analytics_providers.dart';
 import 'package:budget_view/features/analytics/domain/monthly_category_report.dart';
+import 'package:budget_view/features/analytics/domain/forecast.dart';
+import 'package:budget_view/features/analytics/presentation/forecast_screen.dart';
 import 'package:budget_view/features/analytics/presentation/monthly_category_report_screen.dart';
+import 'package:budget_view/features/category/data/category.dart';
+import 'package:budget_view/features/category/domain/category_providers.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -115,6 +119,18 @@ void main() {
           monthlyCategoryReportProvider.overrideWith(
             (ref, filter) => Stream.value(_reportFor(filter)),
           ),
+          // Reached by long-pressing a row; the forecast itself is covered in
+          // forecast_screen_test.dart, here only the hand-over matters.
+          categoriesProvider(true).overrideWith(
+            (ref) => Stream.value([
+              Category()
+                ..uuid = _foodUuid
+                ..name = 'Lebensmittel',
+            ]),
+          ),
+          forecastProvider.overrideWith(
+            (ref, filter) => Stream.value(ForecastResult.empty),
+          ),
         ],
         child: const MaterialApp(home: MonthlyCategoryReportScreen()),
       ),
@@ -219,6 +235,32 @@ void main() {
       ),
     );
     expect(chart.data.sections, hasLength(2));
+  });
+
+  testWidgets('long-pressing a row hands the filter to the forecast', (
+    tester,
+  ) async {
+    await pumpScreen(tester);
+
+    await tester.longPress(find.text('Lebensmittel'));
+    await settle(tester);
+
+    final screen = tester.widget<ForecastScreen>(find.byType(ForecastScreen));
+    final handed = screen.initialFilter!;
+    expect(handed.categoryUuid, _foodUuid);
+    expect(handed.anchorYear, _now.year);
+    expect(handed.anchorMonth, _now.month);
+    expect(handed.direction, ReportDirection.expenses);
+    expect(handed.accountUuid, isNull);
+  });
+
+  testWidgets('the uncategorized row has no forecast to offer', (tester) async {
+    await pumpScreen(tester);
+
+    await tester.longPress(find.text('Ohne Kategorie'));
+    await settle(tester);
+
+    expect(find.byType(ForecastScreen), findsNothing);
   });
 
   testWidgets('a leaf category offers no drilldown', (tester) async {

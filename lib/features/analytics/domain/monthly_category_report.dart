@@ -67,6 +67,22 @@ class MonthlyReportFilter {
   int get hashCode => Object.hash(year, month, accountUuid, direction);
 }
 
+/// One month of a series. The month travels next to the report rather than
+/// inside it, so [MonthlyCategoryReport.empty] can stay `const`.
+class MonthlyReportPoint {
+  const MonthlyReportPoint({
+    required this.year,
+    required this.month,
+    required this.report,
+  });
+
+  final int year;
+  final int month;
+  final MonthlyCategoryReport report;
+
+  DateTime get monthStart => DateTime(year, month);
+}
+
 /// One category's share of a month. All amounts are magnitudes — the direction
 /// already carries the sign.
 class CategoryRow {

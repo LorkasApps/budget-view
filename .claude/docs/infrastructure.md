@@ -30,7 +30,7 @@ lib/
 Per-feature `{presentation,domain,data}` folders are created by each feature ticket, not upfront.
 
 ## Entry Point
-`lib/main.dart` (async): `WidgetsFlutterBinding.ensureInitialized()` → `openAppIsar()` → `runApp(ProviderScope(overrides: [isarProvider.overrideWithValue(isar)], child: BudgetViewApp()))`. `BudgetViewApp` → `MaterialApp` (Material 3, teal seed) → `AppShell` (`lib/app/app_shell.dart`): a `NavigationBar` with tabs `Konten` | `Report` over an `IndexedStack` (`AccountListScreen`, `MonthlyCategoryReportScreen`) — the `IndexedStack` is what keeps each tab's state across switches.
+`lib/main.dart` (async): `WidgetsFlutterBinding.ensureInitialized()` → `openAppIsar()` → `runApp(ProviderScope(overrides: [isarProvider.overrideWithValue(isar)], child: BudgetViewApp()))`. `BudgetViewApp` → `MaterialApp` (Material 3, teal seed) → `AppShell` (`lib/app/app_shell.dart`): a `NavigationBar` with tabs `Konten` | `Report` | `Prognose` over an `IndexedStack` (`AccountListScreen`, `MonthlyCategoryReportScreen`, `ForecastScreen`) — the `IndexedStack` is what keeps each tab's state across switches.
 
 ## Persistence (`lib/core/persistence/`)
 | File | Role |
