@@ -113,5 +113,38 @@ Controls: category chip (`CategoryChip`, tap → `pickCategory`), account chip (
 - A projection below zero is floored at `0`.
 - `r2` is `0` for a series with no variance (a flat series is not a perfect fit, and `0/0` must not surface as `NaN`).
 
-## Not in scope here
-- Item price trends (ticket 022)
+## Item price trends — `domain/item_price_trend.dart`
+**`PricePoint`** — `date` (the parent booking's `bookingDate`), `unitPriceCents` (magnitude).
+
+**`ItemGroup`** — `normalizedKey`, `label`, `purchaseCount`, `latestUnitPriceCents`, `latestDate`. `label` = spelling of most recent purchase, trimmed; one spelling per casing/whitespace variant, newest is best guess at current usage.
+
+**`ItemPriceSeries`** — `normalizedKey`, `label`, `points` (oldest first). Getters: `isEmpty`, `count`, `minUnitPriceCents`, `maxUnitPriceCents` (both `null` when empty). Named ctor `.emptyFor(key)`.
+
+## Item price trend service — `domain/item_price_trend_service.dart`
+`ItemPriceTrendService(transactionRepo, lineItemRepo, accountRepo)`, two methods:
+- `Future<List<ItemGroup>> searchGroups(String query)` — query normalized; blank → `[]`; substring match on normalized key; sorted `purchaseCount` DESC, ties by `label` ASC.
+- `Future<ItemPriceSeries> series(String normalizedKey)` — normalizes argument, `.emptyFor(key)` for unknown key.
+
+**Grouping & pricing**
+- Grouping key = `normalizeForMatching` (`lib/core/text/normalize.dart`) — same as dedupe/tagging. Different sorts stay separate (`h-milch 1,5 %` vs `h-milch 3,5 %`); OCR spelling variants also separate, no fuzzy merge.
+- Unit price per purchase, priority: printed `unitPriceCents` → `round(abs(amountCents) / quantity)` when quantity set → `abs(amountCents)`.
+- `kind == restposten` excluded — managed row is a booking diff, not an article.
+- Only positions count, never booking totals.
+- Bookings per account via `AccountRepository.findAll()` + `TransactionRepository.findByAccount`, one `findByTransactions` bulk query — same repo boundary as monthly report. Archived accounts, soft-deleted bookings and positions drop out.
+
+## Item price trend providers — `domain/analytics_providers.dart`
+- `itemPriceTrendServiceProvider`.
+- `itemGroupSearchProvider` — `StreamProvider.autoDispose.family<List<ItemGroup>, String>`, key = raw query.
+- `itemPriceSeriesProvider` — `StreamProvider.autoDispose.family<ItemPriceSeries, String>`, key = normalized key.
+- Both emit initial snapshot, recompute on `_dataChanges(isar)`, same as report and forecast. `autoDispose` because family key is user text.
+
+## Item price chart UI (`presentation/`)
+**`ItemPriceTrendScreen`** — app-bar `Preistrends`, `TextField` (`Artikel suchen`) debounced 300 ms. Blank → `Artikel suchen, um seinen Preisverlauf zu sehen`. No hits → `Keine Artikel gefunden`. Row shows label, purchase count (singular/plural), latest unit price, chevron; tap pushes chart.
+
+**`ItemPriceChartScreen({normalizedKey, title})`** — raw spelling as `title` (normalized key is lookup only). `0` points → `Keine Käufe erfasst`; exactly `1` → `Nur ein Datenpunkt (X,XX €) — kein Trend darstellbar`; else `fl_chart` `LineChart` with one bar, one dot per purchase. X = days since first purchase (real time axis, 8-week gap reads as one), collapsed to `1` when one day. Y padded around min/max, **no zero anchor**. Min/max are `extraLinesData` horizontal dashed, labelled `Max <price>` / `Min <price>`, collapsing to single `Preis <price>` line when all equal; extreme dots drawn larger. Below chart: `<n> Käufe erfasst` + `Zuletzt <price> am <dd.MM.yyyy>`.
+
+- Amounts render through `formatCentsEur`, dates through `formatDateDe`.
+
+**Entry points**
+- `Mehr` tab → `Preistrends` tile (`MenuScreen`).
+- Long-press on position row in `LineItemsSection` (Drilldown) pushes that row's history directly, normalizing description as key. Restposten row has no long-press.

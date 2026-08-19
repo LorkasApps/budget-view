@@ -32,7 +32,7 @@ Per-feature `{presentation,domain,data}` folders are created by each feature tic
 ## Entry Point
 `lib/main.dart` (async): `WidgetsFlutterBinding.ensureInitialized()` → `openAppIsar()` → `runApp(ProviderScope(overrides: [isarProvider.overrideWithValue(isar)], child: BudgetViewApp()))`. `BudgetViewApp` → `MaterialApp` (Material 3, teal seed) → `AppShell` (`lib/app/app_shell.dart`): a `NavigationBar` with tabs `Konten` | `Report` | `Mehr` over an `IndexedStack` (`AccountListScreen`, `MonthlyCategoryReportScreen`, `MenuScreen`) — the `IndexedStack` is what keeps each tab's state across switches.
 
-`MenuScreen` (`lib/app/menu_screen.dart`) holds every surface that is opened rarely or reached from context anyway. Each is one `ListTile` that **pushes** a route, so back returns to the menu. A tab is earned by frequency, which keeps the bar at three however many surfaces arrive (decisions.md). Currently one tile: `Prognose`.
+`MenuScreen` (`lib/app/menu_screen.dart`) holds every surface that is opened rarely or reached from context anyway. Each is one `ListTile` that **pushes** a route, so back returns to the menu. A tab is earned by frequency, which keeps the bar at three however many surfaces arrive (decisions.md). Currently two tiles: `Prognose` and `Preistrends`.
 
 ## Persistence (`lib/core/persistence/`)
 | File | Role |

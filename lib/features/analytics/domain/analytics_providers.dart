@@ -14,6 +14,8 @@ import '../../transaction/data/transaction.dart';
 import '../../transaction/domain/transaction_providers.dart';
 import 'forecast.dart';
 import 'forecast_service.dart';
+import 'item_price_trend.dart';
+import 'item_price_trend_service.dart';
 import 'monthly_category_report.dart';
 import 'monthly_category_report_service.dart';
 
@@ -71,6 +73,39 @@ final forecastProvider =
       yield await compute();
       await for (final _ in _dataChanges(isar)) {
         yield await compute();
+      }
+    });
+
+final itemPriceTrendServiceProvider = Provider<ItemPriceTrendService>(
+  (ref) => ItemPriceTrendService(
+    ref.watch(transactionRepositoryProvider),
+    ref.watch(lineItemRepositoryProvider),
+    ref.watch(accountRepositoryProvider),
+  ),
+);
+
+/// Both item providers are `autoDispose`, unlike the report ones: their family
+/// key is a search string resp. an item description, so the number of keys
+/// grows with typing instead of being bounded by a filter's fields.
+final itemGroupSearchProvider = StreamProvider.autoDispose
+    .family<List<ItemGroup>, String>((ref, query) async* {
+      final isar = ref.watch(isarProvider);
+      final service = ref.watch(itemPriceTrendServiceProvider);
+
+      yield await service.searchGroups(query);
+      await for (final _ in _dataChanges(isar)) {
+        yield await service.searchGroups(query);
+      }
+    });
+
+final itemPriceSeriesProvider = StreamProvider.autoDispose
+    .family<ItemPriceSeries, String>((ref, normalizedKey) async* {
+      final isar = ref.watch(isarProvider);
+      final service = ref.watch(itemPriceTrendServiceProvider);
+
+      yield await service.series(normalizedKey);
+      await for (final _ in _dataChanges(isar)) {
+        yield await service.series(normalizedKey);
       }
     });
 

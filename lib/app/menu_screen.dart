@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../features/analytics/presentation/forecast_screen.dart';
+import '../features/analytics/presentation/item_price_trend_screen.dart';
 
 /// Everything the bottom nav does not carry.
 ///
@@ -22,6 +23,16 @@ class MenuScreen extends StatelessWidget {
           subtitle: 'Lineare Hochrechnung je Kategorie',
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute<void>(builder: (_) => const ForecastScreen()),
+          ),
+        ),
+        _MenuTile(
+          icon: Icons.price_change_outlined,
+          title: 'Preistrends',
+          subtitle: 'Preisverlauf einzelner Artikel aus Kassenbons',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => const ItemPriceTrendScreen(),
+            ),
           ),
         ),
       ],

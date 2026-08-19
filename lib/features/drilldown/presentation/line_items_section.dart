@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/money/money.dart';
+import '../../../core/text/normalize.dart';
+import '../../analytics/presentation/item_price_chart_screen.dart';
 import '../../category/presentation/category_chip.dart';
 import '../../transaction/data/transaction.dart';
 import '../data/line_item.dart';
@@ -28,6 +30,19 @@ class LineItemsSection extends ConsumerWidget {
 
   Future<void> _edit(BuildContext context, LineItem item) =>
       showLineItemSheet(context, parent: transaction, existing: item);
+
+  /// Navigation-only edge into Analytics (see decisions.md), same shape as the
+  /// long-press from a report row into the forecast: on a position the user
+  /// already holds the item, so the search screen would only be a detour.
+  void _openPriceHistory(BuildContext context, LineItem item) =>
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ItemPriceChartScreen(
+            normalizedKey: normalizeForMatching(item.description),
+            title: item.description,
+          ),
+        ),
+      );
 
   Future<bool> _confirmDelete(BuildContext context, LineItem item) async {
     final confirmed = await showDialog<bool>(
@@ -110,16 +125,22 @@ class LineItemsSection extends ConsumerWidget {
                     _reorder(ref, items, oldIndex, newIndex),
                 itemBuilder: (context, index) {
                   final item = items[index];
+                  final managed = item.kind == LineItemKind.restposten;
                   final row = _LineItemRow(
                     item: item,
                     parent: transaction,
                     index: index,
                     onTap: () => _edit(context, item),
+                    // The Restposten is a difference, not an article, so it has
+                    // no price history to open.
+                    onLongPress: managed
+                        ? null
+                        : () => _openPriceHistory(context, item),
                   );
                   // The managed row has no swipe: the repository would refuse
                   // the delete anyway, and an animating-away row that comes
                   // back reads as a bug.
-                  if (item.kind == LineItemKind.restposten) {
+                  if (managed) {
                     return KeyedSubtree(key: ValueKey(item.uuid), child: row);
                   }
                   return Dismissible(
@@ -174,12 +195,14 @@ class _LineItemRow extends StatelessWidget {
     required this.parent,
     required this.index,
     required this.onTap,
+    required this.onLongPress,
   });
 
   final LineItem item;
   final Transaction parent;
   final int index;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   String? get _quantityLine {
     final quantity = item.quantity;
@@ -231,6 +254,7 @@ class _LineItemRow extends StatelessWidget {
         ],
       ),
       onTap: onTap,
+      onLongPress: onLongPress,
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [

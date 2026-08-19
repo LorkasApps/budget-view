@@ -93,6 +93,7 @@ Non-obvious details:
 - Badge = effective category either way: dimmed to 55 % behind a `subdirectory_arrow_right` arrow when inherited, plain when the position overrides.
 - The managed Restposten row carries a `Restposten` chip, muted text, **no drag handle and no swipe** — the repository would refuse the delete, and a row that animates away and returns reads as a bug. A reorder therefore writes only the regular rows and lets the reconciler re-pin the managed one.
 - In the sheet the managed row keeps its amount visible but disabled (`Betrag (automatisch)`), hides quantity and unit price, and saves through `updateRestpostenDetails` — no reconcile needed, since neither field moves the sum.
+- Long-press on a regular position row opens that item's price history (`ItemPriceChartScreen`, Analytics), keyed by `normalizeForMatching(description)`; the managed Restposten row has no long-press because it is not an article.
 
 **`showLineItemSheet(context, {parent, existing})`** — bottom sheet, saves itself and pops. Fields: description, amount (magnitude — the sign comes from `parent`, so there is no expense/income toggle), optional quantity + price per unit side by side, category row (`allowNone: true`, `noneLabel` = "Erbt von der Buchung (<name>)", or "(ohne Kategorie)" while the booking itself has none). The mismatch warning renders inline under the two optional fields. `LineItemInvalid` from the repository surfaces as a snackbar.
 
@@ -100,4 +101,4 @@ The inherit label is built from a **watched** category list. Reading it during b
 
 ## Not in scope here
 - Photo capture workflow: see `receipt-scan.md` (tickets 016, 017, 018 done)
-- Analytics over positions (tickets 020, 022)
+- Analytics over positions: see `analytics.md` (tickets 020, 022 done)
