@@ -6,6 +6,8 @@ import 'package:budget_view/features/account/domain/account_providers.dart';
 import 'package:budget_view/features/import/data/imported_source.dart';
 import 'package:budget_view/features/import/domain/duplicate_checker.dart';
 import 'package:budget_view/features/import/domain/import_providers.dart';
+import 'package:budget_view/features/tagging/domain/tagging_providers.dart';
+import 'package:budget_view/features/tagging/domain/tagging_suggest_service.dart';
 import 'package:budget_view/features/transaction/data/transaction.dart';
 import 'package:budget_view/features/transaction/import/domain/import_flow_controller.dart';
 import 'package:budget_view/features/transaction/import/pdf/parse_result.dart';
@@ -72,6 +74,17 @@ class _NoDuplicates implements DuplicateChecker {
       const [];
 }
 
+/// Rule lookups query Isar too. Suggestion behaviour lives in
+/// `import_preview_suggest_test.dart`; here the rows must simply stay
+/// uncategorized.
+class _NoSuggestions implements TaggingSuggestService {
+  const _NoSuggestions();
+
+  @override
+  Future<List<CategorySuggestion>> suggest(String counterparty) async =>
+      const [];
+}
+
 void main() {
   late ProviderContainer container;
 
@@ -90,6 +103,9 @@ void main() {
         ),
         accountsProvider(false).overrideWith((ref) => Stream.value([account])),
         duplicateCheckerProvider.overrideWithValue(const _NoDuplicates()),
+        taggingSuggestServiceProvider.overrideWithValue(
+          const _NoSuggestions(),
+        ),
       ],
     );
   });

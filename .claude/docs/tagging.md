@@ -1,6 +1,6 @@
 # Tagging (Tagging domain)
 
-Learns which category the user assigns to a counterparty, so ticket 014 can suggest it. `lib/features/tagging/`. No UI yet — rules are invisible until ticket 025.
+Learns which category the user assigns to a counterparty; the suggest service consumes rules to rank candidate categories. `lib/features/tagging/`. No UI yet — rules are invisible until ticket 025.
 
 ## Entity — `TaggingRule` (`data/tagging_rule.dart`)
 Implements `SyncableEntity` (`entityType = 'taggingRule'`).
@@ -51,13 +51,38 @@ Normalization is `normalizeForMatching` from `lib/core/text/normalize.dart` — 
 
 The first two also reset `Transaction.categoryAutoSuggested` to `false`, because a hand-picked category is no longer a suggestion.
 
+## Suggest service (`domain/tagging_suggest_service.dart`)
+
+- `CategorySuggestion` — `categoryUuid`, `categoryName` (carried so suggestion renders
+  without second lookup), `hitCount` (bare count is the confidence story).
+- `TaggingSuggestService` interface + `LocalTaggingSuggestService
+  (taggingRuleRepository, categoryRepository)`. One method:
+  `Future<List<CategorySuggestion>> suggest(String counterparty)`.
+- Normalizes the counterparty itself via `normalizeForMatching`, so callers hand in
+  raw field value.
+- Blank counterparty → `const []`. No rules → `const []`.
+- Order from `findByCounterparty` (`hitCount` DESC, then `lastAssignedAt` DESC).
+- Rules whose category is archived or gone are dropped: the category picker offers
+  neither, so suggesting it would be an offer the user cannot repeat by hand. A rule
+  pointing at an archived category stays a legal stored state (ticket 025 cures it).
+
+## Suggestion sheet (`presentation/suggestion_sheet.dart`)
+
+- `pickSuggestion(context, suggestions, {selectedCategoryUuid})` — modal bottom
+  sheet titled `Vorschläge`, at most `maxSuggestionAlternatives` (3) rows. Each row:
+  `Icons.auto_awesome_outlined`, category name, trailing `<hitCount>×`. Returns
+  tapped suggestion, `null` when dismissed.
+- Renders the name the suggestion carries instead of a `CategoryChip`, so the sheet
+  needs no category provider.
+- Shared by the booking form and the PDF-import preview.
+
 ## Providers (`domain/tagging_providers.dart`)
 - `taggingRuleRepositoryProvider`
 - `taggingLearnServiceProvider`
+- `taggingSuggestServiceProvider` (interface-typed, so widget tests can hand in fake)
 
 Read at the call sites, so no app-bootstrap wiring is involved.
 
 ## Not in scope here
-- Suggesting a category on import (ticket 014)
 - Rule list / edit / delete / stale handling (ticket 025)
 - Learning from line-item level assignments — MVP learns from bookings only

@@ -6,6 +6,7 @@ import '../../../import/data/imported_source_kind.dart';
 import '../../../import/domain/content_hash.dart';
 import '../../../import/domain/import_providers.dart';
 import '../../../tagging/domain/tagging_providers.dart';
+import '../../../tagging/domain/tagging_suggest_service.dart';
 import '../../data/transaction.dart';
 import '../../domain/dedupe_hash.dart';
 import '../../domain/transaction_providers.dart';
@@ -24,6 +25,7 @@ class ImportRow {
     required this.description,
     required this.counterparty,
     this.categoryUuid,
+    this.categorySuggested = false,
     this.included = true,
   });
 
@@ -33,6 +35,7 @@ class ImportRow {
         description = candidate.description,
         counterparty = candidate.counterparty ?? '',
         categoryUuid = null,
+        categorySuggested = false,
         included = true;
 
   final DateTime bookingDate;
@@ -42,6 +45,11 @@ class ImportRow {
 
   /// Null while uncategorized — imported rows are allowed to stay that way.
   final String? categoryUuid;
+
+  /// True while [categoryUuid] came from a tagging rule and nobody overrode it.
+  /// Travels into `Transaction.categoryAutoSuggested` on persist, which is what
+  /// keeps the learn hook from reinforcing its own guess.
+  final bool categorySuggested;
 
   final bool included;
 
@@ -62,13 +70,14 @@ class ImportRow {
 
   /// Separate from [copyWith] because copyWith cannot express "set back to
   /// null", and clearing a category has to be possible.
-  ImportRow withCategory(String? uuid) {
+  ImportRow withCategory(String? uuid, {bool suggested = false}) {
     return ImportRow(
       bookingDate: bookingDate,
       amountCents: amountCents,
       description: description,
       counterparty: counterparty,
       categoryUuid: uuid,
+      categorySuggested: suggested,
       included: included,
     );
   }
@@ -86,6 +95,7 @@ class ImportRow {
       description: description ?? this.description,
       counterparty: counterparty ?? this.counterparty,
       categoryUuid: categoryUuid,
+      categorySuggested: categorySuggested,
       included: included ?? this.included,
     );
   }
@@ -115,6 +125,7 @@ class ImportFlowState {
     this.selectedParserId,
     this.rows = const [],
     this.rowMatches = const {},
+    this.rowSuggestions = const {},
     this.intraBatchDuplicates = const {},
     this.warnings = const [],
     this.summary,
@@ -138,6 +149,11 @@ class ImportFlowState {
   /// Row index → already-persisted bookings with the same hash on the target
   /// account.
   final Map<int, List<Transaction>> rowMatches;
+
+  /// Row index → categories learned for that row's counterparty, strongest
+  /// first. Derived display data, so it sits next to [rowMatches] rather than on
+  /// the row, which stays a description of the booking.
+  final Map<int, List<CategorySuggestion>> rowSuggestions;
 
   /// Row indexes that duplicate another row within this same document.
   final Set<int> intraBatchDuplicates;
@@ -169,6 +185,7 @@ class ImportFlowState {
     String? selectedParserId,
     List<ImportRow>? rows,
     Map<int, List<Transaction>>? rowMatches,
+    Map<int, List<CategorySuggestion>>? rowSuggestions,
     Set<int>? intraBatchDuplicates,
     List<String>? warnings,
     ImportSummary? summary,
@@ -184,6 +201,7 @@ class ImportFlowState {
       selectedParserId: selectedParserId ?? this.selectedParserId,
       rows: rows ?? this.rows,
       rowMatches: rowMatches ?? this.rowMatches,
+      rowSuggestions: rowSuggestions ?? this.rowSuggestions,
       intraBatchDuplicates: intraBatchDuplicates ?? this.intraBatchDuplicates,
       warnings: warnings ?? this.warnings,
       summary: summary ?? this.summary,
@@ -263,10 +281,12 @@ class ImportFlowController extends AutoDisposeNotifier<ImportFlowState> {
         rows: result.transactions.map(ImportRow.fromCandidate).toList(),
         warnings: result.warnings,
         rowMatches: const {},
+        rowSuggestions: const {},
         intraBatchDuplicates: const {},
         busy: false,
       );
       await _recheckDuplicates();
+      await _applySuggestions();
     } catch (e) {
       state = state.copyWith(busy: false, error: 'Parsen fehlgeschlagen: $e');
     }
@@ -296,6 +316,8 @@ class ImportFlowController extends AutoDisposeNotifier<ImportFlowState> {
 
     // An edit can move a row onto or off a duplicate hash.
     await _recheckDuplicates();
+    // A changed counterparty changes what the rules suggest for the row.
+    await _applySuggestions();
   }
 
   void setRowCategory(int index, String? categoryUuid) {
@@ -325,10 +347,11 @@ class ImportFlowController extends AutoDisposeNotifier<ImportFlowState> {
     for (final row in included) {
       final transaction =
           candidateToTransaction(row.toCandidate(), accountUuid: accountUuid)
-            ..categoryUuid = row.categoryUuid;
+            ..categoryUuid = row.categoryUuid
+            ..categoryAutoSuggested = row.categorySuggested;
       await repository.save(transaction);
-      // Categories on import rows are user-chosen too, so the statement is a
-      // bulk teaching opportunity.
+      // A hand-picked category makes the statement a bulk teaching opportunity;
+      // `learnFrom` skips the rows that only carry the machine's own guess.
       await learn.learnFrom(transaction);
     }
 
@@ -353,6 +376,36 @@ class ImportFlowController extends AutoDisposeNotifier<ImportFlowState> {
         warnings: state.warnings.length,
       ),
     );
+  }
+
+  /// Fills every row that carries no hand-picked category with the strongest
+  /// rule for its counterparty, and records the alternatives for the sheet.
+  ///
+  /// Rows the user categorised are left alone; a row whose counterparty lost
+  /// its rules gives its suggested category back up.
+  Future<void> _applySuggestions() async {
+    final rows = state.rows;
+    if (rows.isEmpty) return;
+
+    final service = ref.read(taggingSuggestServiceProvider);
+    // A statement repeats the same payees, and each lookup is a query.
+    final cache = <String, List<CategorySuggestion>>{};
+    final suggestions = <int, List<CategorySuggestion>>{};
+    final updated = [...rows];
+
+    for (var index = 0; index < rows.length; index++) {
+      final row = rows[index];
+      final found = cache[row.counterparty] ??=
+          await service.suggest(row.counterparty);
+      if (found.isNotEmpty) suggestions[index] = found;
+
+      if (row.categoryUuid != null && !row.categorySuggested) continue;
+      updated[index] = found.isEmpty
+          ? row.withCategory(null)
+          : row.withCategory(found.first.categoryUuid, suggested: true);
+    }
+
+    state = state.copyWith(rows: updated, rowSuggestions: suggestions);
   }
 
   /// Recomputes both duplicate layers over the current rows. Cheap enough to

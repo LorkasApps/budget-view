@@ -9,6 +9,8 @@ import '../../../account/domain/account_providers.dart';
 import '../../../category/presentation/category_chip.dart';
 import '../../../category/presentation/category_picker.dart';
 import '../../../import/data/imported_source.dart';
+import '../../../tagging/domain/tagging_suggest_service.dart';
+import '../../../tagging/presentation/suggestion_sheet.dart';
 import '../../data/transaction.dart';
 import '../domain/import_flow_controller.dart';
 
@@ -162,6 +164,23 @@ class _PdfImportScreenState extends ConsumerState<PdfImportScreen> {
     ref.read(importFlowProvider.notifier).setRowCategory(index, pick.uuid);
   }
 
+  /// An alternative is an override, exactly as in the booking form: the row
+  /// loses its suggestion provenance so the learn hook may raise that rule.
+  Future<void> _chooseRowAlternative(int index) async {
+    final state = ref.read(importFlowProvider);
+    final suggestions =
+        state.rowSuggestions[index] ?? const <CategorySuggestion>[];
+    final picked = await pickSuggestion(
+      context,
+      suggestions,
+      selectedCategoryUuid: state.rows[index].categoryUuid,
+    );
+    if (picked == null) return;
+    ref
+        .read(importFlowProvider.notifier)
+        .setRowCategory(index, picked.categoryUuid);
+  }
+
   Future<void> _pickCategoryForAll() async {
     final pick = await pickCategory(context, allowNone: true);
     if (pick == null) return;
@@ -266,6 +285,9 @@ class _PdfImportScreenState extends ConsumerState<PdfImportScreen> {
                       row: state.rows[index],
                       enabled: !state.busy,
                       suspicious: state.isSuspicious(index),
+                      suggestions:
+                          state.rowSuggestions[index] ?? const [],
+                      onShowAlternatives: () => _chooseRowAlternative(index),
                       onToggle: () => ref
                           .read(importFlowProvider.notifier)
                           .toggleRow(index),
@@ -321,19 +343,32 @@ class _RowTile extends StatelessWidget {
     required this.row,
     required this.enabled,
     required this.suspicious,
+    required this.suggestions,
     required this.onToggle,
     required this.onEdit,
     required this.onPickCategory,
+    required this.onShowAlternatives,
     required this.onShowMatches,
   });
 
   final ImportRow row;
   final bool enabled;
   final bool suspicious;
+  final List<CategorySuggestion> suggestions;
   final VoidCallback onToggle;
   final VoidCallback onEdit;
   final VoidCallback onPickCategory;
+  final VoidCallback onShowAlternatives;
   final VoidCallback onShowMatches;
+
+  int get _hitCount {
+    for (final suggestion in suggestions) {
+      if (suggestion.categoryUuid == row.categoryUuid) {
+        return suggestion.hitCount;
+      }
+    }
+    return 0;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -358,6 +393,32 @@ class _RowTile extends StatelessWidget {
               categoryUuid: row.categoryUuid,
               onTap: enabled ? onPickCategory : null,
             ),
+            // Marks the category as the machine's guess and opens the
+            // runners-up — the chip stays the way to the full tree.
+            if (row.categorySuggested) ...[
+              const SizedBox(width: 4),
+              InkWell(
+                onTap: enabled && suggestions.length > 1
+                    ? onShowAlternatives
+                    : null,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.auto_awesome_outlined,
+                      size: 14,
+                      color: theme.colorScheme.tertiary,
+                    ),
+                    Text(
+                      '$_hitCount×',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.tertiary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             const SizedBox(width: 8),
             Expanded(
               child: Text(

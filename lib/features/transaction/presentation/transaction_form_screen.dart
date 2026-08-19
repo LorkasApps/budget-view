@@ -11,6 +11,8 @@ import '../../drilldown/domain/line_item_providers.dart';
 import '../../drilldown/presentation/line_items_section.dart';
 import '../../import/domain/import_providers.dart';
 import '../../tagging/domain/tagging_providers.dart';
+import '../../tagging/domain/tagging_suggest_service.dart';
+import '../../tagging/presentation/suggestion_sheet.dart';
 import '../data/transaction.dart';
 import '../domain/dedupe_hash.dart';
 import '../domain/transaction_providers.dart';
@@ -41,13 +43,30 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
   late final TextEditingController _descriptionController;
   late final TextEditingController _counterpartyController;
   late final TextEditingController _noteController;
+  final _counterpartyFocus = FocusNode();
   late bool _isExpense;
   late DateTime _bookingDate;
   String? _accountUuid;
   String? _categoryUuid;
+  List<CategorySuggestion> _suggestions = const [];
+
+  /// The category the suggestion filled in, kept apart from [_categoryUuid] so
+  /// a hand-picked category of the same value still counts as hand-picked.
+  String? _suggestedCategoryUuid;
   bool _saving = false;
 
   bool get _isEdit => widget.existing != null;
+
+  bool get _isSuggested =>
+      _suggestedCategoryUuid != null &&
+      _categoryUuid == _suggestedCategoryUuid;
+
+  int get _suggestedHitCount {
+    for (final suggestion in _suggestions) {
+      if (suggestion.categoryUuid == _categoryUuid) return suggestion.hitCount;
+    }
+    return 0;
+  }
 
   @override
   void initState() {
@@ -67,6 +86,7 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
     _bookingDate = existing?.bookingDate ?? DateTime.now();
     _accountUuid = existing?.accountUuid ?? widget.initialAccountUuid;
     _categoryUuid = existing?.categoryUuid;
+    _counterpartyFocus.addListener(_onCounterpartyFocusChange);
   }
 
   @override
@@ -75,7 +95,53 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
     _descriptionController.dispose();
     _counterpartyController.dispose();
     _noteController.dispose();
+    _counterpartyFocus.dispose();
     super.dispose();
+  }
+
+  void _onCounterpartyFocusChange() {
+    if (!_counterpartyFocus.hasFocus) _suggestCategory();
+  }
+
+  /// Suggests on blur rather than per keystroke: every lookup hits Isar, and a
+  /// half-typed counterparty matches nothing anyway.
+  Future<void> _suggestCategory() async {
+    final suggestions = await ref
+        .read(taggingSuggestServiceProvider)
+        .suggest(_counterpartyController.text.trim());
+    if (!mounted) return;
+
+    setState(() {
+      _suggestions = suggestions;
+      // A hand-picked category outranks a suggestion; only an empty field or an
+      // untouched earlier suggestion may be overwritten.
+      final replaceable = _categoryUuid == null || _isSuggested;
+      if (suggestions.isEmpty) {
+        if (_isSuggested) {
+          _categoryUuid = null;
+          _suggestedCategoryUuid = null;
+        }
+        return;
+      }
+      if (!replaceable) return;
+      _categoryUuid = suggestions.first.categoryUuid;
+      _suggestedCategoryUuid = suggestions.first.categoryUuid;
+    });
+  }
+
+  /// Alternatives are overrides, not acceptances: picking the runner-up must
+  /// let the learn hook raise its count, or it could never overtake the leader.
+  Future<void> _chooseAlternative() async {
+    final picked = await pickSuggestion(
+      context,
+      _suggestions,
+      selectedCategoryUuid: _categoryUuid,
+    );
+    if (picked == null) return;
+    setState(() {
+      _categoryUuid = picked.categoryUuid;
+      _suggestedCategoryUuid = null;
+    });
   }
 
   /// Shows existing bookings that would hash the same and asks whether to save
@@ -138,7 +204,10 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
   Future<void> _chooseCategory() async {
     final pick = await pickCategory(context, selected: _categoryUuid);
     if (pick == null) return;
-    setState(() => _categoryUuid = pick.uuid);
+    setState(() {
+      _categoryUuid = pick.uuid;
+      _suggestedCategoryUuid = null;
+    });
   }
 
   Future<void> _pickDate() async {
@@ -181,8 +250,9 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
       ..description = _descriptionController.text.trim()
       ..counterparty = _counterpartyController.text.trim()
       ..note = _noteController.text.trim()
-      // The user picked this category by hand, so it is no longer a suggestion.
-      ..categoryAutoSuggested = false;
+      // True only while the untouched suggestion is still in place; the learn
+      // hook skips those rows so an accepted suggestion cannot reinforce itself.
+      ..categoryAutoSuggested = _isSuggested;
 
     await ref.read(transactionRepositoryProvider).save(transaction);
     await ref.read(taggingLearnServiceProvider).learnFrom(transaction);
@@ -256,14 +326,20 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Kategorie'),
-              subtitle: _categoryUuid == null
-                  ? Text(
-                      'Pflichtfeld',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
+              subtitle: _isSuggested
+                  ? _SuggestionHint(
+                      hitCount: _suggestedHitCount,
+                      onShowAlternatives:
+                          _suggestions.length > 1 ? _chooseAlternative : null,
                     )
-                  : null,
+                  : _categoryUuid == null
+                      ? Text(
+                          'Pflichtfeld',
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        )
+                      : null,
               trailing: CategoryChip(categoryUuid: _categoryUuid),
               onTap: _saving ? null : _chooseCategory,
             ),
@@ -278,6 +354,7 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
             const SizedBox(height: 8),
             TextFormField(
               controller: _counterpartyController,
+              focusNode: _counterpartyFocus,
               decoration: const InputDecoration(
                 labelText: 'Zahlungsempfänger / Absender (optional)',
               ),
@@ -303,6 +380,41 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Marks the category row as machine-filled and offers the runners-up.
+class _SuggestionHint extends StatelessWidget {
+  const _SuggestionHint({
+    required this.hitCount,
+    required this.onShowAlternatives,
+  });
+
+  final int hitCount;
+  final VoidCallback? onShowAlternatives;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+
+    return Row(
+      children: [
+        Icon(Icons.auto_awesome_outlined, size: 14, color: scheme.tertiary),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            'Vorschlag · $hitCount×',
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: scheme.tertiary),
+          ),
+        ),
+        if (onShowAlternatives != null)
+          TextButton(
+            onPressed: onShowAlternatives,
+            child: const Text('Alternativen'),
+          ),
+      ],
     );
   }
 }

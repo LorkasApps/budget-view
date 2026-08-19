@@ -6,7 +6,7 @@
 | **Epic** | Auto-Tagging |
 | **Domain** | Tagging |
 | **Blocked By** | 013 |
-| **Status** | Ready |
+| **Status** | Done |
 
 ## Description
 Use stored `TaggingRule`s (from ticket 013) to **suggest** a category for each transaction candidate at import time or during manual entry. Suggestions are **always visible** — never silent auto-fill. User confirms with one tap. If overridden, the rule store updates via the existing learn hook (ticket 013).
@@ -28,23 +28,28 @@ Use stored `TaggingRule`s (from ticket 013) to **suggest** a category for each t
 | `hitCount` | int |
 
 ## Acceptance Criteria
-- [ ] `TaggingSuggestService` interface in `lib/features/tagging/domain/tagging_suggest_service.dart`
-- [ ] Concrete `LocalTaggingSuggestService` — reads from `TaggingRuleRepository.findByCounterparty(...)`, returns list sorted `hitCount DESC`
-- [ ] `taggingSuggestServiceProvider` (Riverpod) exposes service, overridable in tests
-- [ ] Uses the shared normalization function from ticket 009
-- [ ] **PDF-import preview integration:** each row without a user-set category is auto-populated with the top suggestion; category chip renders in suggestion style (dashed border or subtle tint) until user confirms
-- [ ] Confirming the import (bulk) commits suggested categories; `categoryAutoSuggested=true` for those rows
-- [ ] Overriding a suggested row before confirm turns off the suggestion style; `categoryAutoSuggested=false`
-- [ ] **Manual-entry integration:** on counterparty blur, if top suggestion exists → pre-select category in picker with suggestion style; user tap on the picker clears the suggestion style
-- [ ] "See alternatives" bottom sheet lists top-3 by `hitCount` with the same hit-count label
-- [ ] If no rule matches → no suggestion, no visual change (fall back to normal empty picker)
-- [ ] Learn feedback loop verified: overriding a suggestion → 013's learn hook creates/updates rule for the overridden category
+- [x] `TaggingSuggestService` interface in `lib/features/tagging/domain/tagging_suggest_service.dart`
+- [x] Concrete `LocalTaggingSuggestService` — reads from `TaggingRuleRepository.findByCounterparty(...)`, returns list sorted `hitCount DESC`
+- [x] `taggingSuggestServiceProvider` (Riverpod) exposes service, overridable in tests
+- [x] Uses the shared normalization function from ticket 009
+- [x] **PDF-import preview integration:** each row without a user-set category is auto-populated with the top suggestion; category chip renders in suggestion style (dashed border or subtle tint) until user confirms
+- [x] Confirming the import (bulk) commits suggested categories; `categoryAutoSuggested=true` for those rows
+- [x] Overriding a suggested row before confirm turns off the suggestion style; `categoryAutoSuggested=false`
+- [x] **Manual-entry integration:** on counterparty blur, if top suggestion exists → pre-select category in picker with suggestion style; user tap on the picker clears the suggestion style
+- [x] "See alternatives" bottom sheet lists top-3 by `hitCount` with the same hit-count label
+- [x] If no rule matches → no suggestion, no visual change (fall back to normal empty picker)
+- [x] Learn feedback loop verified: overriding a suggestion → 013's learn hook creates/updates rule for the overridden category
 
 ## Affected Tests
 - `test/features/tagging/domain/tagging_suggest_service_test.dart` — ordering by hitCount, empty counterparty returns nothing, no rules returns empty
-- `test/features/transaction/import/pdf/import_preview_suggest_test.dart` — suggestions applied, overriding clears provenance flag
+- `test/features/transaction/import/domain/import_preview_suggest_test.dart` — suggestions applied, overriding clears provenance flag (ticket said `import/pdf/`; controller suites live under `import/domain/`)
 - `test/features/transaction/presentation/manual_entry_suggest_test.dart` — blur triggers suggest, override clears flag
 - `test/features/tagging/domain/tagging_learn_feedback_test.dart` — override → new rule created / hit-count updated
+- `test/features/transaction/import/import_flow_widget_test.dart` (existing) — now overrides `taggingSuggestServiceProvider` with an empty fake, since the parse step depends on it
+
+## Deviations
+- The import preview already had a category surface (row `CategoryChip`, `Für alle`, `setRowCategory`); `import.md` had simply not documented it. 014 therefore added only the suggestion layer plus the `categorySuggested` provenance, not the category UI itself.
+- Picking an alternative from the sheet counts as an **override**, not as accepting a suggestion — see decisions.md for why the learn loop needs that.
 
 ## Fixtures Needed
 No — inline builders.
@@ -53,5 +58,6 @@ No — inline builders.
 - Input: ~9k tokens
 - Output: ~3k tokens
 
-## Token Usage
-_Filled after Done._
+### Implementation Tokens (estimate)
+- Input: ~215k tokens (incl. sub-agents: tests ~118k, docs ~35k)
+- Output: ~24k tokens

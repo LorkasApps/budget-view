@@ -15,7 +15,7 @@
 | 011-category-assignment.md | Feature | Categories | Category | Done | 010, 006 | Assign one category per transaction |
 | 012-fractal-category-inheritance.md | Feature | Categories | Drilldown | Done | 011, 015 | Line-item category overrides parent transaction |
 | 013-tagging-rule-storage.md | Feature | Auto-Tagging | Tagging | Done | 011 | Store learned rules from user assignments (management UI split into 025) |
-| 014-auto-suggest-on-import.md | Feature | Auto-Tagging | Tagging | Ready | 013 | Suggest category on new imports |
+| 014-auto-suggest-on-import.md | Feature | Auto-Tagging | Tagging | Done | 013 | Suggest category on new imports |
 | 015-line-item-entity.md | Feature | Drilldown | Drilldown | Done | 006 | Line-item entity (child of transaction) |
 | 016-kassenbon-photo-capture.md | Feature | Drilldown | Drilldown | Done | 015, 009 | Camera / gallery capture flow (ephemeral, no persistence) |
 | 017-ocr-mlkit.md | Feature | Drilldown | Drilldown | Done | 016 | OCR via Google ML Kit (in-memory only) |

@@ -135,12 +135,35 @@ Typedef: `PdfParserRanking = ({PdfParser parser, double confidence})`
 
 ## ImportFlow (`domain/import_flow_controller.dart`)
 
-- `ImportRow`: immutable, `fromCandidate`, `toCandidate`, `copyWith`, `included: bool`, computed `dedupeHash`, `toCandidate()`
+- `ImportRow`: immutable, `fromCandidate`, `toCandidate`, `copyWith`, `included: bool`,
+  `categoryUuid` (null = uncategorized, which imported rows may stay),
+  `withCategory(uuid, {suggested})` as the only way to clear it (`copyWith` cannot
+  express "back to null"), `categorySuggested` (true while the
+  category came from a rule and nobody overrode it; travels into
+  `Transaction.categoryAutoSuggested` on persist, which keeps the learn hook from
+  reinforcing its own guess), computed `dedupeHash`
 - `ImportSummary`: `imported`, `skipped`, `warnings` counts
-- `ImportFlowState`: extends prior with `contentHash`, `documentMatches` (re-import warning list), `targetAccountUuid`, `rowMatches` (row index → existing bookings on target account), `intraBatchDuplicates` (row indexes); derives `documentSeenBefore` (bool), `isSuspicious(index)`, `suspiciousCount`, `newCount`
-- `ImportFlowController extends AutoDisposeNotifier`: methods `loadDocument` (hashes bytes, checks document matches), `selectParser`, `parseDocument`, `toggleRow`, `editRow` (async, re-runs duplicate check), `setTargetAccount` (async, re-runs check since matching is account-scoped), `persist` (async, no longer takes account param; uses state); raw bytes in private `_bytes` field, dropped on dispose
+- `ImportFlowState`: extends prior with `contentHash`, `documentMatches` (re-import
+  warning list), `targetAccountUuid`, `rowMatches` (row index → existing bookings on
+  target account), `intraBatchDuplicates` (row indexes), `rowSuggestions` (row index →
+  `List<CategorySuggestion>`, derived display data sitting next to `rowMatches`);
+  derives `documentSeenBefore` (bool), `isSuspicious(index)`, `suspiciousCount`, `newCount`
+- `ImportFlowController extends AutoDisposeNotifier`: methods `loadDocument` (hashes
+  bytes, checks document matches), `selectParser`, `parseDocument`, `toggleRow`,
+  `editRow` (async, re-runs duplicate check), `setRowCategory(index, uuid)`,
+  `setCategoryForAll(uuid)` (bulk-assigns every row, included or not — the user is
+  categorising the statement, not the selection), `setTargetAccount` (async, re-runs
+  check since matching is account-scoped), `persist` (async, no longer takes account
+  param; uses state). Private `_applySuggestions()` runs after `parseDocument` and
+  after `editRow`: per row it looks up suggestions for the counterparty (memoized per
+  counterparty within a run, since a statement repeats payees), records them, and fills
+  the category with the top hit unless the row was hand-picked; a row whose counterparty
+  matches nothing ends up uncategorized again. `setRowCategory` / `setCategoryForAll`
+  clear the suggested flag. Raw bytes in private `_bytes` field, dropped on dispose
 - `importFlowProvider`: `NotifierProvider.autoDispose<ImportFlowController, ImportFlowState>`
-- **Persistence:** `persist` routes included rows through `candidateToTransaction` → `TransactionRepository.save`, then writes one `ImportedSource` row with `kind=pdf`, document hash, filename, counts, and `note` when `documentSeenBefore`
+- **Persistence:** `persist` routes included rows through `candidateToTransaction` →
+  `TransactionRepository.save`, then writes one `ImportedSource` row with `kind=pdf`,
+  document hash, filename, counts, and `note` when `documentSeenBefore`
 
 ## UI Flow
 
@@ -153,7 +176,13 @@ Typedef: `PdfParserRanking = ({PdfParser parser, double confidence})`
   4. If document hash seen before: modal shows "Datei schon importiert am [date] · [count] Buchungen" and earlier import counts; **Fortfahren** / **Abbrechen** (cancel leaves flow, bytes dropped)
   5. Registry ranks parsers; show list with confidence %
   6. User picks parser (first ranked is pre-selected)
-  7. Click "Auslesen" → per-row list with include/exclude checkbox. Header shows `N neu / M mögliche Duplikate`
+  7. Click "Auslesen" → per-row list with include/exclude checkbox. Header shows
+     `N neu / M mögliche Duplikate`. Each row: `CategoryChip` (per-row, optional —
+     rows may be imported uncategorized), edit button, a `Für alle` button in the
+     header (bulk-assigns every row regardless of inclusion status). Suggested row
+     shows `Icons.auto_awesome_outlined` + `<hitCount>×` next to the chip; tapping
+     it opens `pickSuggestion` (only when more than one suggestion exists) and the
+     pick goes through `setRowCategory`, i.e. as an override.
   8. Per-row duplicate marker (copy icon, red) opens modal listing existing bookings; intra-batch duplicates flag **both** copies (user decides which to keep)
   9. Per-row edit dialog: expense/income toggle, amount, description, counterparty, date
   10. Target-account dropdown (pre-filled with entry account), import button (shows included count)
@@ -174,6 +203,9 @@ Typedef: `PdfParserRanking = ({PdfParser parser, double confidence})`
 - **Controller:** ranking, parse, toggle, edit, persist, summary (`test/features/transaction/import/domain/import_flow_controller_test.dart`)
 - **Widget:** UI wiring without database (`test/features/transaction/import/import_flow_widget_test.dart`)
 - **Dedupe:** hash units (`dedupe_hash_test.dart`, `content_hash_test.dart`, `core/text/normalize_test.dart`), `duplicate_checker_test.dart`, `imported_source_repository_test.dart`, and `pdf_dedupe_integration_test.dart` for the flow — re-import, row matches, account scoping, intra-batch, `ImportedSource` counts
+- **Suggestions:** `import_preview_suggest_test.dart` (suggestions applied, overrides clear
+  provenance, persist flags). For the tagging side, suggest service and the
+  learn↔suggest loop are covered under `test/features/tagging/domain/`.
 - **Not covered:** every path that writes through the UI — confirming a duplicate warning, and an edited booking filtering itself out. Both end in a repository call, and Isar cannot run inside `testWidgets`
 - **Reconciliation harness:** env-gated on `ING_PDF` (`test/tool/ing_geometry_dump_test.dart`); dumps geometry and verifies sum against `Neuer Saldo − Alter Saldo`
 - **Fixtures:** none; no PDF committed; real statements never enter the repo

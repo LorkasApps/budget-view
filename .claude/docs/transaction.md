@@ -59,7 +59,21 @@ Pure statics: `description`, `amount` (magnitude — must be unsigned and ≠ 0)
 
 ## Form (`presentation/transaction_form_screen.dart`)
 
-On save, before persistence:
+**Category suggestion**
+- Counterparty field carries a `FocusNode`; **on blur** the form asks
+  `taggingSuggestServiceProvider`. Not per keystroke: every lookup is an Isar query,
+  and a half-typed counterparty matches nothing.
+- The top hit fills the category only while the field is empty or still holds an
+  untouched earlier suggestion; a hand-picked category is never overwritten.
+- A counterparty that matches no rule gives a previously suggested category back up.
+- While untouched, the `Kategorie` row's subtitle shows `Vorschlag · <hitCount>×` with
+  an `Icons.auto_awesome_outlined` marker, plus an `Alternativen` button once more than
+  one suggestion exists (opens `pickSuggestion`).
+- `categoryAutoSuggested` is saved `true` only while that untouched suggestion stands.
+  Both the category picker and picking an alternative count as overrides → `false`,
+  which is what lets the learn hook raise the chosen rule.
+
+**On save, before persistence:**
 1. Compute `dedupeHash` for the form's values
 2. Call `duplicateCheckerProvider.findTransactionMatches(hash, accountUuid:, excludeDeleted: true)`
 3. Filter out the booking being edited (self-match when updating)
