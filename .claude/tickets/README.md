@@ -30,4 +30,4 @@
 | 026-quick-create-category-in-picker.md | Feature | Categories | Category | Draft | None | Quick-create a category from inside pickCategory (name + prefilled parent, defaults for the rest) |
 | 027-app-icon-and-branding.md | Feature | Setup | Infra | Ready | None | Money-bag launcher icon (adaptive + monochrome) and launch screen via flutter_native_splash |
 | 029-menu-tab-for-rare-surfaces.md | Feature | None | Infra | Done | None | Bottom nav stays at Konten \| Report \| Mehr; rare surfaces (Prognose, later 022/024/025) live behind a menu screen |
-| 028-milestone-1-verification-pass.md | TechDebt | None | Infra | Draft | None | One device + visual pass over all of milestone 1 — collects every check `make check` cannot make (native halves, rendering, gestures) |
+| 028-milestone-1-verification-pass.md | TechDebt | None | Infra | Draft | None | One device + visual pass over all of milestone 1 — collects every check `make check` cannot make (native halves, rendering, gestures); carries 022 + 014 visual checks |

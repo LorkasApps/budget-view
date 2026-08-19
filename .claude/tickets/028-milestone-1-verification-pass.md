@@ -45,7 +45,8 @@ follows the app's own flow, so the data each later area needs already exists.
 
 ### Boot + shell (001–003, 020, 021)
 - [ ] Cold start opens the account list, no crash while Isar opens
-- [ ] Bottom nav switches `Konten` / `Report` / `Prognose`; each tab keeps its scroll position and filter state across switches (that is what the `IndexedStack` is for)
+- [ ] Bottom nav switches `Konten` / `Report` / `Mehr` (029 moved the rare surfaces behind the menu); each tab keeps its scroll position and filter state across switches (that is what the `IndexedStack` is for)
+- [ ] `Mehr` lists `Prognose` and `Preistrends`, and back returns to the menu rather than to a tab
 - [ ] German umlauts render correctly in every screen title and label
 - [ ] Amounts read as `1.234,56 €` throughout (`de_DE`, non-breaking space before the symbol)
 - [ ] Launcher icon + splash, once 027 is Done — add its findings here rather than opening a second pass
@@ -116,6 +117,27 @@ follows the app's own flow, so the data each later area needs already exists.
 - [ ] Long-press on a report row opens the forecast — judge whether the gesture is discoverable enough without a visible affordance, since it is the primary path from report to forecast
 - [ ] The app-bar `Prognose` action in the drilldown opens the same screen with the same numbers
 - [ ] `Anpassungsgüte` reads plausibly against the visible scatter (a flat series must not claim 100 %)
+
+### Item price trends (022)
+- [ ] Search settles after the 300 ms debounce without flicker while typing
+- [ ] Result rows read `<n> Käufe` with the latest unit price; a single purchase says `1 Kauf`
+- [ ] Chart paints: one dot per purchase, min/max dashed marker lines, labels legible against the line
+- [ ] The x-axis is a real time axis — an irregular gap between purchases must *look* irregular, and both end labels stay readable
+- [ ] The y-axis does **not** start at zero: a 20-cent move on a ~1,50 € article has to be visible
+- [ ] Everything bought on one day (zero span) still renders instead of collapsing the axis
+- [ ] A never-changing price shows the single `Preis …` marker, not Min and Max stacked on each other
+- [ ] Long-press on a position row opens that article's history; the Restposten row does not react
+- [ ] `Nur ein Datenpunkt (…)` and `Keine Käufe erfasst` appear where expected
+- [ ] Grouping against real OCR data: note how many spelling variants of one product became separate groups — that count decides whether the item-merge follow-up is worth a ticket
+
+### Category suggestions (014)
+- [ ] Leaving the counterparty field fills the category and the subtitle reads `Vorschlag · <n>×`, without the row overflowing on a narrow screen
+- [ ] `Alternativen` opens the sheet with at most 3 entries and their counts; picking one replaces the category and drops the marker
+- [ ] Picking a category by hand drops the marker too
+- [ ] Import preview: suggested rows show the marker + count next to the chip without overflowing — the row already overflowed once (errors.md)
+- [ ] Tapping the marker opens the alternatives while tapping the chip still opens the full tree
+- [ ] Learn loop on real statements: accepting a suggestion must not raise its count, overriding must raise the new category's count until it wins
+- [ ] A rule whose category was archived produces no suggestion
 
 ## Affected Tests
 None — this ticket adds no automated test. Findings may add them through their own Bug tickets.
