@@ -1,0 +1,16 @@
+# Launch screen — regenerate with `make splash`.
+# #009688 is Colors.teal, the same value as adaptive_icon_background in
+# pubspec.yaml, so startup flows into the app without a colour jump.
+# One colour for light and dark on purpose: no color_dark.
+flutter_native_splash:
+  color: "#009688"
+  image: "assets/icon/money_bag.png"
+  android: true
+  ios: false
+  web: false
+
+  # Android 12+ splash API: the system masks the icon into a circle, so this
+  # uses the safe-zone-framed foreground rather than the filled tile.
+  android_12:
+    image: "assets/icon/money_bag_foreground.png"
+    icon_background_color: "#009688"

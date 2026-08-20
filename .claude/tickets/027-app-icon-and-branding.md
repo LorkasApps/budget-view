@@ -6,7 +6,7 @@
 | **Epic** | Setup |
 | **Domain** | Infra |
 | **Blocked By** | None |
-| **Status** | Ready |
+| **Status** | In Progress |
 
 ## Description
 The app still ships Flutter's default launcher icon and Flutter's blank `launch_background`. Wanted: a money-bag mark matching the existing Material 3 teal seed, used as the Android launcher icon **and shown while the app loads**.

@@ -91,6 +91,22 @@ dev_dependencies:
   isar_community_generator: ^3.3.2
   build_runner: ^2.4.13
 
+  # Android launcher icon generation from assets/icon (make icons).
+  flutter_launcher_icons: ^0.14.4
+
+  # Android launch screen generation from assets/icon (make splash).
+  flutter_native_splash: ^2.4.8
+
+# Launcher icons — sources in assets/icon/, regenerate with `make icons`.
+# #009688 is Colors.teal, the Material 3 seed the app theme is built from.
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon/money_bag.png"
+  adaptive_icon_background: "#009688"
+  adaptive_icon_foreground: "assets/icon/money_bag_foreground.png"
+  adaptive_icon_monochrome: "assets/icon/money_bag_monochrome.png"
+
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
 

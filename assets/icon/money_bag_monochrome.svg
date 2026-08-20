@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- Adaptive monochrome layer (themed icons): same geometry and framing as the foreground, pure white. -->
+  <g transform="translate(512 512) scale(0.8) translate(-512 -518)">
+    <path fill="#FFFFFF" d="M372 150C452 118 572 118 652 150C672 186 676 214 676 236C676 268 632 288 576 302C692 348 820 440 862 592C898 720 836 856 700 890C640 906 570 910 512 910C454 910 384 906 324 890C188 856 126 720 162 592C204 440 332 348 448 302C392 288 348 268 348 236C348 214 352 186 372 150Z"/>
+  </g>
+</svg>

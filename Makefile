@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 .PHONY: help get upgrade outdated analyze format format-check test test-name coverage \
-        run run-release gen gen-watch clean doctor build-apk build-appbundle \
+        run run-release gen gen-watch icons splash clean doctor build-apk build-appbundle \
         install-apk check pre-commit devices
 
 ## ---------------------------------------------------------------------------
@@ -48,6 +48,15 @@ gen: ## One-shot code generation
 	dart run build_runner build
 gen-watch: ## Watch + regenerate on change
 	dart run build_runner watch
+
+# --- Branding assets (launcher icon + launch screen) -----------------------
+# Both read assets/icon/*.png. Output is generated into android/ and committed.
+icons: ## Regenerate the Android launcher icons from assets/icon
+	dart run flutter_launcher_icons
+
+splash: ## Regenerate the Android launch screen from assets/icon
+	dart run flutter_native_splash:create
+
 # --- Run / build -----------------------------------------------------------
 devices: ## List connected devices / emulators
 	flutter devices
