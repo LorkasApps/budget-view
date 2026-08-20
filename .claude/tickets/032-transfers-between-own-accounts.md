@@ -5,8 +5,8 @@
 | **Type** | Feature |
 | **Epic** | None |
 | **Domain** | Transaction |
-| **Blocked By** | None |
-| **Status** | Draft |
+| **Blocked By** | 037 (both extend the import preview edit dialog) |
+| **Status** | Ready |
 
 ## Description
 A booking carries an amount and a sign, nothing else. Moving money from one own account to another therefore looks
@@ -31,36 +31,60 @@ you would act on.
 The rollup sums what the data says. The missing piece sits one layer down: `Transaction` has no notion of a booking whose
 counterpart is another account of the same user. Fixing it in the report alone would mean guessing there.
 
-## Open questions for refinement
-- **How is a transfer recognised?** A flag the user sets on a booking, a pairing of two bookings across accounts (same
-  amount, opposite sign, near-identical date), a rule on the counterparty text, or the target-account field an import
-  could offer? Each has a different failure mode — pairing invents links, a manual flag needs discipline, counterparty
-  text is a heuristic on bank wording
-- **One booking or two?** A transfer is physically two bookings, one per account. Does the model keep both and link
-  them, or does it grow a first-class `Transfer` that owns both legs? The second is cleaner and touches far more code
-- **What if only one side is imported?** Today the ING statement is the only source. The outgoing leg exists, the
-  receiving account may not even be in the app
-- **Where does it have to take effect** beyond the monthly report — forecast (021), price trends (022) are line-item
-  based so probably not, category suggestions (014) would otherwise learn rules from transfers
-- **Does this need a new field on `Transaction`?** That means a `kDbSchemaVersion` bump and, per `docs/sync.md`, a
-  decision on how it mirrors to the change queue
-- **What happens to the bookings already imported?** Nothing marks them today; is a one-off pass over existing data
-  wanted, or does the feature only apply going forward?
-- Scope check during refinement: recognition, model change and report exclusion may well be more than one ticket — the
-  013 → 025 and 009 → 024 splits are the precedent
+## Resolved during refinement
+- **Recognition** → the user marks a booking as a transfer. No heuristic that can be wrong, and it works when only one side
+  of the pair is imported, which is today's situation. Rejected automatic pairing (it invents links: two equal amounts on
+  one day are not a transfer, and with a single imported account it finds nothing) and rejected a counterparty rule (bank
+  wording is inconsistent, and a rule firing wrongly would *hide* real spending — an invisible error instead of a visible
+  one)
+- **Storage** → a new `TransactionKind` field (`regular` | `transfer`), stored by name like `TaggingMatchField`. Chosen over
+  a `bool isTransfer` because 040 brings the same class of case (a securities purchase is money changing form, not leaving),
+  and a two-value bool would be renamed within weeks. Costs a `kDbSchemaVersion` bump plus a sync-payload key — cheap now,
+  since nothing is released and dev bumps nuke and rebuild
+- **Consequences** → for `transfer` the category requirement drops (a transfer belongs in no spending category) while a
+  category stays allowed; the learn hook skips transfers, so no rule is created that would later suggest a spending category
+  for one. The exclusion itself happens centrally in the rollup, which is what makes the forecast inherit it for free
+- **Where it is set** → in the booking form **and** in the import preview's edit dialog — the dialog that 037 is extending
+  with the category. Import time is when you still know that a row is a transfer. This ticket therefore comes after 037, so
+  the second change does not land in a dialog someone else is rewriting
+- **Existing data** → no bulk assistant. The few transfers among the already imported bookings get marked by opening them;
+  a bulk tool would need candidate detection, which is the pairing heuristic this ticket rejected
+- **Fixtures** → none; the rollup tests build their bookings inline as they do today
 
 ## Acceptance Criteria
-_Not refined yet — the questions above come first._
+- [ ] `Transaction` gains `kind` (`TransactionKind.regular` | `.transfer`), stored by name, default `regular`
+- [ ] `kDbSchemaVersion` is bumped and the sync payload carries the new key
+- [ ] The booking form has a transfer toggle; the import preview's edit dialog has the same toggle writing the same field
+- [ ] With `transfer` set, the category is no longer required — saving without one works, and setting one is still allowed
+- [ ] `TaggingLearnService` skips transfers: marking one and saving creates no rule and raises no `hitCount`
+- [ ] The monthly report rollup excludes transfers from **both** `Ausgaben` and `Einnahmen`, and the `Ohne Kategorie` row
+      does not collect them either
+- [ ] The forecast inherits the exclusion because it reads the same rollup — covered by a test rather than by assumption
+- [ ] Account balances still include transfers: the money did move, so a balance without them would be wrong
+- [ ] Tests: rollup with and without a transfer, the learn hook skipping one, the relaxed category requirement, and the
+      balance still counting it
+- [ ] `make check` green
+- [ ] The report numbers of the 028 finding become reproducible: with the transfers of the imported statement marked,
+      `Ausgaben` drops to the order the user expected
 
-## Out of Scope (proposed, to confirm)
+## Out of Scope
 - Multi-currency
 - Anything about the receiving account's own categorisation
+- Linking the two legs of a transfer to each other; the marking is per booking
+- A bulk assistant for existing data
 
 ## Affected Tests
-Unknown until the recognition question is answered. The report rollup suites are the ones most likely to change.
+- `monthly_category_report_service_test.dart` and the forecast suite — the exclusion
+- The tagging learn suite — transfers must not teach
+- Transaction validation and form tests — the conditional category requirement
+- The balance suite — transfers still count
 
 ## Fixtures Needed
-Ask during refinement.
+No — inline bookings, as the report suites do today.
 
-## Token Usage
+### Refinement Tokens (estimate)
+- Input: ~18k tokens
+- Output: ~3k tokens
+
+### Implementation Tokens (estimate)
 _Filled after Done._
