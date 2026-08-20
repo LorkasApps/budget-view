@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../features/analytics/presentation/forecast_screen.dart';
 import '../features/analytics/presentation/item_price_trend_screen.dart';
+import 'settings_screen.dart';
 
 /// Everything the bottom nav does not carry.
 ///
@@ -33,6 +34,14 @@ class MenuScreen extends StatelessWidget {
             MaterialPageRoute<void>(
               builder: (_) => const ItemPriceTrendScreen(),
             ),
+          ),
+        ),
+        _MenuTile(
+          icon: Icons.settings_outlined,
+          title: 'Einstellungen',
+          subtitle: 'Import-Historie',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
           ),
         ),
       ],

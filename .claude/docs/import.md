@@ -189,9 +189,16 @@ Typedef: `PdfParserRanking = ({PdfParser parser, double confidence})`
   11. Persist → summary screen: `N importiert / M übersprungen / K Hinweise`
 - Persistence: wired via `TransactionRepository.save` + writes `ImportedSource` row
 
+## Import History (`presentation/import_history_screen.dart`)
+
+`ImportHistoryScreen` lists all completed imports, newest first. Each row shows import metadata (icon per kind, filename as title, date + counts + note). Rows are inert — the entity carries no reference to produced bookings. Swipe end-to-start → confirm dialog → delete (reactive list updates via provider watch). Empty state: "Noch keine Importe.". No batch-delete action.
+
+| Item | Type | Notes |
+|---|---|---|
+| `importedSourcesProvider` | `StreamProvider<List<ImportedSource>>` | `findAll()` re-emitted on `isar.importedSources.watchLazy()`; same pattern as `accountsProvider` |
+
 ## Still Missing
 
-- Import-history screen (list + delete `ImportedSource` rows) — ticket 024, needs Settings surface
 - Password-protected PDFs (out of scope)
 - Batch import (out of scope; one file at a time)
 - `valueDate` has nowhere to go — `Transaction` entity lacks Wertstellung field
@@ -206,6 +213,7 @@ Typedef: `PdfParserRanking = ({PdfParser parser, double confidence})`
 - **Suggestions:** `import_preview_suggest_test.dart` (suggestions applied, overrides clear
   provenance, persist flags). For the tagging side, suggest service and the
   learn↔suggest loop are covered under `test/features/tagging/domain/`.
+- **Import history:** `test/features/import/presentation/import_history_screen_test.dart` (rows, confirm dialog, delete reaching only delete, empty state) and `test/features/import/domain/imported_sources_provider_test.dart` (provider re-emits after save and delete, with real Isar in temp dir)
 - **Not covered:** every path that writes through the UI — confirming a duplicate warning, and an edited booking filtering itself out. Both end in a repository call, and Isar cannot run inside `testWidgets`
 - **Reconciliation harness:** env-gated on `ING_PDF` (`test/tool/ing_geometry_dump_test.dart`); dumps geometry and verifies sum against `Neuer Saldo − Alter Saldo`
 - **Fixtures:** none; no PDF committed; real statements never enter the repo

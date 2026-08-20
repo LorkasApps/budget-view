@@ -6,7 +6,7 @@
 | **Epic** | Import |
 | **Domain** | Import |
 | **Blocked By** | 009 |
-| **Status** | Ready |
+| **Status** | Done |
 
 ## Description
 Split out of ticket 009, which specified this list "under Settings" — but no
@@ -43,23 +43,23 @@ This ticket lands first, so it **builds** `SettingsScreen` and adds the `Import-
   `ImportedSource` holds no reference to the bookings it produced and the hash means nothing to the user
 
 ## Acceptance Criteria
-- [ ] `SettingsScreen` exists and is reached from a new `Einstellungen` tile in `MenuScreen`, pushed as a route so back
+- [x] `SettingsScreen` exists and is reached from a new `Einstellungen` tile in `MenuScreen`, pushed as a route so back
       returns to `Mehr`
-- [ ] `SettingsScreen` carries one `Import-Historie` row that pushes the history screen; no other row is added here
-- [ ] History screen lists every `ImportedSource` flat in `importedAt DESC` via a reactive
+- [x] `SettingsScreen` carries one `Import-Historie` row that pushes the history screen; no other row is added here
+- [x] History screen lists every `ImportedSource` flat in `importedAt DESC` via a reactive
       `importedSourcesProvider` (`StreamProvider`, re-queries on the Isar collection watch like `accountsProvider`)
-- [ ] Row shows: formatted `importedAt`, source label (`filename` for `kind=pdf`, a photo label for `kind=photo`, which
+- [x] Row shows: formatted `importedAt`, source label (`filename` for `kind=pdf`, a photo label for `kind=photo`, which
       carries no filename), `transactionsProduced` and `lineItemsProduced`, plus `note` when set
-- [ ] Rows are not tappable
-- [ ] Per-row delete calls `ImportedSourceRepository.delete(uuid)` behind a confirm dialog that states the imported
+- [x] Rows are not tappable
+- [x] Per-row delete calls `ImportedSourceRepository.delete(uuid)` behind a confirm dialog that states the imported
       bookings stay
-- [ ] The list updates after a delete without manual refresh
-- [ ] Empty state when no import happened yet
-- [ ] No "delete all" action anywhere on the screen
-- [ ] Test: deleting a row leaves the transactions and line-items of that import untouched
-- [ ] Widget test: `pdf` and `photo` rows render their respective source label, the delete flow reaches the repository,
+- [x] The list updates after a delete without manual refresh
+- [x] Empty state when no import happened yet
+- [x] No "delete all" action anywhere on the screen
+- [x] Test: deleting a row leaves the transactions and line-items of that import untouched
+- [x] Widget test: `pdf` and `photo` rows render their respective source label, the delete flow reaches the repository,
       the empty state shows
-- [ ] `make check` green
+- [x] `make check` green
 
 ## Out of Scope
 - Anything that re-runs or undoes an import
@@ -74,4 +74,5 @@ shared fixture.
 - Output: ~3k tokens
 
 ### Implementation Tokens (estimate)
-_Filled after Done._
+- Input: ~55k tokens
+- Output: ~6k tokens
