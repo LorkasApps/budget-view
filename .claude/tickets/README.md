@@ -31,3 +31,4 @@
 | 027-app-icon-and-branding.md | Feature | Setup | Infra | Done | None | Money-bag launcher icon (adaptive + monochrome) and launch screen via flutter_native_splash |
 | 029-menu-tab-for-rare-surfaces.md | Feature | None | Infra | Done | None | Bottom nav stays at Konten \| Report \| Mehr; rare surfaces (Prognose, later 022/024/025) live behind a menu screen |
 | 028-milestone-1-verification-pass.md | TechDebt | None | Infra | Ready | 024, 025, 026 | One device + visual pass over all of milestone 1 — collects every check `make check` cannot make (native halves, rendering, gestures); carries 022 + 014 visual checks |
+| 030-r8-mlkit-missing-classes.md | Bug | Setup | Infra | Ready | None | Release build dies in R8: google_mlkit_text_recognition references the unused Chinese/Devanagari/Japanese/Korean recognizers |
