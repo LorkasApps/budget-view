@@ -7,7 +7,7 @@
 | **Domain** | Drilldown |
 | **Blocked By** | None |
 | **Severity** | High |
-| **Status** | Draft |
+| **Status** | Ready |
 
 ## Description
 Photographed slightly off-square, the receipt parses into plausible-looking positions with the prices shifted by one row:
@@ -64,35 +64,70 @@ Open questions for this half:
 - The totals row is the one line whose value is known to be the sum — could it be used as a **check** instead of a row,
   comparing against the sum of parsed positions and flagging a mismatch?
 
-## Why the pairing shifts (hypothesis to confirm during refinement)
-The parser takes the rightmost money token of a line as that line's price. Once the paper is skewed, ML Kit's line
-grouping no longer matches visual rows: a description and the price beside it drift into different lines, and the
-right-hand column shifts against the left-hand one. The pairing rule assumes an axis-aligned layout that the photo does
-not deliver.
+## Why the pairing shifts (confirmed against the docs)
+`HeuristicReceiptLineItemParser` already groups geometrically: lines are sorted by vertical position and merged into one
+row when their vertical centres lie within `(line height + row max height) / 4`. That tolerance is the breaking point.
+Across half a receipt's width, a few degrees of skew move the right-hand price by more than a line height, so it joins the
+neighbouring row — which is exactly the observed "item 2 with price 1" pattern. The grouping is not wrong in kind, it
+assumes the rows are axis-parallel.
 
-## Open questions for refinement
-- **Pair by geometry instead of by line membership?** Every `OcrLine` carries a bounding box. Pairing a price to the
-  description whose vertical band it overlaps most would survive rotation up to some angle — what angle, and what happens
-  beyond it?
-- **Or deskew before OCR?** Estimating the dominant text angle and rotating the bitmap is a heavier, more general fix
-  (`image` is already a dependency). It would also help the recognition rate itself, not just the pairing
-- **Or refuse rather than guess?** Detect that lines are not parallel to the axis and ask for a straighter photo. Cheapest
-  and honest, but pushes the work back to the user on every crooked shot
-- **What must the review screen show either way?** Today a wrong pairing looks exactly like a right one. Marking
-  low-confidence pairings `ambiguous` is arguably required regardless of which fix lands
-- Does the same shift affect quantity and unit price when a receipt prints them in their own column?
-- Accuracy needs numbers before and after: how many rows land `ok` / `ambiguous` / `unparsed` across several receipts,
-  which is the measurement ticket 028 already asks for
+## Resolved during refinement
+- **Approach** → deskew the bitmap **before** OCR rather than compensating the angle inside the grouping. Chosen over the
+  cheaper box-regression variant because it also improves recognition itself, not only the pairing. Accepted cost: it runs
+  ahead of every scan, including the straight ones, and it is more code than a rotation applied to coordinates.
+  Consequence to keep in mind: the grouping tolerance stays as it is, so an under-corrected image reproduces the exact same
+  silent shift — a safety net matters more with this route, not less
+- **Angle source** → projection profile on the bitmap: for a set of candidate angles, sum the greyscale rows and take the
+  angle with the sharpest structure. Chosen over deriving the angle from a first OCR pass, so recognition runs once.
+  Accepted cost: real image processing with a candidate-angle raster, and its runtime depends on resolution and step width
+  — the existing downscale before OCR is the place to hang it
+- **Noise rows** → two changes. The skip vocabulary gains the prefixes this receipt exposed (`gesamtpreis`, `bargeld`, and
+  whatever else the sample shows), and a row **without a money token never becomes a candidate** at all, which removes the
+  address block by construction. Accepted cost: the docs call showing unrecognised rows a deliberate choice, and that hint
+  ("there was text here I could not read") is given up
+- **Checksum** → the printed total is read but still never imported: its amount is compared against the sum of the parsed
+  positions, and a mismatch is shown in the review screen with both numbers. This is the only signal on a receipt that is
+  independent of the row grouping, and it would have caught today's finding on its own. It stays quiet once the user
+  deselects rows, since then a difference is intended
+- **Fixtures** → no committed images. The angle test paints its own striped bitmap, rotates it by a known angle and asserts
+  the estimate within a tolerance. It measures the angle estimation, not recognition quality
 
 ## Acceptance Criteria
-_Not refined yet — the questions above come first._
+- [ ] A deskew step runs between the existing downscale and the OCR call: projection-profile angle estimate over candidate
+      angles, then rotation through `image`
+- [ ] The candidate range and step live in one named place and are wide enough for a hand-held photo (starting point
+      ±12° at 0.5°, adjust against real captures)
+- [ ] An image that is already straight is **not** rotated — an estimate near zero skips the resampling instead of
+      degrading the bitmap for nothing
+- [ ] Unit test: a synthetic striped bitmap rotated by a known angle is estimated back within a stated tolerance, for
+      several angles including 0
+- [ ] The skip vocabulary gains the prefixes the sample receipt exposed, at least `gesamtpreis` and `bargeld`
+- [ ] A row without a money token never becomes a `LineItemCandidate`, so address and header blocks disappear by
+      construction rather than by keyword
+- [ ] With that, `parseState.unparsed` is unreachable for value-less rows: either something else still produces it, or the
+      state and its review rendering go — no branch kept for a case no input can reach (decisions.md)
+- [ ] The printed total is parsed, never imported, and compared against the sum of the parsed positions
+- [ ] A mismatch is shown in the review screen naming both numbers; deselecting rows silences it
+- [ ] Tests: skip vocabulary, value-less rows dropped, checksum match and mismatch, and that the total row itself is not
+      importable
+- [ ] `make check` green
+- [ ] Device verification is **not** part of this ticket — it lives in 036, which requires a release APK
+
+## Out of Scope
+- Perspective correction (a receipt photographed at an angle rather than rotated); only in-plane rotation is addressed
+- Improving recognition itself beyond what a straightened image gives for free
 
 ## Affected Tests
 The parser suites under `test/features/drilldown/scan/` are unit-testable with synthetic geometry: fixtures whose bounding
 boxes are rotated by a few degrees would reproduce this without a device.
 
 ## Fixtures Needed
-Likely yes — rotated-geometry OCR fixtures. Confirm during refinement.
+No committed fixtures. The angle test generates its own bitmaps; parser tests keep building `OcrResult` inline as the
+existing suites do.
 
-## Token Usage
+### Refinement Tokens (estimate)
+- Input: ~20k tokens
+- Output: ~3k tokens
+
+### Implementation Tokens (estimate)
 _Filled after Done._
