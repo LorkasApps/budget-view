@@ -7,7 +7,7 @@
 | **Domain** | Infra |
 | **Blocked By** | None |
 | **Severity** | Critical |
-| **Status** | Draft |
+| **Status** | Done |
 
 ## Description
 Ticket 030 unblocked the release build with `-dontwarn` rules for the ML Kit script recognizers this app does not bundle.
@@ -41,19 +41,40 @@ Use a debug build for anything involving the scan. Not acceptable for a shipped 
 ## Since When
 Since ticket 030 (2026-08-20). Before that the release build did not complete at all, so no working release ever existed.
 
-## Open questions for refinement
-- **Which fix:** real `-keep` rules for the ML Kit and plugin classes, or adding the four script artifacts as
-  dependencies (the option 030 rejected on APK size), or narrowing minification for this package?
-- If keep rules: which surface exactly — `com.google.mlkit.vision.text.**`, the plugin's own
-  `com.google_mlkit_text_recognition.**`, or both? A too-broad `-keep` gives back the size that shrinking bought
-- **How does this get caught next time?** `make release-check` proves the build completes, which is exactly what it did
-  here. A build that runs is not a build that works — the gate needs a runtime step, or the ticket has to say plainly
-  that release OCR is device-verified only
-- Does anything else in the app reach native code through reflection and sit behind the same silent risk
-  (`image_picker`, `file_selector`, Isar's native libs, Syncfusion)?
+## Resolved during refinement
+The cause was narrowed by experiment, not by reading:
+
+| Step | Result |
+|------|--------|
+| Dropped `getDefaultProguardFile("proguard-android-optimize.txt")`, kept only our rules | still failed — the aggressive default rules were **not** the cause |
+| Added `-keep` for `com.google.mlkit.**`, `com.google.android.odml.**` and both plugin packages | recognition works in the release APK |
+
+So the defect was never the absent script classes: a class that is never loaded does not disturb Android, verification is
+lazy. R8 was **renaming ML Kit's own task and handler machinery**, which the recognizer reaches reflectively, and the
+native call then returned null. The `-dontwarn` lines from 030 stay — they are still what lets R8 finish — but they were
+never the fix.
+
+- **Keep scope** → accepted broad (`com.google.mlkit.**` plus ODML plus the two plugin packages) rather than narrowed by
+  trial. Narrowing would cost a device round per attempt to save shrinking on a library whose bundled models dominate the
+  APK anyway. The optimize default file stays out: it is not needed, and re-adding it would invite the same class of
+  failure back
+- **Gate limitation** → recorded in `errors.md` rather than automated: `make release-check` proves the build completes,
+  which it did while OCR was broken. A build that runs is not a build that works, and nothing short of an instrumented
+  device test can close that gap. Ticket 036 therefore requires each area to be walked on a release APK, not only on
+  `make run`
+- **Same risk elsewhere** → open, deliberately not chased here: `image_picker`, `file_selector`, Isar's native libs and
+  Syncfusion all cross into native code and none has been exercised in a release build. 036's release-APK requirement is
+  what will surface them
 
 ## Acceptance Criteria
-_Not refined yet — the questions above come first._
+- [x] The release APK recognises text from a receipt, verified on the device with the same image that failed
+- [x] `-keep` rules for `com.google.mlkit.**`, `com.google.android.odml.**`, `com.google_mlkit_commons.**` and
+      `com.google_mlkit_text_recognition.**` live in `android/app/proguard-rules.pro`
+- [x] The `-dontwarn` lines for the four unused script packages remain, so R8 still completes
+- [x] `getDefaultProguardFile("proguard-android-optimize.txt")` is gone from the release buildType — it was ruled out as
+      the cause and is not needed
+- [x] `errors.md` names the real cause and the real fix, replacing the entry that recommended `-dontwarn`
+- [x] Signing config untouched; still the debug key
 
 ## Affected Tests
 None possible in the test VM: ML Kit has no binding there, and R8 does not run for tests. Verification is a release APK
@@ -62,5 +83,10 @@ on a device.
 ## Fixtures Needed
 No.
 
-## Token Usage
-_Filled after Done._
+### Refinement Tokens (estimate)
+- Input: ~14k tokens
+- Output: ~2k tokens
+
+### Implementation Tokens (estimate)
+- Input: ~10k tokens
+- Output: ~1k tokens

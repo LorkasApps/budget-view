@@ -32,10 +32,9 @@ android {
             signingConfig = signingConfigs.getByName("debug")
             // Shrinking itself stays with the Flutter Gradle Plugin; this only adds
             // the keep rules R8 needs for the ML Kit scripts we do not bundle.
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro",
-            )
+            // Deliberately without getDefaultProguardFile: the -optimize variant is
+            // the suspect behind the release-only OCR failure (ticket 034).
+            proguardFiles("proguard-rules.pro")
         }
     }
 }
