@@ -133,13 +133,18 @@ follows the app's own flow, so the data each later area needs already exists.
 _Finding from this pass (not a check): `Ausgaben` read 12.891,34 for July against a real spend of roughly 3k. The sums are
 correct — net −467,36 reconciles with `Neuer Saldo − Alter Saldo` — but transfers to another own account count as
 spending, because a booking knows only amount and sign. Ticket **032**._
-- [ ] The donut paints at all — first `fl_chart` usage in the app, and no test has rendered a frame
-- [ ] Slice percentage labels stay legible; the 8 % cut-off hides the ones that would not fit
-- [ ] Filter bar survives a narrow screen: month row, account chip and the Ausgaben/Einnahmen toggle must not overflow
-- [ ] Month picker opens in year mode and returns the picked month
-- [ ] `Ohne Kategorie` row is visibly muted and stays out of the donut
-- [ ] Drilldown shows `X (direkt)` first and its total equals the row that was tapped
-- [ ] A category with many siblings still produces a readable donut (colour repetition from the 12-colour palette is expected — judge whether it is confusing)
+- [x] The donut paints at all — first `fl_chart` usage in the app, and no test has rendered a frame
+- [x] Slice percentage labels stay legible; the 8 % cut-off hides the ones that would not fit — a 1 % slice renders
+      without its label, as intended
+- [x] Filter bar survives a narrow screen: month row, account chip and the Ausgaben/Einnahmen toggle must not overflow
+- [x] Month picker opens in year mode and returns the picked month. The **result** is right (picking 05.06 yields June),
+      but after the year sheet comes a day grid rather than a month overview. Accepted as-is: Flutter's `DatePickerMode`
+      has only `day` and `year`, so a month-granular dialog would have to be hand-built including its accessibility
+      behaviour — more risk than the misleading day precision is worth (decisions.md)
+- [x] `Ohne Kategorie` row is visibly muted and stays out of the donut
+- [x] Drilldown shows `X (direkt)` first and its total equals the row that was tapped
+- [x] A category with many siblings still produces a readable donut (colour repetition from the 12-colour palette is
+      expected — judge whether it is confusing). Judged at 5 children; a larger tree has not been tried
 
 ### Forecast (021)
 - [ ] The `LineChart` paints: history dots, thin fitted line, dashed projection continuing from the last measured month
