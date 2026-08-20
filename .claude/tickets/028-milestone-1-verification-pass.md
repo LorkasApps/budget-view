@@ -8,7 +8,7 @@
 | **Blocked By** | 024, 025, 026 |
 | **Severity** | Medium |
 | **Effort** | XL |
-| **Status** | In Progress |
+| **Status** | Done |
 
 ## Description
 Everything milestone 1 built that `make check` structurally cannot judge, collected
@@ -178,9 +178,9 @@ not trustworthy while 035 is open._
       measuring once the correction path of 037 exists
 
 ### Settings, rules, quick-create (024, 025, 026)
-- [ ] `Mehr` → `Einstellungen` opens; every row pushes its screen and back returns to `Einstellungen`, not to `Mehr`
-      (still open — the first attempt tested the tab-level back gesture instead, which surfaced ticket **039**: back at
-      tab root closes the app rather than returning to `Konten`)
+- [x] `Mehr` → `Einstellungen` opens; every row pushes its screen and back returns to `Einstellungen`, not to `Mehr`.
+      The first attempt tested the tab-level back gesture instead, which surfaced ticket **039**: back at tab root closes
+      the app rather than returning to `Konten`
 - [x] Import history: source label right for a PDF row, counts plausible, empty state on a fresh
       install. Delete is a **swipe** end-to-start with no visible affordance — judge whether it is discoverable, since
       it is the only action on the screen, and confirm the dialog says the bookings stay
@@ -203,4 +203,26 @@ No — real statements and real receipts, both kept out of git.
 - Output: ~3k tokens
 
 ### Implementation Tokens (estimate)
-_Filled after Done._
+- Input: ~120k tokens
+- Output: ~14k tokens
+
+## Outcome
+Walked 2026-08-20 on a physical device, area by area. 62 checks verified, 2 failed outright, 17 moved to ticket 036 and
+1 deferred inside its own area (the 24-label forecast axis, which needs 12 months of history).
+
+Findings that became tickets:
+
+| Ticket | Severity | What the pass found |
+|--------|----------|---------------------|
+| 034 | Critical | Release APK recognises no text: `-dontwarn` from 030 let R8 strip the ML Kit recognizer |
+| 035 | High | Skew pairs every price with the neighbouring item; address, total, `Bargeld`, `Rückgeld`, EC rows arrive as positions |
+| 032 | — | Transfers between own accounts count as expense *and* income, inflating the report by four times real spending |
+| 039 | Medium | Back at tab root closes the app instead of returning to `Konten` |
+| 037 | — | No way to correct or clear a suggested category from the import edit dialog |
+| 038 | — | The picker needs search once the tree grows |
+
+Two observations recorded without a ticket, by decision: the month picker's day grid stays (`decisions.md`), and the
+forecast long-press was only found after being told where to press.
+
+The pass earned its keep on the two Critical/High items above: both were invisible to `make check` by construction, one
+of them only exists in a release build, and the other silently produced wrong data rather than failing.

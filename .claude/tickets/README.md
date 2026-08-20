@@ -30,7 +30,7 @@
 | 026-quick-create-category-in-picker.md | Feature | Categories | Category | Done | None | Quick-create a category from inside pickCategory (name + prefilled parent, defaults for the rest) |
 | 027-app-icon-and-branding.md | Feature | Setup | Infra | Done | None | Money-bag launcher icon (adaptive + monochrome) and launch screen via flutter_native_splash |
 | 029-menu-tab-for-rare-surfaces.md | Feature | None | Infra | Done | None | Bottom nav stays at Konten \| Report \| Mehr; rare surfaces (Prognose, later 022/024/025) live behind a menu screen |
-| 028-milestone-1-verification-pass.md | TechDebt | None | Infra | In Progress | 024, 025, 026 | One device + visual pass over all of milestone 1 — collects every check `make check` cannot make (native halves, rendering, gestures); carries 022 + 014 visual checks |
+| 028-milestone-1-verification-pass.md | TechDebt | None | Infra | Done | 024, 025, 026 | One device + visual pass over all of milestone 1 — collects every check `make check` cannot make (native halves, rendering, gestures); carries 022 + 014 visual checks |
 | 030-r8-mlkit-missing-classes.md | Bug | Setup | Infra | Done | None | Release build dies in R8: google_mlkit_text_recognition references the unused Chinese/Devanagari/Japanese/Korean recognizers |
 | 031-theme-mode-setting.md | Feature | Setup | Infra | Ready | None | Theme mode row in Settings: Dunkel / Hell / Systemvorgabe (default), dark scheme from the same teal seed |
 | 032-transfers-between-own-accounts.md | Feature | None | Transaction | Draft | None | Transfers between own accounts count as expense + income and inflate the report; model has no notion of them |
