@@ -38,7 +38,7 @@
 | 034-r8-strips-mlkit-recognizer.md | Bug | Setup | Infra | Done | None | Release APK cannot read receipts: R8 renames ML Kit's reflective internals; needs `-keep`, not `-dontwarn` |
 | 035-skewed-receipt-shifts-prices.md | Bug | Drilldown | Drilldown | Ready | None | Skew pairs every price with the neighbouring item, and address/total/Bargeld/Rückgeld/EC rows arrive as positions |
 | 036-v2-receipt-verification-checklist.md | TechDebt | None | Drilldown | Draft | 034, 035, 033, 037 | Device checks for the receipt pipeline after its fixes, plus PDF receipts and the tagging-suggestion loop |
-| 037-clear-category-in-import-preview.md | Feature | Import | Transaction | Draft | None | Correct or clear a row's category from the import edit dialog, not only via the row chip |
+| 037-clear-category-in-import-preview.md | Feature | Import | Transaction | Ready | None | Reach the row category from the import edit dialog; chip already allows change and clear |
 | 038-category-picker-search.md | Feature | Categories | Category | Draft | None | Search in the category picker: a name hit pulls its whole subtree along, at any depth |
 | 039-back-from-a-tab-exits-the-app.md | Bug | None | Infra | Draft | None | Back at tab root closes the app instead of returning to Konten; the IndexedStack has no history around it |
 | 040-trade-republic-import.md | Feature | Import | Transaction | Draft | None | Second PdfParser for Trade Republic; cash statement is small, depot statement needs a securities notion (touches 032) |

@@ -1,4 +1,4 @@
-# Import preview: change and clear a row's category from the edit dialog
+# Import preview: reach the row category from the edit dialog
 
 | Field | Value |
 |-------|-------|
@@ -6,7 +6,7 @@
 | **Epic** | Import |
 | **Domain** | Transaction |
 | **Blocked By** | None |
-| **Status** | Draft |
+| **Status** | Ready |
 
 ## Description
 Auto-tagging fills categories in the import preview from learned rules, and it is sometimes wrong — which is the learning
@@ -20,22 +20,33 @@ Second half: **clearing**. Import rows may be persisted uncategorized, so "no ca
 manual entry where a category is required. Whether the preview's picker currently offers that is the first thing
 refinement has to establish.
 
-## Open questions for refinement
-- Does the preview's `pickCategory` call pass `allowNone: true` today? If yes, clearing already works from the chip and
-  this ticket is only about the dialog. If no, the clear path has to be added — and `CategoryPick(null)` versus `null`
-  must be handled correctly, since that distinction is load-bearing in the picker
-- Should the dialog get a category **field**, or should it simply carry the same chip the row shows? The second is less
-  new UI and keeps one interaction to learn
-- Does clearing a suggested category also clear the suggestion marker and its `<n>×`, and does it count as an override
-  for the learn loop — or as "no opinion"? `ImportFlowController.setRowCategory` clears the suggested flag today; the
-  learn hook runs on persist, per row
-- `Für alle` bulk-assigns every row. Is there a matching "clear all" wanted, or would that be a foot-gun on a
-  77-row statement?
-- Anything to fix about the marker itself while in there — 028 flagged that the suggested row's chip plus marker plus
-  count is the row that already overflowed once (errors.md)
+## Resolved during refinement
+- **The capability already exists.** `pdf_import_screen.dart` calls `pickCategory` with `allowNone: true`, both per row
+  (`_pickRowCategory`) and for `Für alle` (`_pickCategoryForAll`). Changing a category works today, and so does clearing
+  it — `Keine Kategorie` in that sheet, which `setRowCategory(index, null)` then applies. A bulk clear exists for the same
+  reason. What was missing is the **place**: the user looked in the edit dialog, because that is where a row gets corrected
+- **Fix** → the edit dialog gains a category row that opens the same picker and shows the current selection. Deliberately
+  duplicating an interaction that already exists on the row chip: two entry points for one action is normally worth
+  avoiding, here it matches where people look. Nothing about the chip changes
+- **Clearing teaches nothing, by construction.** `learnFrom` requires a set category, so a cleared row creates no rule.
+  The consequence is worth stating: the wrong rule keeps its `hitCount` and will suggest again next import. Negative
+  learning ("this rule is wrong") would be its own feature and is out of scope here
+- **Fixtures** → none. Rows with and without a suggestion are built inline, as `import_preview_suggest_test.dart` does
 
 ## Acceptance Criteria
-_Not refined yet — the questions above come first._
+- [ ] The per-row edit dialog carries a category row showing the row's current category, or `Keine Kategorie` when unset
+- [ ] Tapping it opens `pickCategory` with `selected` prefilled and `allowNone: true`, exactly as the row chip does
+- [ ] The result goes through `ImportFlowController.setRowCategory`, so the suggestion flag is cleared the same way as via
+      the chip — an override from the dialog must be indistinguishable from an override on the row
+- [ ] Clearing from the dialog sets the row to no category, and the row then persists uncategorized
+- [ ] When the row carries a suggestion, the dialog shows its marker and `<n>×` count, so it is visible *why* a category is
+      there before it is replaced
+- [ ] Cancelling the dialog changes nothing, including the category
+- [ ] Nothing about the row chip, `Für alle`, or the manual entry form changes
+- [ ] Widget test: set a category from the dialog, clear it from the dialog, cancel without effect, and that the suggestion
+      flag is cleared on override
+- [ ] `manual_entry_category_required_test.dart` stays green — no clear option may leak into manual entry
+- [ ] `make check` green
 
 ## Out of Scope (proposed, to confirm)
 - Changing what the learn loop learns; only the correction path in the preview is at stake
@@ -48,7 +59,11 @@ _Not refined yet — the questions above come first._
   manual entry
 
 ## Fixtures Needed
-Ask during refinement.
+No — inline rows in the test, as the existing import suites do.
 
-## Token Usage
+### Refinement Tokens (estimate)
+- Input: ~10k tokens
+- Output: ~2k tokens
+
+### Implementation Tokens (estimate)
 _Filled after Done._
