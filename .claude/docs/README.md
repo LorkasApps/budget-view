@@ -5,7 +5,7 @@
 | infrastructure.md | Infra | Stack, feature-first layout, entry point (AppShell, MenuScreen, SettingsScreen), dev commands (Makefile) |
 | sync.md | Infra | Sync stub: SyncableEntity, ChangeQueueEntry, LocalSyncAdapter, repo-layer contract |
 | account.md | Account | Account entity, repository (sync-wired), providers, validation, list/form UI, money helpers |
-| category.md | Category | Category tree entity, repository (sync-wired, exceptions), tree helpers, providers, validation, tree/form UI (expandable, drag-reorder, icon/color pickers) |
+| category.md | Category | Category tree entity, repository (sync-wired, exceptions), tree helpers, providers, validation, tree/form/picker UI (expandable, drag-reorder, icon/color pickers, quick-create in picker) |
 | transaction.md | Transaction | Transaction entity, repository (+sumForAccount), providers, validation, list/form UI, balance integration |
 | drilldown.md | Drilldown | LineItem entity, repository (sign follows parent, reorder), validation + mismatch warning, section/sheet inside the booking form |
 | receipt-scan.md | Drilldown | Ephemeral receipt photo capture: source picker, doc-hash check, OCR/parser seams, confirm → line-items + ImportedSource |

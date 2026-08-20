@@ -27,7 +27,7 @@
 | 023-unit-price-normalization.md | Feature | Analytics | Analytics | Draft (post-V1) | 015, 018, 022 | Weight-based unit-price for variable-weight items (€/kg, €/l) |
 | 024-import-history-screen.md | Feature | Import | Import | Done | 009 | ImportedSource list + delete, split out of 009 (needs a Settings surface) |
 | 025-tagging-rule-management.md | Feature | Auto-Tagging | Tagging | Done | 013 | Rule list + edit/delete + stale handling, split out of 013 (shares the Settings surface with 024) |
-| 026-quick-create-category-in-picker.md | Feature | Categories | Category | Ready | None | Quick-create a category from inside pickCategory (name + prefilled parent, defaults for the rest) |
+| 026-quick-create-category-in-picker.md | Feature | Categories | Category | Done | None | Quick-create a category from inside pickCategory (name + prefilled parent, defaults for the rest) |
 | 027-app-icon-and-branding.md | Feature | Setup | Infra | Done | None | Money-bag launcher icon (adaptive + monochrome) and launch screen via flutter_native_splash |
 | 029-menu-tab-for-rare-surfaces.md | Feature | None | Infra | Done | None | Bottom nav stays at Konten \| Report \| Mehr; rare surfaces (Prognose, later 022/024/025) live behind a menu screen |
 | 028-milestone-1-verification-pass.md | TechDebt | None | Infra | Ready | 024, 025, 026 | One device + visual pass over all of milestone 1 — collects every check `make check` cannot make (native halves, rendering, gestures); carries 022 + 014 visual checks |

@@ -6,7 +6,7 @@
 | **Epic** | Categories |
 | **Domain** | Category |
 | **Blocked By** | None (010 + 011 already `Done`) |
-| **Status** | Ready |
+| **Status** | Done |
 
 ## Description
 A missing category currently costs the user the whole entry: there is no way in from `pickCategory`, so the only route is cancel the form → back to the account list → category icon → FAB → create → start the entry again. The typed input is lost on the way.
@@ -33,21 +33,21 @@ The fix belongs in `pickCategory` itself, not in the callers: the sheet is used 
   separated by a divider, so the two are not read as one group
 
 ## Acceptance Criteria
-- [ ] Every row of the `pickCategory` tree carries a trailing `+` that starts quick-create with that row as parent
-- [ ] One `Neue Kategorie` row below the none-option (divider between them) starts quick-create at root level
-- [ ] The `+` and the row's selection tap have separate hit areas; tapping the row still selects, never creates
-- [ ] Quick-create is an `AlertDialog` naming its parent, with a single name field and `Abbrechen` / `Anlegen`
-- [ ] Icon defaults to `label`, colour to `#607D8B`, `sortOrder` per the entity default — no icon grid, no palette
-- [ ] Persists through `CategoryRepository.save`; no new domain logic and no new repository method
-- [ ] `CategoryInvalid` (empty name, duplicate sibling name) renders as a field error inside the dialog; the dialog stays
+- [x] Every row of the `pickCategory` tree carries a trailing `+` that starts quick-create with that row as parent
+- [x] One `Neue Kategorie` row below the none-option (divider between them) starts quick-create at root level
+- [x] The `+` and the row's selection tap have separate hit areas; tapping the row still selects, never creates
+- [x] Quick-create is an `AlertDialog` naming its parent, with a single name field and `Abbrechen` / `Anlegen`
+- [x] Icon defaults to `label`, colour to `#607D8B`, `sortOrder` per the entity default — no icon grid, no palette
+- [x] Persists through `CategoryRepository.save`; no new domain logic and no new repository method
+- [x] `CategoryInvalid` (empty name, duplicate sibling name) renders as a field error inside the dialog; the dialog stays
       open and nothing is written
-- [ ] On success the sheet closes and returns the new category as the pick, so the caller needs no second tap
-- [ ] Works from all four call sites, since it lives in the shared sheet: booking form, inline quick-pick in the
+- [x] On success the sheet closes and returns the new category as the pick, so the caller needs no second tap
+- [x] Works from all four call sites, since it lives in the shared sheet: booking form, inline quick-pick in the
       transaction list, PDF import preview, line-item sheet
-- [ ] In the line-item case the none-option keeps its `Erbt von der Buchung (…)` label and its first position
-- [ ] Nothing about `CategoryTreeScreen` or `CategoryFormScreen` changes
-- [ ] `manual_entry_category_required_test.dart` still passes: the added rows must not introduce a clear-option
-- [ ] `make check` green
+- [x] In the line-item case the none-option keeps its `Erbt von der Buchung (…)` label and its first position
+- [x] Nothing about `CategoryTreeScreen` or `CategoryFormScreen` changes
+- [x] `manual_entry_category_required_test.dart` still passes: the added rows must not introduce a clear-option
+- [x] `make check` green
 
 ## Affected Tests
 - `test/features/category/presentation/category_picker_quick_create_test.dart` — trailing `+` present per row and
@@ -63,4 +63,5 @@ No. A two-root tree with one child plus one colliding sibling, built inline in t
 - Output: ~3k tokens
 
 ### Implementation Tokens (estimate)
-_Filled after Done._
+- Input: ~40k tokens
+- Output: ~5k tokens
