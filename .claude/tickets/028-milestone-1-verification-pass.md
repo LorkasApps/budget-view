@@ -121,12 +121,15 @@ follows the app's own flow, so the data each later area needs already exists.
 - [x] `quantity × unitPrice ≠ amount` shows the inline warning but still saves
 
 ### Receipt scan (016, 017, 018)
-- [ ] Camera path: `Kassenbon scannen` → Kamera opens **without** a permission prompt, capture returns to the flow
-- [ ] Gallery path: picker opens (Photo Picker on API 33+), chosen image returns to the flow
+- [x] Camera path: `Kassenbon scannen` → Kamera opens **without** a permission prompt, capture returns to the flow
+      (debug build; the release APK fails the recognition outright — ticket **034**)
+- [x] Gallery path: picker opens (Photo Picker on API 33+), chosen image returns to the flow
 - [ ] OCR umlauts: a real receipt round-trips `Käse`, `Öl`, `Süß`, `Brühe` in the review screen
 - [ ] Rotation: a portrait capture is recognized as well as a landscape one — ML Kit reading EXIF through `InputImage.fromFilePath` is the assumption behind the temp-file detour
 - [ ] Heuristic accuracy on ≥ 3 receipts from different shops: note how many rows land `ok` / `ambiguous` / `unparsed`, and whether two receipt rows were ever merged into one candidate
-- [ ] Prices land on the right rows (rightmost-money-token rule against real column layout)
+- [ ] Prices land on the right rows (rightmost-money-token rule against real column layout) — **FAILED**, ticket
+      **035**: on a slightly skewed photo every price paired with the neighbouring description, silently and with no
+      marker
 - [ ] Skip list catches each receipt's totals block; no `Summe` / `MwSt` row becomes a position
 - [ ] Review screen: toggles, row edit, `Zeile hinzufügen`, `alle kategorisieren` behave on a real list
 - [ ] Confirm persists with the right sign and the Restposten closes the gap
