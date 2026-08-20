@@ -1,4 +1,4 @@
-# Release build cannot read receipts: R8 strips the ML Kit recognizer
+# Release build cannot read receipts: R8 renames the ML Kit recognizer
 
 | Field | Value |
 |-------|-------|
@@ -11,9 +11,10 @@
 
 ## Description
 Ticket 030 unblocked the release build with `-dontwarn` rules for the ML Kit script recognizers this app does not bundle.
-That silenced R8 but protected nothing: `-dontwarn` only suppresses the warning, it does not keep the classes. The
-shrinker is still free to remove them, and the plugin picks its recognizer at runtime through those very script option
-classes.
+The build completed from then on, but the shipped artifact could not read a receipt.
+
+The first suspicion — that R8 had removed those absent script classes — turned out to be wrong; see the resolution below
+for what the experiments showed. Recorded here because the wrong hypothesis is an easy one to repeat.
 
 Result: the release APK builds, ships, installs — and OCR fails on the device with
 `PlatformException … null object reference`. The same receipt, same gallery image, works in a debug build.
