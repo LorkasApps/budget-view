@@ -5,10 +5,10 @@
 | **Type** | TechDebt |
 | **Epic** | None |
 | **Domain** | Infra |
-| **Blocked By** | None (all collected features are Done) |
+| **Blocked By** | 024, 025, 026 |
 | **Severity** | Medium |
 | **Effort** | XL |
-| **Status** | Draft |
+| **Status** | Ready |
 
 ## Description
 Everything milestone 1 built that `make check` structurally cannot judge, collected
@@ -36,6 +36,20 @@ screen lands in a shell whose navigation has never been touched by a finger.
 All of them — Infra (shell, boot), Account, Transaction, Category, Drilldown
 (positions + scan), Import, Analytics.
 
+## Resolved during refinement
+- **Sequencing** → blocked on 024, 025, 026 and run as **one** pass once they land, so the new Settings surface, the rule
+  list and the picker quick-create are walked in the same sitting. Accepted cost: the base stays unverified until then,
+  and a defect in it is found only after three features have been built on top
+- **Test data** → real statements and real receipts only. A check whose data does not exist yet (12 months of history for
+  the forecast axis, repeated purchases of one article) is **not** ticked but marked `vertagt: braucht <N> Monate Daten`.
+  No seed generator: this ticket produces findings, not code
+- **Definition of Done** → every check is either ticked, turned into its own Bug ticket, or explicitly deferred. Whether
+  the resulting bugs are fixed is their own lifecycle. `Done` here means "the pass happened", not "the app is fine" —
+  otherwise a low-severity cosmetic bug would hold the whole milestone open
+- **Findings** → noted inline behind the check, but only when there is something to note: a deviation (with its Bug
+  ticket id), a deferral, or a number the check explicitly asks for (OCR hit rate, how many spelling variants became
+  separate groups). A clean pass stays a bare tick
+
 ## Verification Strategy
 One pass on a physical Android device, `make run`. Note the observation next to
 each item; deviations become Bug tickets. Work area by area — the order below
@@ -49,7 +63,8 @@ follows the app's own flow, so the data each later area needs already exists.
 - [ ] `Mehr` lists `Prognose` and `Preistrends`, and back returns to the menu rather than to a tab
 - [ ] German umlauts render correctly in every screen title and label
 - [ ] Amounts read as `1.234,56 €` throughout (`de_DE`, non-breaking space before the symbol)
-- [ ] Launcher icon + splash, once 027 is Done — add its findings here rather than opening a second pass
+- [x] Launcher icon + splash (027) — verified 2026-08-20 on device: icon at grid size, startup shows the mark, themed
+      variant renders. No deviation
 
 ### Accounts (004, 005)
 - [ ] List renders, total header sums the accounts, per-account balance matches opening balance + bookings
@@ -139,8 +154,25 @@ follows the app's own flow, so the data each later area needs already exists.
 - [ ] Learn loop on real statements: accepting a suggestion must not raise its count, overriding must raise the new category's count until it wins
 - [ ] A rule whose category was archived produces no suggestion
 
+### Settings, rules, quick-create (024, 025, 026)
+- [ ] `Mehr` → `Einstellungen` opens; every row pushes its screen and back returns to `Einstellungen`, not to `Mehr`
+- [ ] Import history: source label right for a PDF row and for a photo row, counts plausible, per-row delete confirms and
+      says the bookings stay, empty state on a fresh install
+- [ ] Rule list: the three sorts reorder, remap keeps `hitCount`, an archived category marks its rules stale, the
+      collective delete names the count and removes only those rows
+- [ ] Picker quick-create: the trailing `+` creates under the intended parent and never selects the row by accident, a
+      duplicate sibling name is refused inside the dialog, and on success the caller is left with the new category
+      selected — walked from all four call sites
+
 ## Affected Tests
 None — this ticket adds no automated test. Findings may add them through their own Bug tickets.
 
 ## Fixtures Needed
 No — real statements and real receipts, both kept out of git.
+
+### Refinement Tokens (estimate)
+- Input: ~22k tokens
+- Output: ~3k tokens
+
+### Implementation Tokens (estimate)
+_Filled after Done._

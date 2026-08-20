@@ -6,7 +6,7 @@
 | **Epic** | Categories |
 | **Domain** | Category |
 | **Blocked By** | None (010 + 011 already `Done`) |
-| **Status** | Draft |
+| **Status** | Ready |
 
 ## Description
 A missing category currently costs the user the whole entry: there is no way in from `pickCategory`, so the only route is cancel the form → back to the account list → category icon → FAB → create → start the entry again. The typed input is lost on the way.
@@ -15,25 +15,52 @@ The fix belongs in `pickCategory` itself, not in the callers: the sheet is used 
 
 **Decided up front:** quick creation, not the full `CategoryFormScreen`. Name plus a pre-filled parent, everything else defaulted. Icon and colour stay editable later in the tree screen — offering the 24-icon grid and 12-colour palette mid-entry would rebuild the form the user just escaped from.
 
-## Acceptance Criteria (draft — not yet locked)
-- [ ] `pickCategory` sheet offers a "Neue Kategorie" entry
-- [ ] Quick-create asks for the name only; parent is pre-filled, icon defaults to `label`, colour to `#607D8B` (the existing entity defaults)
-- [ ] Persists through `CategoryRepository.save` — no new domain logic; `CategoryInvalid` (empty name, duplicate sibling name) is surfaced inline instead of as a snackbar behind the sheet
-- [ ] On success the new category is returned as the pick, so the caller is left with it selected and no second tap is needed
-- [ ] Reaches all four call sites, since it lives in the shared sheet
-- [ ] Nothing about the existing tree screen or `CategoryFormScreen` changes
+## Resolved during refinement
+- **Parent source** → explicit, never guessed. Every tree row carries a trailing `+` meaning "new subcategory here", and
+  one `Neue Kategorie` row near the top (below the none-option) creates at root level. The parent is fixed by the gesture and is not
+  editable inside quick-create. Chosen because tapping a row already means "select this one", so the parent needs its own
+  gesture, and because a parent field would mean a second picker sheet stacked on the first. Accepted cost: busier rows,
+  and the `+` hit area has to stay clearly separate from the selection tap
+- **Form factor** → an `AlertDialog` over the open sheet: title names the parent (`Neue Unterkategorie in Lebensmittel`,
+  or `Neue Kategorie` at root), one name field, `Abbrechen` / `Anlegen`. Rejected the inline-expanding row (keyboard,
+  autoscroll and sheet height would have to cooperate on a row that may sit deep in the scrolled tree) and a stacked
+  second sheet (two similar dismiss gestures, and the space it buys is space the ticket deliberately does not want)
+- **Name collision** → refused, shown as a field error from `CategoryInvalid`; the dialog stays open and nothing is
+  written. No "select the existing one instead" shortcut: the rule and its message already exist in the repository, and
+  the colliding sibling is visible in the tree behind the dialog anyway
+- **Row order in the sheet** → the none-option (`Keine Kategorie` / `Erbt von der Buchung …`) keeps the first slot,
+  because the `null` vs `CategoryPick(null)` distinction is load-bearing. `Neue Kategorie` sits directly below it,
+  separated by a divider, so the two are not read as one group
 
-## Open Questions for Refinement
-- **Which parent gets pre-filled?** Root, or the node the user had highlighted when tapping "Neue Kategorie"? The latter is more useful but needs the row's context — and a picker row is currently a plain selection, not a focusable state
-- Is the quick-create a second sheet on top, an inline row that expands into a text field, or a small dialog?
-- Should the parent be changeable during quick-create, or strictly the pre-filled one (with a "move it later in the tree" nudge)?
-- Behaviour when the name collides with an existing sibling: refuse with the repository's message, or offer to select the existing category instead? The second reads friendlier but silently turns a create into a pick
-- Does the entry belong at the top of the sheet or below the tree? Top is reachable, bottom keeps the tree the primary content
-- Line-item sheet runs the picker with `allowNone: true` and the label "Erbt von der Buchung (…)" — does quick-create sit next to that option without confusing the two?
+## Acceptance Criteria
+- [ ] Every row of the `pickCategory` tree carries a trailing `+` that starts quick-create with that row as parent
+- [ ] One `Neue Kategorie` row below the none-option (divider between them) starts quick-create at root level
+- [ ] The `+` and the row's selection tap have separate hit areas; tapping the row still selects, never creates
+- [ ] Quick-create is an `AlertDialog` naming its parent, with a single name field and `Abbrechen` / `Anlegen`
+- [ ] Icon defaults to `label`, colour to `#607D8B`, `sortOrder` per the entity default — no icon grid, no palette
+- [ ] Persists through `CategoryRepository.save`; no new domain logic and no new repository method
+- [ ] `CategoryInvalid` (empty name, duplicate sibling name) renders as a field error inside the dialog; the dialog stays
+      open and nothing is written
+- [ ] On success the sheet closes and returns the new category as the pick, so the caller needs no second tap
+- [ ] Works from all four call sites, since it lives in the shared sheet: booking form, inline quick-pick in the
+      transaction list, PDF import preview, line-item sheet
+- [ ] In the line-item case the none-option keeps its `Erbt von der Buchung (…)` label and its first position
+- [ ] Nothing about `CategoryTreeScreen` or `CategoryFormScreen` changes
+- [ ] `manual_entry_category_required_test.dart` still passes: the added rows must not introduce a clear-option
+- [ ] `make check` green
 
 ## Affected Tests
-- `test/features/category/presentation/category_picker_quick_create_test.dart` — entry present, create flow returns the new category as the pick, duplicate-name rejection stays inside the sheet
+- `test/features/category/presentation/category_picker_quick_create_test.dart` — trailing `+` present per row and
+  parented correctly, root entry present, create flow returns the new category as the pick, duplicate-name rejection
+  stays inside the dialog, row tap still selects instead of creating
 - Existing picker tests must keep passing: `manual_entry_category_required_test.dart` asserts that no clear-option appears for manual entry, so an added row must not break that expectation
 
 ## Fixtures Needed
-Ask during refinement.
+No. A two-root tree with one child plus one colliding sibling, built inline in the test — same call as 024 and 025.
+
+### Refinement Tokens (estimate)
+- Input: ~24k tokens
+- Output: ~3k tokens
+
+### Implementation Tokens (estimate)
+_Filled after Done._
