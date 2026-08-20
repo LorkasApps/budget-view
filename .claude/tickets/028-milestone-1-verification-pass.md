@@ -179,6 +179,8 @@ not trustworthy while 035 is open._
 
 ### Settings, rules, quick-create (024, 025, 026)
 - [ ] `Mehr` → `Einstellungen` opens; every row pushes its screen and back returns to `Einstellungen`, not to `Mehr`
+      (still open — the first attempt tested the tab-level back gesture instead, which surfaced ticket **039**: back at
+      tab root closes the app rather than returning to `Konten`)
 - [x] Import history: source label right for a PDF row, counts plausible, empty state on a fresh
       install. Delete is a **swipe** end-to-start with no visible affordance — judge whether it is discoverable, since
       it is the only action on the screen, and confirm the dialog says the bookings stay
