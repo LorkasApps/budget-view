@@ -14,6 +14,9 @@ Current state of the project foundation. Updated as Setup-epic tickets complete.
 | Charts | `fl_chart` ^1.2.0 |
 | Package / applicationId | `de.lorkaps_apps.budget_view` |
 | App display name | `BudgetView` (Android manifest `android:label`) |
+| Theme seed | Teal `#009688` = `Colors.teal` (Material 3, `lib/main.dart`) |
+| Launcher icon / splash | `flutter_launcher_icons` ^0.14.4, `flutter_native_splash` ^2.4.8 (dev-only) |
+| Branding assets | SVG + PNG in `assets/icon/`: `money_bag.svg` (teal+white), `money_bag_foreground.svg` (white), `money_bag_monochrome.svg` (white) — all from one path; rasterised by `tool/svg_to_png.py` |
 
 ## Folder Layout (feature-first)
 ```
@@ -48,7 +51,9 @@ Per-feature `{presentation,domain,data}` folders are created by each feature tic
 **Schema versioning:** dev = nuke+rebuild on bump (`DevTools.wipeDatabase`); prod (v1.0+) = migration steps in `openAppIsar`'s reconcile, keyed on stored `schemaVersion`.
 
 ## Developer Commands
-All Flutter commands run via the root `Makefile` (Flutter cannot run in the agent sandbox). Key targets: `make get`, `make check` (analyze+test), `make gen` (build_runner, from ticket 002), `make run`, `make build-apk`. `make help` lists all.
+All Flutter commands run via the root `Makefile` (Flutter cannot run in the agent sandbox). Key targets: `make get`, `make check` (analyze+test), `make gen` (build_runner, from ticket 002), `make run`, `make build-apk`. Branding: `make icon-png` (SVG→PNG), `make icons` (`flutter_launcher_icons`), `make splash` (`flutter_native_splash`). `make help` lists all.
+
+**Warning:** both generators own committed Android res files (see ticket 027, Generator-owned files section). Hand edits are unsafe — regenerate instead.
 
 ## Setup epic complete
 Foundation done (tickets 001–003): Flutter scaffold, Isar persistence, sync stub. Feature epics (Accounts onwards) build on this. See `sync.md` for the repository-layer contract every feature repo must follow.

@@ -28,7 +28,7 @@ Android-only scope, so no iOS asset set is needed (see decisions.md).
 | Step | Who |
 |------|-----|
 | Three SVGs under `assets/icon/`, all from the same path data | agent |
-| Three PNG exports, 1024×1024 each | **user**, one-off via browser / Inkscape / any converter |
+| Three PNG exports, 1024×1024 each | agent via `make icon-png` — see "Adjusted during implementation" |
 | `flutter_launcher_icons` + `flutter_native_splash` config, `make` targets, generation | agent |
 
 The three variants, because adaptive layers and the legacy icon need different framing:
@@ -39,18 +39,18 @@ The three variants, because adaptive layers and the legacy icon need different f
 | `money_bag_monochrome.svg/.png` | same geometry, pure white on transparent | `adaptive_icon_monochrome` (themed icons) |
 | `money_bag.svg/.png` | teal background **plus** bag, no transparency, mark filling the frame | legacy launcher icon and legacy splash image |
 
-No new runtime dependency; both packages are dev-only. Cost accepted: every design change means three fresh exports, so the SVGs should be settled before exporting.
+No new runtime dependency; both packages are dev-only. A design change costs one `make icons && make splash` round, since the raster step is wired ahead of both generators.
 
 ## Acceptance Criteria
-- [ ] Three SVGs committed under `assets/icon/` per the pipeline table, sharing one path definition: plain bag silhouette with a neck tie, no glyph, no coins
-- [ ] The three matching 1024×1024 PNG exports committed alongside them
-- [ ] `flutter_launcher_icons` (dev dependency) configured with `adaptive_icon_background` = the teal value, `adaptive_icon_foreground`, and `adaptive_icon_monochrome`; launcher icon replaced across all Android densities; app name stays `BudgetView`
-- [ ] `flutter_native_splash` (dev dependency) configured via `flutter_native_splash.yaml`: same teal as the adaptive background, foreground PNG as the Android 12+ splash icon, legacy fallback covered. **No `color_dark`**
-- [ ] Both generators run from `make` targets (`make icons`, `make splash`) rather than one-off local invocations, and both appear in `make help`
-- [ ] Generated output is committed — the Android build needs it — with sources next to it so it can be regenerated
-- [ ] Teal is taken from the existing Material 3 seed; no second palette is introduced, and the exact hex is recorded in the ticket once read from the theme
-- [ ] Documented in the ticket which files `flutter_native_splash` takes ownership of (`styles.xml`, `values-night/styles.xml`, `launch_background.xml`, `values-v31/`), so a later hand edit there is not silently regenerated away
-- [ ] Nothing inside the app changes — no app-bar mark, no empty-state graphic
+- [x] Three SVGs committed under `assets/icon/` per the pipeline table, sharing one path definition: plain bag silhouette with a neck tie, no glyph, no coins
+- [x] The three matching 1024×1024 PNG exports committed alongside them
+- [x] `flutter_launcher_icons` (dev dependency) configured with `adaptive_icon_background` = `#009688`, `adaptive_icon_foreground`, and `adaptive_icon_monochrome`; launcher icon replaced across all Android densities; app name stays `BudgetView`
+- [x] `flutter_native_splash` (dev dependency) configured via `flutter_native_splash.yaml`: same teal (`#009688`) as the adaptive background, foreground PNG as the Android 12+ splash icon, legacy fallback covered. **No `color_dark`**
+- [x] Both generators run from `make` targets (`make icons`, `make splash`) rather than one-off local invocations, and both appear in `make help`
+- [x] Generated output is committed — the Android build needs it — with sources next to it so it can be regenerated
+- [x] Teal is taken from the existing Material 3 seed; no second palette is introduced, and the exact hex (`#009688` = `Colors.teal`) is recorded in the ticket once read from the theme
+- [x] Documented in the ticket which files are generator-owned, so a later hand edit there is not silently regenerated away
+- [x] Nothing inside the app changes — no app-bar mark, no empty-state graphic
 - [ ] Verified by hand on the device: launcher icon at grid size, startup shows the mark, and the themed-icon variant when wallpaper theming is on
 
 ## Verification note
@@ -67,6 +67,19 @@ Not unit-testable, and a golden test would assert the generator's output rather 
 - **Monochrome layer** → in scope. The silhouette already *is* monochrome, so the third adaptive layer costs one more export and no design work. Without it, users who enabled themed icons get the generic fallback instead of the app's mark
 - Monochrome layer for Android 13+ themed icons: in scope, or a later ticket?
 
+## Adjusted during implementation
+- **PNG export automation** → `tool/svg_to_png.py` (stdlib-only rasteriser) added; `make icon-png` generates the three PNGs. Replaces the user hand-export plan. Why: SVGs remain the single source, so a design tweak is one `make` call instead of three manual exports. Both `make icons` and `make splash` depend on `icon-png`, keeping rasters in sync. User approved.
+
+- **Adaptive framing via SVG with foreground inset 0** → `adaptive_icon_foreground_inset: 0` in config plus SVG scaled at 0.78. Why: default inset (16 %) shrinks a mark already framed for the safe zone, leaving it visibly small on the launcher grid. Framing now lives in the SVG only. Measured: mark's largest radius from canvas centre = 335 px vs. safe-circle radius 338 px on 1024 px canvas.
+
+## Generator-owned files
+Both packages write to committed Android resources. Hand edits to these files are not safe — they are overwritten on the next generation.
+
+| Generator | Ownership |
+|-----------|-----------|
+| `flutter_native_splash` | `android/app/src/main/res/drawable/launch_background.xml`, `drawable-v21/launch_background.xml`, `values/styles.xml`, `values-night/styles.xml`, `values-v31/styles.xml`, `values-night-v31/styles.xml`, `drawable/background.png`, `drawable-v21/background.png`, `drawable-<dpi>/splash.png`, `drawable-<dpi>/android12splash.png`, `drawable-night-<dpi>/android12splash.png` |
+| `flutter_launcher_icons` | `mipmap-<dpi>/ic_launcher.png`, `mipmap-anydpi-v26/ic_launcher.xml`, `drawable-<dpi>/ic_launcher_foreground.png`, `drawable-<dpi>/ic_launcher_monochrome.png`, `values/colors.xml` (the `ic_launcher_background` colour) |
+
 ## Affected Tests
 None. See the verification note above.
 
@@ -76,3 +89,7 @@ No.
 ### Refinement Tokens (estimate)
 - Input: ~40k tokens
 - Output: ~7k tokens
+
+### Implementation Tokens (estimate)
+- Input: ~90k tokens
+- Output: ~9k tokens
