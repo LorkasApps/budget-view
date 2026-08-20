@@ -8,7 +8,7 @@
 | **Blocked By** | 024, 025, 026 |
 | **Severity** | Medium |
 | **Effort** | XL |
-| **Status** | Ready |
+| **Status** | In Progress |
 
 ## Description
 Everything milestone 1 built that `make check` structurally cannot judge, collected
@@ -51,48 +51,63 @@ All of them — Infra (shell, boot), Account, Transaction, Category, Drilldown
   separate groups). A clean pass stays a bare tick
 
 ## Verification Strategy
-One pass on a physical Android device, `make run`. Note the observation next to
+One pass on a physical Android device, `make run` (since ticket 030 a release APK also builds, so `make build-apk` +
+`make install-apk` works if you would rather walk it off the cable).
+
+Light mode only: the theme-mode setting is ticket 031 and is not built yet, so its dark-mode checks — including whether
+the category palette and the chart colours hold up — belong to that ticket, not this pass. Note the observation next to
 each item; deviations become Bug tickets. Work area by area — the order below
 follows the app's own flow, so the data each later area needs already exists.
 
 ## Acceptance Criteria
 
 ### Boot + shell (001–003, 020, 021)
-- [ ] Cold start opens the account list, no crash while Isar opens
-- [ ] Bottom nav switches `Konten` / `Report` / `Mehr` (029 moved the rare surfaces behind the menu); each tab keeps its scroll position and filter state across switches (that is what the `IndexedStack` is for)
-- [ ] `Mehr` lists `Prognose` and `Preistrends`, and back returns to the menu rather than to a tab
-- [ ] German umlauts render correctly in every screen title and label
-- [ ] Amounts read as `1.234,56 €` throughout (`de_DE`, non-breaking space before the symbol)
+- [x] Cold start opens the account list, no crash while Isar opens
+- [x] Bottom nav switches `Konten` / `Report` / `Mehr` (029 moved the rare surfaces behind the menu); each tab keeps its scroll position and filter state across switches (that is what the `IndexedStack` is for)
+- [x] `Mehr` lists `Prognose`, `Preistrends` and `Einstellungen` (024 added the third), and back returns to the menu rather than to a tab
+- [x] German umlauts render correctly in every screen title and label
+- [x] Amounts read as `1.234,56 €` throughout (`de_DE`, non-breaking space before the symbol)
 - [x] Launcher icon + splash (027) — verified 2026-08-20 on device: icon at grid size, startup shows the mark, themed
       variant renders. No deviation
 
 ### Accounts (004, 005)
-- [ ] List renders, total header sums the accounts, per-account balance matches opening balance + bookings
-- [ ] A negative balance is visibly in the error colour, not just differently signed
-- [ ] Swipe → archive asks first; long-press on an archived row restores it
-- [ ] Form: name validation, type dropdown, EUR input accepting `,` and `.`, date picker refusing the future
+- [x] List renders, total header sums the accounts, per-account balance matches opening balance + bookings
+- [x] A negative balance is visibly in the error colour, not just differently signed
+- [x] Swipe → archive asks first; long-press on an archived row restores it
+- [x] Form: name validation, type dropdown, EUR input accepting `,` and `.`, date picker refusing the future.
+      Note: two validator messages are unreachable through the UI — the amount field opens a number pad, so
+      `Ungültiger Betrag` needs a paste to fire, and the date picker does not offer future dates at all, so
+      `Datum darf nicht in der Zukunft liegen` never shows. Both validators stay unit-tested; whether the guards
+      earn their place is a judgement call, not a defect
 
 ### Transactions (006, 011)
-- [ ] List is newest-first with the saldo header; swipe → delete confirms
-- [ ] Row `CategoryChip` quick-pick reassigns inline and the row updates immediately
-- [ ] Form: Ausgabe/Einnahme toggle drives the sign, missing category shows `Kategorie erforderlich` in red
-- [ ] Uncategorized-only filter in the app bar actually narrows the list
+- [x] List is newest-first with the saldo header; swipe → delete confirms
+- [x] Row `CategoryChip` quick-pick reassigns inline and the row updates immediately
+- [x] Form: Ausgabe/Einnahme toggle drives the sign, missing category shows `Kategorie erforderlich` in red
+- [ ] Uncategorized-only filter in the app bar actually narrows the list — **deferred to after the PDF import area**:
+      manual entry forces a category, so an uncategorized row only exists once an import produced one. Filtering from
+      "everything" to "nothing" would not have proven the predicate
 
 ### Categories (010, 012)
-- [ ] Tree expands/collapses; the drag handle reorders siblings **without** stealing the long-press that archives (the two gestures share one row — this is the point of the explicit `ReorderableDragStartListener`)
-- [ ] Reorder across levels is refused with the snackbar, not silently applied
-- [ ] Icon grid (24) and colour grid (12) both render and persist the choice
-- [ ] Deleting a category that has children or bookings shows the German block message with the right counts
-- [ ] Picker sheet: `Erbt von der Buchung (…)` label appears for line-items, `Keine Kategorie` where allowed
+- [x] Tree expands/collapses; the drag handle reorders siblings **without** stealing the long-press that archives (the two gestures share one row — this is the point of the explicit `ReorderableDragStartListener`)
+- [x] Reorder across levels is refused with the snackbar, not silently applied
+- [x] Icon grid (24) and colour grid (12) both render and persist the choice
+- [x] Deleting a category that has children or bookings shows the German block message with the right counts
+- [x] Picker sheet: `Erbt von der Buchung (…)` label appears for line-items, `Keine Kategorie` where allowed.
+      Checked with a categorized booking (real category name in the label) and in the booking form (no none-row at
+      all). The `Erbt von der Buchung (ohne Kategorie)` wording needs a booking without a category, which manual
+      entry cannot produce — **deferred to after the PDF import area**
 
 ### PDF import (007, 008, 009)
-- [ ] `file_selector` opens and returns a real ING statement
-- [ ] The statement parses: row count and amounts match the paper, `Neuer Saldo − Alter Saldo` reconciles
-- [ ] A statement from a **second** layout / another bank is either parsed or rejected with a readable message — never silently half-parsed
-- [ ] Preview: per-row checkbox, per-row category, `Für alle` batch assign
-- [ ] **Residual gap from 008:** the import button → `persist` wiring is the one step no automated test covers. Confirm the kept rows actually land in the account
-- [ ] Re-importing the same file warns with the earlier import date (doc hash), and proceeding is possible
-- [ ] Duplicate rows are marked on **both** copies within one batch
+- [x] `file_selector` opens and returns a real ING statement
+- [x] The statement parses: row count and amounts match the paper, `Neuer Saldo − Alter Saldo` reconciles
+- [x] A statement from a **second** layout / another bank is either parsed or rejected with a readable message — never
+      silently half-parsed. Foreign statement ranks `ing-giro-v1` at 0 % and the screen asks whether this really is an
+      ING statement, so the user gets a decision rather than a wrong import
+- [x] Preview: per-row checkbox, per-row category, `Für alle` batch assign
+- [x] **Residual gap from 008:** the import button → `persist` wiring is the one step no automated test covers. Confirm the kept rows actually land in the account
+- [x] Re-importing the same file warns with the earlier import date (doc hash), and proceeding is possible
+- [x] Duplicate rows are marked on **both** copies within one batch
 
 ### Line-items (015, 019)
 - [ ] Positions section appears in the booking form in edit mode only
@@ -117,6 +132,9 @@ follows the app's own flow, so the data each later area needs already exists.
 - [ ] Cache directory holds no `scan_*.jpg` leftovers after several passes (the `finally` delete fires on device)
 
 ### Monthly report (020)
+_Finding from this pass (not a check): `Ausgaben` read 12.891,34 for July against a real spend of roughly 3k. The sums are
+correct — net −467,36 reconciles with `Neuer Saldo − Alter Saldo` — but transfers to another own account count as
+spending, because a booking knows only amount and sign. Ticket **032**._
 - [ ] The donut paints at all — first `fl_chart` usage in the app, and no test has rendered a frame
 - [ ] Slice percentage labels stay legible; the 8 % cut-off hides the ones that would not fit
 - [ ] Filter bar survives a narrow screen: month row, account chip and the Ausgaben/Einnahmen toggle must not overflow
@@ -156,11 +174,14 @@ follows the app's own flow, so the data each later area needs already exists.
 
 ### Settings, rules, quick-create (024, 025, 026)
 - [ ] `Mehr` → `Einstellungen` opens; every row pushes its screen and back returns to `Einstellungen`, not to `Mehr`
-- [ ] Import history: source label right for a PDF row and for a photo row, counts plausible, per-row delete confirms and
-      says the bookings stay, empty state on a fresh install
-- [ ] Rule list: the three sorts reorder, remap keeps `hitCount`, an archived category marks its rules stale, the
-      collective delete names the count and removes only those rows
-- [ ] Picker quick-create: the trailing `+` creates under the intended parent and never selects the row by accident, a
+- [ ] Import history: source label right for a PDF row and for a photo row, counts plausible, empty state on a fresh
+      install. Delete is a **swipe** end-to-start with no visible affordance — judge whether it is discoverable, since
+      it is the only action on the screen, and confirm the dialog says the bookings stay
+- [ ] Rule list: the three sorts reorder (sort lives behind an app-bar icon — judge discoverability), remap keeps
+      `hitCount`, an archived category marks its rules stale, the collective delete names the count and removes only
+      those rows. Delete per rule is again a swipe
+- [ ] Picker quick-create: the trailing `+` creates under the intended parent and never selects the row by accident —
+      thumb-sized taps on a dense tree are exactly what a widget test cannot judge, a
       duplicate sibling name is refused inside the dialog, and on success the caller is left with the new category
       selected — walked from all four call sites
 
