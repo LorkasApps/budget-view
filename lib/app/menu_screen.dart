@@ -39,7 +39,7 @@ class MenuScreen extends StatelessWidget {
         _MenuTile(
           icon: Icons.settings_outlined,
           title: 'Einstellungen',
-          subtitle: 'Import-Historie',
+          subtitle: 'Import-Historie und Tagging-Regeln',
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
           ),

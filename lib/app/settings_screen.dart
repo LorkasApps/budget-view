@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../features/import/presentation/import_history_screen.dart';
+import '../features/tagging/presentation/tagging_rules_screen.dart';
 
 /// Configuration and the data lists that go with it.
 ///
@@ -21,6 +22,15 @@ class SettingsScreen extends StatelessWidget {
           trailing: const Icon(Icons.chevron_right),
           onTap: () => Navigator.of(context).push(
             MaterialPageRoute<void>(builder: (_) => const ImportHistoryScreen()),
+          ),
+        ),
+        ListTile(
+          leading: const Icon(Icons.label_outline),
+          title: const Text('Tagging-Regeln'),
+          subtitle: const Text('Gelernte Kategorie-Vorschläge kuratieren'),
+          trailing: const Icon(Icons.chevron_right),
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const TaggingRulesScreen()),
           ),
         ),
       ],

@@ -1,6 +1,6 @@
 # Tagging (Tagging domain)
 
-Learns which category the user assigns to a counterparty; the suggest service consumes rules to rank candidate categories. `lib/features/tagging/`. No UI yet — rules are invisible until ticket 025.
+Learns which category the user assigns to a counterparty; the suggest service consumes rules to rank candidate categories. `lib/features/tagging/`. Rules are curated via `TaggingRulesScreen` (ticket 025).
 
 ## Entity — `TaggingRule` (`data/tagging_rule.dart`)
 Implements `SyncableEntity` (`entityType = 'taggingRule'`).
@@ -80,9 +80,31 @@ The first two also reset `Transaction.categoryAutoSuggested` to `false`, because
 - `taggingRuleRepositoryProvider`
 - `taggingLearnServiceProvider`
 - `taggingSuggestServiceProvider` (interface-typed, so widget tests can hand in fake)
+- `taggingRulesProvider` — `StreamProvider<List<TaggingRule>>`, yields `findAll()` and re-yields on `isar.taggingRules.watchLazy()`. Same shape as `accountsProvider`
 
 Read at the call sites, so no app-bootstrap wiring is involved.
 
+## TaggingRulesScreen (`presentation/tagging_rules_screen.dart`) — ticket 025
+
+Flat list of learned rules, default order strongest-first (`hitCount` desc, then `lastAssignedAt` desc).
+
+**Header sort menu:** "Stärke" (default), "Zuletzt genutzt" (`lastAssignedAt` desc), "Gegenseite" (`matchValueNorm` asc, case-insensitive). Sort order is Dart comparator, not query.
+
+**Row:** leading category icon, title `matchValueNorm`, subtitle joining resolved category name, `<hitCount>×`, date, and `veraltet` when stale. Trailing warning icon only when stale.
+
+**Stale:** rule's `categoryUuid` resolves to nothing OR to a category with `archived == true`. Names resolve via `categoriesProvider(true)` so archived category name still shows.
+
+**Interactions:** tapping opens `pickCategory` sheet and calls `TaggingRuleRepository.remap` (preserves `hitCount`). Swipe end-to-start deletes behind confirm. When stale rules exist, banner above list offers collective delete (names the count, removes only stale). No multi-select.
+
+**Rules never hand-created:** `matchValueNorm` is normalized string (`normalizeForMatching`), so hand-typed value that never matches looks indistinguishable from a working rule. Rules born only in learn path.
+
+## Tests — curation side
+| File | Coverage |
+|------|----------|
+| `test/features/tagging/presentation/tagging_settings_test.dart` | Rows in all three sort orders, stale marker, remap via picker, single delete, collective delete (stale only), empty state |
+| `test/features/tagging/domain/tagging_rule_category_archive_test.dart` | Archiving a category leaves its rules in place with their `hitCount`, on a real Isar |
+
+Repository, learn service, suggest service and the sync mirror keep their own suites under `test/features/tagging/domain/`.
+
 ## Not in scope here
-- Rule list / edit / delete / stale handling (ticket 025)
 - Learning from line-item level assignments — MVP learns from bookings only
