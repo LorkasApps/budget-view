@@ -84,9 +84,8 @@ follows the app's own flow, so the data each later area needs already exists.
 - [x] List is newest-first with the saldo header; swipe → delete confirms
 - [x] Row `CategoryChip` quick-pick reassigns inline and the row updates immediately
 - [x] Form: Ausgabe/Einnahme toggle drives the sign, missing category shows `Kategorie erforderlich` in red
-- [ ] Uncategorized-only filter in the app bar actually narrows the list — **deferred to after the PDF import area**:
-      manual entry forces a category, so an uncategorized row only exists once an import produced one. Filtering from
-      "everything" to "nothing" would not have proven the predicate
+- [x] Uncategorized-only filter in the app bar actually narrows the list — verified after the import, against a booking
+      that really had no category. Before that it could only have narrowed "everything" to "nothing"
 
 ### Categories (010, 012)
 - [x] Tree expands/collapses; the drag handle reorders siblings **without** stealing the long-press that archives (the two gestures share one row — this is the point of the explicit `ReorderableDragStartListener`)
@@ -172,26 +171,21 @@ not trustworthy while 035 is open._
 - [x] Grouping against real OCR data — **moved to ticket 036**: the count only means something once 035 is fixed,
       since shifted prices and noise rows distort exactly the grouping it would measure
 
-### Category suggestions (014)
-- [x] Leaving the counterparty field fills the category and the subtitle reads `Vorschlag · <n>×`, without the row
-      overflowing on a narrow screen. Suggestions also land on rows where they are wrong, which is the learn loop
-      working as designed; the missing correction path in the import preview became ticket **037**
-- [ ] `Alternativen` opens the sheet with at most 3 entries and their counts; picking one replaces the category and drops the marker
-- [ ] Picking a category by hand drops the marker too
-- [ ] Import preview: suggested rows show the marker + count next to the chip without overflowing — the row already overflowed once (errors.md)
-- [ ] Tapping the marker opens the alternatives while tapping the chip still opens the full tree
-- [ ] Learn loop on real statements: accepting a suggestion must not raise its count, overriding must raise the new category's count until it wins
-- [ ] A rule whose category was archived produces no suggestion
+### Category suggestions (014) — moved to ticket 036
+- [x] Suggestions arrive on leaving the counterparty field, with `Vorschlag · <n>×`, and land on wrong rows too, which is
+      the learn loop working. The missing correction path became ticket **037**
+- [x] The remaining six checks moved to ticket **036**: they measure how well the loop learns, and that is worth
+      measuring once the correction path of 037 exists
 
 ### Settings, rules, quick-create (024, 025, 026)
 - [ ] `Mehr` → `Einstellungen` opens; every row pushes its screen and back returns to `Einstellungen`, not to `Mehr`
-- [ ] Import history: source label right for a PDF row and for a photo row, counts plausible, empty state on a fresh
+- [x] Import history: source label right for a PDF row, counts plausible, empty state on a fresh
       install. Delete is a **swipe** end-to-start with no visible affordance — judge whether it is discoverable, since
       it is the only action on the screen, and confirm the dialog says the bookings stay
-- [ ] Rule list: the three sorts reorder (sort lives behind an app-bar icon — judge discoverability), remap keeps
+- [x] Rule list: the three sorts reorder (sort lives behind an app-bar icon — judge discoverability), remap keeps
       `hitCount`, an archived category marks its rules stale, the collective delete names the count and removes only
       those rows. Delete per rule is again a swipe
-- [ ] Picker quick-create: the trailing `+` creates under the intended parent and never selects the row by accident —
+- [x] Picker quick-create: the trailing `+` creates under the intended parent and never selects the row by accident —
       thumb-sized taps on a dense tree are exactly what a widget test cannot judge, a
       duplicate sibling name is refused inside the dialog, and on success the caller is left with the new category
       selected — walked from all four call sites

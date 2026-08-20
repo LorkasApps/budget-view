@@ -1,11 +1,11 @@
-# V2 verification checklist: receipt scan and PDF receipts
+# V2 verification checklist: receipts, PDF invoices, tagging suggestions
 
 | Field | Value |
 |-------|-------|
 | **Type** | TechDebt |
 | **Epic** | None |
 | **Domain** | Drilldown |
-| **Blocked By** | 034, 035, 033 |
+| **Blocked By** | 034, 035, 033, 037 |
 | **Severity** | Medium |
 | **Effort** | L |
 | **Status** | Draft |
@@ -70,6 +70,22 @@ and at least two PDF invoices from different senders.
       question of 033 becomes visible exactly here
 - [ ] Re-picking the same PDF triggers the doc-hash warning with wording that fits a receipt, not a bank statement
 - [ ] Total-as-checksum, if 035 implemented it: a manipulated or misparsed invoice is flagged rather than accepted
+
+### Category suggestions, moved from 028 (014)
+Held back because these checks measure how well the loop *learns*, and the correction path of 037 changes what a user
+does when it guesses wrong. The photo half of the import history sits here too: it needs a confirmed scan, which 035
+currently makes untrustworthy.
+
+- [ ] `Alternativen` opens the sheet with at most 3 entries and their counts; picking one replaces the category and drops
+      the marker
+- [ ] Picking a category by hand drops the marker too
+- [ ] Import preview: suggested rows show the marker + count next to the chip without overflowing — that row already
+      overflowed once (errors.md)
+- [ ] Tapping the marker opens the alternatives while tapping the chip still opens the full tree
+- [ ] Learn loop on real statements: accepting a suggestion must not raise its count, overriding must raise the new
+      category's count until it wins — the rule list of 025 shows `hitCount`, so this is observable
+- [ ] A rule whose category was archived produces no suggestion
+- [ ] Import history renders a `photo` row correctly (kind label instead of a filename), which needs one confirmed scan
 
 ## Affected Tests
 None — this ticket adds no automated test. Findings may add them through their own Bug tickets. Note that PDF parsing,
