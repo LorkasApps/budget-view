@@ -6,7 +6,7 @@
 | **Epic** | Setup |
 | **Domain** | Infra |
 | **Blocked By** | None |
-| **Status** | In Progress |
+| **Status** | Done |
 
 ## Description
 The app still ships Flutter's default launcher icon and Flutter's blank `launch_background`. Wanted: a money-bag mark matching the existing Material 3 teal seed, used as the Android launcher icon **and shown while the app loads**.
@@ -51,7 +51,7 @@ No new runtime dependency; both packages are dev-only. A design change costs one
 - [x] Teal is taken from the existing Material 3 seed; no second palette is introduced, and the exact hex (`#009688` = `Colors.teal`) is recorded in the ticket once read from the theme
 - [x] Documented in the ticket which files are generator-owned, so a later hand edit there is not silently regenerated away
 - [x] Nothing inside the app changes — no app-bar mark, no empty-state graphic
-- [ ] Verified by hand on the device: launcher icon at grid size, startup shows the mark, and the themed-icon variant when wallpaper theming is on
+- [x] Verified by hand on the device: launcher icon at grid size, startup shows the mark, and the themed-icon variant when wallpaper theming is on
 
 ## Verification note
 Not unit-testable, and a golden test would assert the generator's output rather than any behaviour of ours. The agent also cannot see the result: judging whether the mark reads well is the user's call, on the device.

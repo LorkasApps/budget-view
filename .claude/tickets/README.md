@@ -28,6 +28,6 @@
 | 024-import-history-screen.md | Feature | Import | Import | Draft | 009 | ImportedSource list + delete, split out of 009 (needs a Settings surface) |
 | 025-tagging-rule-management.md | Feature | Auto-Tagging | Tagging | Draft | 013 | Rule list + edit/delete + stale handling, split out of 013 (shares the Settings surface with 024) |
 | 026-quick-create-category-in-picker.md | Feature | Categories | Category | Draft | None | Quick-create a category from inside pickCategory (name + prefilled parent, defaults for the rest) |
-| 027-app-icon-and-branding.md | Feature | Setup | Infra | In Progress | None | Money-bag launcher icon (adaptive + monochrome) and launch screen via flutter_native_splash |
+| 027-app-icon-and-branding.md | Feature | Setup | Infra | Done | None | Money-bag launcher icon (adaptive + monochrome) and launch screen via flutter_native_splash |
 | 029-menu-tab-for-rare-surfaces.md | Feature | None | Infra | Done | None | Bottom nav stays at Konten \| Report \| Mehr; rare surfaces (Prognose, later 022/024/025) live behind a menu screen |
 | 028-milestone-1-verification-pass.md | TechDebt | None | Infra | Draft | None | One device + visual pass over all of milestone 1 — collects every check `make check` cannot make (native halves, rendering, gestures); carries 022 + 014 visual checks |
