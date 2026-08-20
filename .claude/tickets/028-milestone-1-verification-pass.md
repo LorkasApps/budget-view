@@ -130,7 +130,8 @@ follows the app's own flow, so the data each later area needs already exists.
 - [ ] Prices land on the right rows (rightmost-money-token rule against real column layout) — **FAILED**, ticket
       **035**: on a slightly skewed photo every price paired with the neighbouring description, silently and with no
       marker
-- [ ] Skip list catches each receipt's totals block; no `Summe` / `MwSt` row becomes a position
+- [ ] Skip list catches each receipt's totals block; no `Summe` / `MwSt` row becomes a position — **FAILED**, ticket
+      **035**: address lines, the total, `Bargeld`, `Rückgeld` and EC terminal data all arrived as deletable rows
 - [ ] Review screen: toggles, row edit, `Zeile hinzufügen`, `alle kategorisieren` behave on a real list
 - [ ] Confirm persists with the right sign and the Restposten closes the gap
 - [ ] Re-scanning the same photo triggers the doc-hash warning, and proceeding notes `Erneuter Scan trotz Warnung`

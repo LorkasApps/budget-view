@@ -1,4 +1,4 @@
-# A skewed receipt attaches prices to the wrong items
+# Receipt scan: prices shift on skew, and noise rows become positions
 
 | Field | Value |
 |-------|-------|
@@ -40,7 +40,31 @@ Photograph the receipt square, or correct every position by hand in the review s
 Since the heuristic parser landed with ticket 018 (2026-08-17). No device pass had happened until now, and the unit tests
 feed straight OCR fixtures, so skew never appeared.
 
-## Why it happens (hypothesis to confirm during refinement)
+## Second defect from the same scan: noise rows become positions
+The same pass produced candidate rows for everything the receipt happens to print:
+
+| Noise | Why it is not a position |
+|-------|--------------------------|
+| Shop address and header lines | No amount at all — a line without a money token cannot be an article |
+| `Gesamtpreis` / total | It is the sum of the positions, so importing it double-counts the whole receipt |
+| `Bargeld` given, `Rückgeld` | Payment, not purchase |
+| EC / card terminal data | Terminal metadata |
+
+All of them arrive as rows the user can only delete, one by one, on every single scan. Ticket 018 has a skip list for the
+totals block, so either its patterns miss this shop's wording, or the rows are added before the list is consulted.
+
+Note the two defects have different causes — geometry for the pairing, filtering for the noise — so refinement may well
+split this ticket (the 013 → 025 and 009 → 024 splits are the precedent). They are filed together because they were found
+in one scan and because the review screen is where both become visible.
+
+Open questions for this half:
+- Should a line **without** a money token ever become a candidate? Dropping those alone removes the address block
+- Is the skip list keyword-based, and does it need this receipt's actual wording, or does it need a structural rule
+  (everything below the total line is payment, not purchase)?
+- The totals row is the one line whose value is known to be the sum — could it be used as a **check** instead of a row,
+  comparing against the sum of parsed positions and flagging a mismatch?
+
+## Why the pairing shifts (hypothesis to confirm during refinement)
 The parser takes the rightmost money token of a line as that line's price. Once the paper is skewed, ML Kit's line
 grouping no longer matches visual rows: a description and the price beside it drift into different lines, and the
 right-hand column shifts against the left-hand one. The pairing rule assumes an axis-aligned layout that the photo does
