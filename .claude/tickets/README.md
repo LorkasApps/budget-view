@@ -37,3 +37,4 @@
 | 033-pdf-receipts-for-drilldown.md | Feature | Drilldown | Drilldown | Draft | None | PDF receipts (Amazon et al.) as a line-item source: text layer instead of OCR, parser + source model open |
 | 034-r8-strips-mlkit-recognizer.md | Bug | Setup | Infra | Draft | None | Release APK cannot read receipts: `-dontwarn` from 030 let R8 strip the ML Kit recognizer classes |
 | 035-skewed-receipt-shifts-prices.md | Bug | Drilldown | Drilldown | Draft | None | Skew pairs every price with the neighbouring item, and address/total/Bargeld/Rückgeld/EC rows arrive as positions |
+| 036-v2-receipt-verification-checklist.md | TechDebt | None | Drilldown | Draft | 034, 035, 033 | Device checks for the receipt pipeline after its fixes, plus the human checks for PDF receipts |

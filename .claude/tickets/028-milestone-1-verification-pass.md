@@ -120,23 +120,14 @@ follows the app's own flow, so the data each later area needs already exists.
 - [x] Editing a position re-closes the gap: the Restposten updates or disappears without a manual reload
 - [x] `quantity × unitPrice ≠ amount` shows the inline warning but still saves
 
-### Receipt scan (016, 017, 018)
+### Receipt scan (016, 017, 018) — moved to ticket 036
 - [x] Camera path: `Kassenbon scannen` → Kamera opens **without** a permission prompt, capture returns to the flow
       (debug build; the release APK fails the recognition outright — ticket **034**)
 - [x] Gallery path: picker opens (Photo Picker on API 33+), chosen image returns to the flow
-- [ ] OCR umlauts: a real receipt round-trips `Käse`, `Öl`, `Süß`, `Brühe` in the review screen
-- [ ] Rotation: a portrait capture is recognized as well as a landscape one — ML Kit reading EXIF through `InputImage.fromFilePath` is the assumption behind the temp-file detour
-- [ ] Heuristic accuracy on ≥ 3 receipts from different shops: note how many rows land `ok` / `ambiguous` / `unparsed`, and whether two receipt rows were ever merged into one candidate
-- [ ] Prices land on the right rows (rightmost-money-token rule against real column layout) — **FAILED**, ticket
-      **035**: on a slightly skewed photo every price paired with the neighbouring description, silently and with no
-      marker
-- [ ] Skip list catches each receipt's totals block; no `Summe` / `MwSt` row becomes a position — **FAILED**, ticket
-      **035**: address lines, the total, `Bargeld`, `Rückgeld` and EC terminal data all arrived as deletable rows
-- [ ] Review screen: toggles, row edit, `Zeile hinzufügen`, `alle kategorisieren` behave on a real list
-- [ ] Confirm persists with the right sign and the Restposten closes the gap
-- [ ] Re-scanning the same photo triggers the doc-hash warning, and proceeding notes `Erneuter Scan trotz Warnung`
-- [ ] `Weiteren Bon scannen` runs a second pass on the same booking
-- [ ] Cache directory holds no `scan_*.jpg` leftovers after several passes (the `finally` delete fires on device)
+- [x] Two checks failed outright and became tickets **034** (release build recognises nothing) and **035** (skew pairs
+      prices with the neighbouring item; address, total, `Bargeld`, `Rückgeld` and EC rows arrive as positions)
+- [x] The remaining receipt checks moved to ticket **036** together with the PDF-receipt checks of 033: running them
+      against a pipeline this broken would have measured the known defects instead of their own subject
 
 ### Monthly report (020)
 _Finding from this pass (not a check): `Ausgaben` read 12.891,34 for July against a real spend of roughly 3k. The sums are
