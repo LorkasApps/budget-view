@@ -34,3 +34,4 @@
 | 030-r8-mlkit-missing-classes.md | Bug | Setup | Infra | Done | None | Release build dies in R8: google_mlkit_text_recognition references the unused Chinese/Devanagari/Japanese/Korean recognizers |
 | 031-theme-mode-setting.md | Feature | Setup | Infra | Ready | None | Theme mode row in Settings: Dunkel / Hell / Systemvorgabe (default), dark scheme from the same teal seed |
 | 032-transfers-between-own-accounts.md | Feature | None | Transaction | Draft | None | Transfers between own accounts count as expense + income and inflate the report; model has no notion of them |
+| 033-pdf-receipts-for-drilldown.md | Feature | Drilldown | Drilldown | Draft | None | PDF receipts (Amazon et al.) as a line-item source: text layer instead of OCR, parser + source model open |

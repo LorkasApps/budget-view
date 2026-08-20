@@ -110,12 +110,15 @@ follows the app's own flow, so the data each later area needs already exists.
 - [x] Duplicate rows are marked on **both** copies within one batch
 
 ### Line-items (015, 019)
-- [ ] Positions section appears in the booking form in edit mode only
-- [ ] Drag handle reorders while the horizontal swipe still deletes (same shared-gesture risk as the category tree)
-- [ ] Footer `Σ … von …` matches the booking total
-- [ ] The Restposten row carries its chip, has no drag handle and refuses to swipe away
-- [ ] Editing a position re-closes the gap: the Restposten updates or disappears without a manual reload
-- [ ] `quantity × unitPrice ≠ amount` shows the inline warning but still saves
+- [x] Positions section appears in the booking form in edit mode only
+- [x] Drag handle reorders while the horizontal swipe still deletes (same shared-gesture risk as the category tree)
+- [x] Footer `Σ … von …` matches the booking total
+- [x] The Restposten row carries its chip, has no drag handle and refuses to swipe away. Note: the row showed up only
+      after a save when no Restposten existed before. Whether that was the position save (the documented reconciler
+      call site, so as designed) or only the booking save (which would mean the sheet skips reconcile for the *first*
+      position) was not distinguished — user judged the behaviour acceptable, so it stays a note rather than a ticket
+- [x] Editing a position re-closes the gap: the Restposten updates or disappears without a manual reload
+- [x] `quantity × unitPrice ≠ amount` shows the inline warning but still saves
 
 ### Receipt scan (016, 017, 018)
 - [ ] Camera path: `Kassenbon scannen` → Kamera opens **without** a permission prompt, capture returns to the flow
