@@ -1,6 +1,6 @@
 .DEFAULT_GOAL := help
 .PHONY: help get upgrade outdated analyze format format-check test test-name coverage \
-        run run-release gen gen-watch icons splash clean doctor build-apk build-appbundle \
+        run run-release gen gen-watch icon-png icons splash clean doctor build-apk build-appbundle \
         install-apk check pre-commit devices
 
 ## ---------------------------------------------------------------------------
@@ -50,11 +50,15 @@ gen-watch: ## Watch + regenerate on change
 	dart run build_runner watch
 
 # --- Branding assets (launcher icon + launch screen) -----------------------
-# Both read assets/icon/*.png. Output is generated into android/ and committed.
-icons: ## Regenerate the Android launcher icons from assets/icon
+# The SVGs are the source; both generators consume the rasterised PNGs, so the
+# raster step runs first. Generated output under android/ is committed.
+icon-png: ## Rasterise assets/icon/*.svg to 1024x1024 PNG (stdlib Python, no Flutter)
+	python3 tool/svg_to_png.py assets/icon/*.svg
+
+icons: icon-png ## Regenerate the Android launcher icons from assets/icon
 	dart run flutter_launcher_icons
 
-splash: ## Regenerate the Android launch screen from assets/icon
+splash: icon-png ## Regenerate the Android launch screen from assets/icon
 	dart run flutter_native_splash:create
 
 # --- Run / build -----------------------------------------------------------
