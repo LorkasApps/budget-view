@@ -7,7 +7,7 @@
 | **Domain** | Infra |
 | **Blocked By** | None |
 | **Severity** | High |
-| **Status** | Ready |
+| **Status** | Done |
 
 ## Description
 `flutter build apk --release` (`make build-apk`) fails in `:app:minifyReleaseWithR8`. `google_mlkit_text_recognition`
@@ -62,20 +62,21 @@ today, 2026-08-20.
   Both fixes touch the same Android build, so one round covers them
 
 ## Acceptance Criteria
-- [ ] `android/app/proguard-rules.pro` exists and carries `-dontwarn` for exactly four packages, one line each:
+- [x] `android/app/proguard-rules.pro` exists and carries `-dontwarn` for exactly four packages, one line each:
       `com.google.mlkit.vision.text.chinese.**`, `.devanagari.**`, `.japanese.**`, `.korean.**`
-- [ ] The release buildType in `android/app/build.gradle.kts` references it through `proguardFiles` alongside
+- [x] The release buildType in `android/app/build.gradle.kts` references it through `proguardFiles` alongside
       `getDefaultProguardFile("proguard-android-optimize.txt")`; `isMinifyEnabled` stays unset, since the Flutter Gradle
       Plugin owns shrinking
-- [ ] `google_mlkit_text_recognition` is at `^0.17.1`, which carries `google_mlkit_commons` `^0.13.0`
-- [ ] `make build-apk` completes and writes `build/app/outputs/flutter-apk/app-release.apk`
-- [ ] That build output contains neither the R8 missing-class errors nor the KGP plugin warning
-- [ ] `make check` is green after the plugin bump — the OCR and scan suites in particular
-- [ ] `make release-check` runs `check` then `build-apk` and appears in `make help`
-- [ ] `.claude/docs/errors.md` gains a row: symptom (R8 missing ML Kit script classes), cause (plugin dispatches over
+- [x] `google_mlkit_text_recognition` is at `^0.17.1`, which carries `google_mlkit_commons` `^0.13.0`
+- [x] `make build-apk` completes and writes `build/app/outputs/flutter-apk/app-release.apk`
+- [x] That build output contains neither the R8 missing-class errors nor the KGP plugin warning
+- [x] `make check` is green after the plugin bump — the OCR and scan suites in particular
+- [x] `make release-check` runs `check` then `build-apk` and appears in `make help`
+- [x] `.claude/docs/errors.md` gains a row: symptom (R8 missing ML Kit script classes), cause (plugin dispatches over
       every script, we ship Latin only), fix (the keep rules)
-- [ ] Wherever the docs name the ML Kit plugin version, it matches the new one
-- [ ] The signing config is **not** touched — release still signs with the debug key, and a real keystore stays its own
+- [x] Wherever the docs name the ML Kit plugin version, it matches the new one — no doc pins it; only `pubspec.yaml`
+      does, and `infrastructure.md` now documents `make release-check` and where the keep rules live
+- [x] The signing config is **not** touched — release still signs with the debug key, and a real keystore stays its own
       ticket
 
 ## Affected Tests
@@ -90,4 +91,9 @@ No.
 - Output: ~3k tokens
 
 ### Implementation Tokens (estimate)
-_Filled after Done._
+- Input: ~22k tokens
+- Output: ~3k tokens
+
+## Verified
+`make get && ./.claude/helper/check.py release-check` on 2026-08-20: 425 tests pass, `app-release.apk` written (98.7 MB), build output free of both the R8 missing-class errors and the KGP warning.
+Observation for a possible follow-up, out of scope here: that APK is a universal build carrying every ABI.

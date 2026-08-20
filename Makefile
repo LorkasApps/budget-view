@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 .PHONY: help get upgrade outdated analyze format format-check test test-name coverage \
         run run-release gen gen-watch icon-png icons splash clean doctor build-apk build-appbundle \
-        install-apk check pre-commit devices
+        install-apk check release-check pre-commit devices
 
 ## ---------------------------------------------------------------------------
 ## BudgetView — developer command reference
@@ -89,5 +89,7 @@ doctor: ## Flutter environment diagnostics
 
 # --- Aggregates ------------------------------------------------------------
 check: analyze test ## Analyze + test (fast quality gate)
+
+release-check: check build-apk ## Quality gate + release build (R8 runs nowhere else)
 
 pre-commit: format-check analyze test ## Full pre-commit gate

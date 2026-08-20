@@ -71,7 +71,7 @@ dependencies:
   image: ^4.9.1
 
   # On-device OCR for receipt scanning (Latin script).
-  google_mlkit_text_recognition: ^0.16.0
+  google_mlkit_text_recognition: ^0.17.1
 
   # Donut chart for the monthly category report.
   fl_chart: ^1.2.0

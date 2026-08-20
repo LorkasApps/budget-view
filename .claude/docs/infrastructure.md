@@ -53,6 +53,8 @@ Per-feature `{presentation,domain,data}` folders are created by each feature tic
 ## Developer Commands
 All Flutter commands run via the root `Makefile` (Flutter cannot run in the agent sandbox). Key targets: `make get`, `make check` (analyze+test), `make gen` (build_runner, from ticket 002), `make run`, `make build-apk`. Branding: `make icon-png` (SVG→PNG), `make icons` (`flutter_launcher_icons`), `make splash` (`flutter_native_splash`). `make help` lists all.
 
+`make release-check` (= `check` + `build-apk`) is the gate before shipping: R8 runs for release only, so `make check` structurally cannot see shrinker breakage. Keep rules live in `android/app/proguard-rules.pro` (ML Kit ships Latin only — see errors.md).
+
 **Warning:** both generators own committed Android res files (see ticket 027, Generator-owned files section). Hand edits are unsafe — regenerate instead.
 
 ## Setup epic complete
