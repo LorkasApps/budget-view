@@ -16,9 +16,8 @@ The per-row edit dialog offers expense/income, amount, description, counterparty
 The row's `CategoryChip` does open the picker, so changing a category is possible — but the user editing a row looks for
 it in the dialog they just opened, and a suggested-but-wrong category is exactly the reason they opened it.
 
-Second half: **clearing**. Import rows may be persisted uncategorized, so "no category" is a legal outcome here, unlike
-manual entry where a category is required. Whether the preview's picker currently offers that is the first thing
-refinement has to establish.
+Clearing is a legal outcome here — import rows may be persisted uncategorized, unlike manual entry where a category is
+required. It also already works from the chip; see the resolution below, which is what shrank this ticket to the dialog.
 
 ## Resolved during refinement
 - **The capability already exists.** `pdf_import_screen.dart` calls `pickCategory` with `allowNone: true`, both per row
