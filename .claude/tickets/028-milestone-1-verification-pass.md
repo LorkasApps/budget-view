@@ -173,7 +173,9 @@ not trustworthy while 035 is open._
       since shifted prices and noise rows distort exactly the grouping it would measure
 
 ### Category suggestions (014)
-- [ ] Leaving the counterparty field fills the category and the subtitle reads `Vorschlag · <n>×`, without the row overflowing on a narrow screen
+- [x] Leaving the counterparty field fills the category and the subtitle reads `Vorschlag · <n>×`, without the row
+      overflowing on a narrow screen. Suggestions also land on rows where they are wrong, which is the learn loop
+      working as designed; the missing correction path in the import preview became ticket **037**
 - [ ] `Alternativen` opens the sheet with at most 3 entries and their counts; picking one replaces the category and drops the marker
 - [ ] Picking a category by hand drops the marker too
 - [ ] Import preview: suggested rows show the marker + count next to the chip without overflowing — the row already overflowed once (errors.md)
