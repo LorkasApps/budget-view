@@ -50,6 +50,11 @@ and at least two PDF invoices from different senders.
 - [ ] `Weiteren Bon scannen` runs a second pass on the same booking
 - [ ] Cache directory holds no `scan_*.jpg` leftovers after several passes (the `finally` delete fires on device)
 
+### Item grouping, moved from 028 (022)
+- [ ] Grouping against real OCR data: how many spelling variants of one product became separate groups. That number
+      decides whether the item-merge tool sketched in 022 is worth a ticket — and it only means something once 035 is
+      fixed, because shifted prices and noise rows distort the very grouping it measures
+
 ### PDF receipts (033)
 - [ ] The source picker offers the PDF path, and `file_selector` returns a real invoice
 - [ ] A digital invoice parses **without** OCR — recognition must not be involved at all for a PDF carrying a text layer

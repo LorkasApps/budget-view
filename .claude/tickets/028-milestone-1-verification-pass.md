@@ -147,24 +147,30 @@ spending, because a booking knows only amount and sign. Ticket **032**._
       expected — judge whether it is confusing). Judged at 5 children; a larger tree has not been tried
 
 ### Forecast (021)
-- [ ] The `LineChart` paints: history dots, thin fitted line, dashed projection continuing from the last measured month
-- [ ] Axis labels stay readable at 3 months of history **and** at 12 + a 12-month horizon (24 x-labels in one axis is the crowding case)
-- [ ] `Fenster` and `Horizont` chip rows do not overflow on a narrow screen
-- [ ] Long-press on a report row opens the forecast — judge whether the gesture is discoverable enough without a visible affordance, since it is the primary path from report to forecast
-- [ ] The app-bar `Prognose` action in the drilldown opens the same screen with the same numbers
-- [ ] `Anpassungsgüte` reads plausibly against the visible scatter (a flat series must not claim 100 %)
+- [x] The `LineChart` paints: history dots, thin fitted line, dashed projection continuing from the last measured month
+- [x] Axis labels stay readable at 3 months of history **and** at 12 + a 12-month horizon (24 x-labels in one axis is
+      the crowding case) — short-history half only. The crowding case is **vertagt: braucht 12 Monate Daten**
+- [x] `Fenster` and `Horizont` chip rows do not overflow on a narrow screen
+- [x] Long-press on a report row opens the forecast — judge whether the gesture is discoverable enough without a
+      visible affordance, since it is the primary path from report to forecast. Found only after being told where to
+      press: the first attempt went to the trend screen. `(direkt)` and `Ohne Kategorie` correctly do not react
+- [x] The app-bar `Prognose` action in the drilldown opens the same screen with the same numbers
+- [x] `Anpassungsgüte` reads plausibly against the visible scatter (a flat series must not claim 100 %)
 
 ### Item price trends (022)
-- [ ] Search settles after the 300 ms debounce without flicker while typing
-- [ ] Result rows read `<n> Käufe` with the latest unit price; a single purchase says `1 Kauf`
-- [ ] Chart paints: one dot per purchase, min/max dashed marker lines, labels legible against the line
-- [ ] The x-axis is a real time axis — an irregular gap between purchases must *look* irregular, and both end labels stay readable
-- [ ] The y-axis does **not** start at zero: a 20-cent move on a ~1,50 € article has to be visible
-- [ ] Everything bought on one day (zero span) still renders instead of collapsing the axis
-- [ ] A never-changing price shows the single `Preis …` marker, not Min and Max stacked on each other
-- [ ] Long-press on a position row opens that article's history; the Restposten row does not react
-- [ ] `Nur ein Datenpunkt (…)` and `Keine Käufe erfasst` appear where expected
-- [ ] Grouping against real OCR data: note how many spelling variants of one product became separate groups — that count decides whether the item-merge follow-up is worth a ticket
+_Verified with hand-entered positions (same article across four bookings): real OCR data is
+not trustworthy while 035 is open._
+- [x] Search settles after the 300 ms debounce without flicker while typing
+- [x] Result rows read `<n> Käufe` with the latest unit price; a single purchase says `1 Kauf`
+- [x] Chart paints: one dot per purchase, min/max dashed marker lines, labels legible against the line
+- [x] The x-axis is a real time axis — an irregular gap between purchases must *look* irregular, and both end labels stay readable
+- [x] The y-axis does **not** start at zero: a 20-cent move on a ~1,50 € article has to be visible
+- [x] Everything bought on one day (zero span) still renders instead of collapsing the axis
+- [x] A never-changing price shows the single `Preis …` marker, not Min and Max stacked on each other
+- [x] Long-press on a position row opens that article's history; the Restposten row does not react
+- [x] `Nur ein Datenpunkt (…)` and `Keine Käufe erfasst` appear where expected
+- [x] Grouping against real OCR data — **moved to ticket 036**: the count only means something once 035 is fixed,
+      since shifted prices and noise rows distort exactly the grouping it would measure
 
 ### Category suggestions (014)
 - [ ] Leaving the counterparty field fills the category and the subtitle reads `Vorschlag · <n>×`, without the row overflowing on a narrow screen
