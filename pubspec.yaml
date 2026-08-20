@@ -106,6 +106,9 @@ flutter_launcher_icons:
   adaptive_icon_background: "#009688"
   adaptive_icon_foreground: "assets/icon/money_bag_foreground.png"
   adaptive_icon_monochrome: "assets/icon/money_bag_monochrome.png"
+  # The SVG already frames the mark inside the safe circle, so the generator
+  # must not inset it a second time.
+  adaptive_icon_foreground_inset: 0
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
