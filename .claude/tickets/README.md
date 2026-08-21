@@ -36,7 +36,7 @@
 | 032-transfers-between-own-accounts.md | Feature | None | Transaction | Ready | 037 | Transfers between own accounts count as expense + income and inflate the report; model has no notion of them |
 | 033-pdf-receipts-for-drilldown.md | Feature | Drilldown | Drilldown | Ready | 035 | PDF receipts as a line-item source: generic row parser validated against the printed total, scanned PDFs rendered through OCR |
 | 034-r8-strips-mlkit-recognizer.md | Bug | Setup | Infra | Done | None | Release APK cannot read receipts: R8 renames ML Kit's reflective internals; needs `-keep`, not `-dontwarn` |
-| 035-skewed-receipt-shifts-prices.md | Bug | Drilldown | Drilldown | Ready | None | Skew pairs every price with the neighbouring item, and address/total/Bargeld/Rückgeld/EC rows arrive as positions |
+| 035-skewed-receipt-shifts-prices.md | Bug | Drilldown | Drilldown | Done | None | Skew pairs every price with the neighbouring item, and address/total/Bargeld/Rückgeld/EC rows arrive as positions |
 | 036-v2-receipt-verification-checklist.md | TechDebt | None | Drilldown | Draft | 034, 035, 033, 037 | Device checks for the receipt pipeline after its fixes, plus PDF receipts and the tagging-suggestion loop |
 | 037-clear-category-in-import-preview.md | Feature | Import | Transaction | Ready | None | Reach the row category from the import edit dialog; chip already allows change and clear |
 | 038-category-picker-search.md | Feature | Categories | Category | Ready | None | Search in the category picker: a name hit pulls its whole subtree along, at any depth |

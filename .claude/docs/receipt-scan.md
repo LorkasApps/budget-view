@@ -34,11 +34,11 @@ seams → user confirm → line-items persisted + ImportedSource row + bytes dis
 | Contract | Stub |
 |----------|------|
 | `OcrService.recognize(Uint8List) → Future<OcrResult>` — `OcrResult(fullText, blocks)`, `OcrBlock(text, boundingBox, lines)`, `OcrLine(text, boundingBox, confidence?)`; throws `OcrEngineException` | `MlKitOcrService` (ticket 017) via `google_mlkit_text_recognition` 0.16.0 |
-| `ReceiptLineItemParser.parse(OcrResult) → List<LineItemCandidate>` — `LineItemCandidate(description, amountCents?, quantity?, unitPriceCents?, rawOcrText, parseState, includeInSave, categoryUuid?)`, unsigned magnitudes | `HeuristicReceiptLineItemParser` — groups lines by vertical overlap across block boundaries, skips rows by prefix, rightmost price, quantity prefix parsing |
+| `ReceiptLineItemParser.parse(OcrResult) → ReceiptParseResult(candidates, printedTotalCents)` — `ReceiptParseResult(List<LineItemCandidate>, int?)`, `LineItemCandidate(description, amountCents?, quantity?, unitPriceCents?, rawOcrText, parseState, includeInSave, categoryUuid?)`, unsigned magnitudes | `HeuristicReceiptLineItemParser` — groups lines by vertical overlap across block boundaries, skips rows by prefix, rightmost price, reads printed total from totals row, drops rows without money tokens, quantity prefix parsing |
 | `CapturedReceiptImage` — `bytes` + `filename` (empty for camera) | — |
 | `ScanSource` enum: `camera` \| `gallery` | — |
 | `ReceiptImageSource.pick(ScanSource) → Future<CapturedReceiptImage?>` | `ImagePickerReceiptImageSource` via `image_picker` 1.2.3 |
-| `ReceiptImagePreprocessor.prepare(Uint8List) → Future<Uint8List>` | `JpegReceiptImagePreprocessor` — downscale to 2000 px max edge, re-encode JPEG @ 85% quality, runs on helper isolate |
+| `ReceiptImagePreprocessor.prepare(Uint8List) → Future<Uint8List>` | `JpegReceiptImagePreprocessor` — estimate tilt via projection profile, deskew, downscale to 2000 px max edge, re-encode JPEG @ 85% quality, returns original bytes if no changes, runs on helper isolate |
 
 All in `lib/features/drilldown/scan/domain/` or `data/`.
 
@@ -112,7 +112,13 @@ spaces.
 matches any prefix in the skip set are discarded: `summe`, `zwischensumme`,
 `total`, `mwst`, `ust`, `netto`, `brutto`, `gegeben`, `zurück`, `rückgeld`,
 `saldo`, `datum`, `uhrzeit`, `bon`, `filiale`, `kunden`, `karte`, `kasse`,
-`beleg`, `ec-cash`, `eur` — covering totals, taxes, payment lines, and metadata.
+`beleg`, `ec-cash`, `eur`, `gesamt`, `bargeld`, `girocard`, `ec-karte` — covering
+totals, taxes, payment lines, and metadata.
+
+**Printed total detection.** A row matching `summe`, `gesamt`, or `total` prefix,
+with a readable money token, records that token as the receipt's printed total
+(rightmost match wins if multiple). `zwischensumme` is deliberately excluded.
+Rows without a money token are dropped entirely instead of becoming candidates.
 
 **Money tokens.** The parser searches for price patterns: one to three digits per
 group, groups separated by `,`, `.`, or space (e.g., `1,23`, `1.23`, `1.234,56`,
@@ -127,9 +133,9 @@ field. `unitPriceCents` is derived only when the division `amountCents / quantit
 lands within a cent; otherwise it stays null — a mismatch is flagged by the UI's
 warning instead of being invented.
 
-**Parse states.** A row can land in `ok` (description and amount both read cleanly),
-`ambiguous` (amount but no description), or `unparsed` (no amount). `includeInSave`
-defaults to true for `ok` rows, false for `ambiguous` and `unparsed`.
+**Parse states.** A row can land in `ok` (description and amount both read cleanly)
+or `ambiguous` (amount but no description). `includeInSave` defaults to true for
+`ok` rows, false for `ambiguous`. Rows without a money token are dropped.
 
 ## Review screen
 
@@ -139,11 +145,14 @@ for editing and returns the reviewed list, or null if the user discards.
 **Row states and rendering.**
 - `ok`: plain `ListTile` — description, category chip once set, amount, quantity line
 - `ambiguous`: same layout on a `tertiaryContainer` background, subtitle "Beschreibung fehlt"
-- `unparsed`: the `rawOcrText` as the title in monospace, subtitle "Nicht erkannt"
 
 The include-checkbox is **disabled for non-savable rows** — those lacking a
 non-empty trimmed description or a positive amount. Disabled rows are skipped at
 `confirm()`.
+
+**Printed total banner.** Review screen shows a banner when the kept positions do
+not sum to the printed total, naming both figures. Banner disappears when user
+edits the selection (difference now intended).
 
 **Row actions:** tap opens `showCandidateSheet`, a trailing icon deletes the row,
 "Zeile hinzufügen" appends an empty one. Deliberately no swipe-to-delete: the rows
@@ -166,9 +175,10 @@ mirrors that fact so the rule is observable from tests and UI without exposing t
 field.
 
 **Doc-hash computed over raw capture.**
-Hash is computed immediately after `pick()` returns, before downscaling. Otherwise a
-version bump in the `image` library would shift the hash of the same document,
-breaking the re-scan warning. Downscaled bytes are handed to OCR only.
+Hash is computed immediately after `pick()` returns, before preprocessing (deskew,
+downscale). Otherwise a version bump in the `image` library or a deskew improvement
+would shift the hash of the same document, breaking the re-scan warning. Preprocessed
+bytes are handed to OCR only.
 
 **`photoScanFlowProvider` is `autoDispose`.**
 The flow is temporary and so is the photo. Without `autoDispose` the controller
@@ -268,8 +278,9 @@ re-scan of the same photo warns.
 | `photo_scan_multi_test.dart` | `test/features/drilldown/scan/domain/` | "Scan another" within a flow: two passes produce two rows, each with correct counts |
 | `photo_scan_confirm_test.dart` | `test/features/drilldown/scan/domain/` | Confirm logic: sign application, filtering to savable rows, reconcile call, count in ImportedSource |
 | `scan_test_support.dart` | `test/features/drilldown/scan/domain/` | Shared fakes: `FakeReceiptImageSource`, `FakeOcrService`, `FakeReceiptLineItemParser`, synthetic receipt bytes, test container builder |
+| `receipt_skew_test.dart` | `test/features/drilldown/scan/data/` | Tilt sign for positive and negative tilt, straightening end-to-end, same instance when already straight, blank image |
 | `mlkit_ocr_service_test.dart` | `test/features/drilldown/scan/data/` | OCR mapping (blocks, lines, boxes, confidence, `fullText`), bytes reach the temp file, empty result travels on, engine failure wrapped, temp file deleted on success and on throw |
-| `heuristic_receipt_line_item_parser_test.dart` | `test/features/drilldown/scan/data/` | Row grouping across block boundaries, skip list, money tokens, quantity/unit parsing, parse states, candidates |
+| `heuristic_receipt_line_item_parser_test.dart` | `test/features/drilldown/scan/data/` | Row grouping across block boundaries, skip list (including new `gesamt`, `bargeld`, etc.), money tokens, printed total detection, `zwischensumme` not a total, quantity/unit parsing, rows without money dropped, parse states, candidates |
 | `scan_review_screen_test.dart` | `test/features/drilldown/scan/presentation/` | UI: row states rendering, include-checkbox disabled rule, edit/add/delete/categorize, footer, return contract |
 
 Not covered automatically: real ML Kit recognition (native plugin, device check).

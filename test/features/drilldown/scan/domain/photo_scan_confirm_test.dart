@@ -49,7 +49,7 @@ void main() {
       parser: FakeReceiptLineItemParser([
         LineItemCandidate(description: 'Milch', amountCents: 119),
         excluded,
-        unparsedCandidate(),
+        LineItemCandidate(), // no description or amount: not savable
       ]),
     );
     final transaction = await savedExpense(container);
@@ -157,7 +157,7 @@ void main() {
       parser: FakeReceiptLineItemParser([
         LineItemCandidate(description: 'Milch', amountCents: 119),
         excluded,
-        unparsedCandidate(),
+        LineItemCandidate(), // no description or amount: not savable
       ]),
     );
     final transaction = await savedExpense(container);

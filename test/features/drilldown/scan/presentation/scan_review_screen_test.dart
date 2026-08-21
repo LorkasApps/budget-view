@@ -68,11 +68,14 @@ Future<void> _openReview(
 
 void main() {
   testWidgets(
-    'an unparsed candidate checkbox is disabled, an ok one is not',
+    'a non-savable candidate checkbox is disabled, an ok one is not',
     (tester) async {
       await _openReview(
         tester,
-        candidates: [unparsedCandidate(), defaultCandidates().first],
+        candidates: [
+          LineItemCandidate(), // no description or amount: not savable
+          defaultCandidates().first,
+        ],
       );
 
       final checkboxes =

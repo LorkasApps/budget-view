@@ -7,7 +7,7 @@
 | **Domain** | Drilldown |
 | **Blocked By** | None |
 | **Severity** | High |
-| **Status** | Ready |
+| **Status** | Done |
 
 ## Description
 Photographed slightly off-square, the receipt parses into plausible-looking positions with the prices shifted by one row:
@@ -93,25 +93,25 @@ assumes the rows are axis-parallel.
   the estimate within a tolerance. It measures the angle estimation, not recognition quality
 
 ## Acceptance Criteria
-- [ ] A deskew step runs between the existing downscale and the OCR call: projection-profile angle estimate over candidate
+- [x] A deskew step runs between the existing downscale and the OCR call: projection-profile angle estimate over candidate
       angles, then rotation through `image`
-- [ ] The candidate range and step live in one named place and are wide enough for a hand-held photo (starting point
+- [x] The candidate range and step live in one named place and are wide enough for a hand-held photo (starting point
       ±12° at 0.5°, adjust against real captures)
-- [ ] An image that is already straight is **not** rotated — an estimate near zero skips the resampling instead of
+- [x] An image that is already straight is **not** rotated — an estimate near zero skips the resampling instead of
       degrading the bitmap for nothing
-- [ ] Unit test: a synthetic striped bitmap rotated by a known angle is estimated back within a stated tolerance, for
+- [x] Unit test: a synthetic striped bitmap rotated by a known angle is estimated back within a stated tolerance, for
       several angles including 0
-- [ ] The skip vocabulary gains the prefixes the sample receipt exposed, at least `gesamtpreis` and `bargeld`
-- [ ] A row without a money token never becomes a `LineItemCandidate`, so address and header blocks disappear by
+- [x] The skip vocabulary gains the prefixes the sample receipt exposed, at least `gesamtpreis` and `bargeld`
+- [x] A row without a money token never becomes a `LineItemCandidate`, so address and header blocks disappear by
       construction rather than by keyword
-- [ ] With that, `parseState.unparsed` is unreachable for value-less rows: either something else still produces it, or the
+- [x] With that, `parseState.unparsed` is unreachable for value-less rows: either something else still produces it, or the
       state and its review rendering go — no branch kept for a case no input can reach (decisions.md)
-- [ ] The printed total is parsed, never imported, and compared against the sum of the parsed positions
-- [ ] A mismatch is shown in the review screen naming both numbers; deselecting rows silences it
-- [ ] Tests: skip vocabulary, value-less rows dropped, checksum match and mismatch, and that the total row itself is not
+- [x] The printed total is parsed, never imported, and compared against the sum of the parsed positions
+- [x] A mismatch is shown in the review screen naming both numbers; deselecting rows silences it
+- [x] Tests: skip vocabulary, value-less rows dropped, checksum match and mismatch, and that the total row itself is not
       importable
-- [ ] `make check` green
-- [ ] Device verification is **not** part of this ticket — it lives in 036, which requires a release APK
+- [x] `make check` green
+- [x] Device verification is **not** part of this ticket — it lives in 036, which requires a release APK
 
 ## Out of Scope
 - Perspective correction (a receipt photographed at an angle rather than rotated); only in-plane rotation is addressed
@@ -130,4 +130,19 @@ existing suites do.
 - Output: ~3k tokens
 
 ### Implementation Tokens (estimate)
-_Filled after Done._
+- Input: ~70k tokens
+- Output: ~8k tokens
+
+## Outcome
+436 tests pass (11 new). Implemented as refined: projection-profile tilt estimate over dark pixels binned per candidate
+angle (`data/receipt_skew.dart`), applied in the existing isolate preprocessor between downscale and OCR; skip vocabulary
+extended; rows without a money token dropped, which made `LineItemParseState.unparsed` unreachable and it was removed
+along with its review rendering; the printed total is read into `ReceiptParseResult.printedTotalCents` and compared in the
+review screen.
+
+Two things the work itself surfaced:
+- `img.copyRotate` fills newly exposed corners with the image's background colour, which defaults to **black**. On a photo
+  of white paper that is a large dark mass — it would have degraded OCR and poisoned any later estimate. The rotation now
+  sets paper white first. Found while writing the test, not while writing the code
+- The angle sign is pinned by tests that draw tilted stripes rather than rotating a fixture, so the convention cannot drift:
+  a wrong rotation direction fails the end-to-end case even when the estimate itself is right

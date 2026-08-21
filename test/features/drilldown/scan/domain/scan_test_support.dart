@@ -78,7 +78,8 @@ class FakeReceiptLineItemParser implements ReceiptLineItemParser {
   List<LineItemCandidate> candidates;
 
   @override
-  List<LineItemCandidate> parse(OcrResult result) => candidates;
+  ReceiptParseResult parse(OcrResult result) =>
+      ReceiptParseResult(candidates: candidates);
 }
 
 /// Two positions as the parser produces them: unsigned magnitudes, the flow
@@ -87,13 +88,6 @@ List<LineItemCandidate> defaultCandidates() => [
       LineItemCandidate(description: 'Milch', amountCents: 119),
       LineItemCandidate(description: 'Brot', amountCents: 249),
     ];
-
-/// A row OCR could not decompose. Not savable, so `confirm` skips it instead
-/// of letting the repository reject it.
-LineItemCandidate unparsedCandidate() => LineItemCandidate(
-      rawOcrText: 'PFAND 0,25 25 A',
-      parseState: LineItemParseState.unparsed,
-    );
 
 /// An unsaved expense booking. Callers persist it via
 /// `transactionRepositoryProvider` before starting a scan against it.

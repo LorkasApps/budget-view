@@ -6,9 +6,6 @@ enum LineItemParseState {
 
   /// An amount without a description — needs a human look.
   ambiguous,
-
-  /// No amount found; only the raw OCR row survives.
-  unparsed,
 }
 
 /// One position the parser proposes, before the user reviews it.
@@ -77,7 +74,23 @@ class LineItemCandidate {
       );
 }
 
+/// What one pass over a receipt yielded.
+///
+/// [printedTotalCents] is the receipt's own total, read but never imported: it
+/// is the only figure on the paper that does not depend on the row grouping, so
+/// comparing it against the positions is what turns a plausible-looking parse
+/// into a checked one (ticket 035).
+class ReceiptParseResult {
+  const ReceiptParseResult({
+    required this.candidates,
+    this.printedTotalCents,
+  });
+
+  final List<LineItemCandidate> candidates;
+  final int? printedTotalCents;
+}
+
 abstract interface class ReceiptLineItemParser {
   /// Empty output is valid — nothing on the receipt looked like an item.
-  List<LineItemCandidate> parse(OcrResult result);
+  ReceiptParseResult parse(OcrResult result);
 }

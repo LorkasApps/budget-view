@@ -6,8 +6,12 @@ import '../domain/receipt_line_item_parser.dart';
 /// payment lines, receipt metadata. Matched on the normalized row start.
 const _skipPrefixes = {
   'summe',
+  'gesamt',
   'zwischensumme',
   'total',
+  'bargeld',
+  'girocard',
+  'ec-karte',
   'mwst',
   'ust',
   'netto',
@@ -43,6 +47,10 @@ final _quantityPrefix = RegExp(
 
 const _countUnits = {'x', 'stk', 'stk.', 'stück'};
 
+/// Skipped rows that state the receipt's own total. `zwischensumme` is not in
+/// here on purpose: a subtotal is not the figure to check against.
+const _totalPrefixes = {'summe', 'gesamt', 'total'};
+
 /// Turns OCR text into candidate positions.
 ///
 /// Layout does the heavy lifting: lines are grouped into rows by vertical
@@ -53,17 +61,37 @@ class HeuristicReceiptLineItemParser implements ReceiptLineItemParser {
   const HeuristicReceiptLineItemParser();
 
   @override
-  List<LineItemCandidate> parse(OcrResult result) {
+  ReceiptParseResult parse(OcrResult result) {
     final candidates = <LineItemCandidate>[];
+    int? printedTotalCents;
 
     for (final row in _rows(result)) {
       final text = row.trim();
       if (text.isEmpty) continue;
-      if (_isSkippable(text)) continue;
-      candidates.add(_candidate(text));
+
+      if (_isSkippable(text)) {
+        // The last total wins: a receipt that prints one twice ends with the
+        // figure that counts.
+        printedTotalCents = _totalOf(text) ?? printedTotalCents;
+        continue;
+      }
+
+      final candidate = _candidate(text);
+      // A row without an amount cannot be an item — address and header blocks
+      // leave by this door rather than by keyword.
+      if (candidate != null) candidates.add(candidate);
     }
 
-    return candidates;
+    return ReceiptParseResult(
+      candidates: candidates,
+      printedTotalCents: printedTotalCents,
+    );
+  }
+
+  int? _totalOf(String text) {
+    final normalized = text.toLowerCase().trimLeft();
+    if (!_totalPrefixes.any(normalized.startsWith)) return null;
+    return _amountOf(text);
   }
 
   /// Groups every line of every block into visual rows, top to bottom, and
@@ -111,23 +139,14 @@ class HeuristicReceiptLineItemParser implements ReceiptLineItemParser {
     return _skipPrefixes.any(normalized.startsWith);
   }
 
-  LineItemCandidate _candidate(String text) {
-    final matches = _amountToken.allMatches(text).toList();
-    if (matches.isEmpty) {
-      return LineItemCandidate(
-        rawOcrText: text,
-        parseState: LineItemParseState.unparsed,
-      );
-    }
+  /// Null when the row carries no readable amount, which disqualifies it as an
+  /// item.
+  LineItemCandidate? _candidate(String text) {
+    final match = _amountToken.allMatches(text).lastOrNull;
+    if (match == null) return null;
 
-    final match = matches.last;
     final amountCents = _toCents(match.group(1)!, match.group(2)!);
-    if (amountCents == null || amountCents == 0) {
-      return LineItemCandidate(
-        rawOcrText: text,
-        parseState: LineItemParseState.unparsed,
-      );
-    }
+    if (amountCents == null || amountCents == 0) return null;
 
     var description = text.substring(0, match.start).trim();
     double? quantity;
@@ -169,6 +188,13 @@ class HeuristicReceiptLineItemParser implements ReceiptLineItemParser {
     if (derived <= 0) return null;
     if (((derived * quantity).round() - amountCents).abs() > 1) return null;
     return derived;
+  }
+
+  /// Rightmost money token of a row, in cents.
+  int? _amountOf(String text) {
+    final match = _amountToken.allMatches(text).lastOrNull;
+    if (match == null) return null;
+    return _toCents(match.group(1)!, match.group(2)!);
   }
 
   int? _toCents(String whole, String fraction) =>

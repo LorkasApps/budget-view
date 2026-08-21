@@ -34,6 +34,7 @@ class PhotoScanFlowState {
     this.phase = PhotoScanPhase.idle,
     this.documentMatches = const [],
     this.candidates = const [],
+    this.printedTotalCents,
     this.filename = '',
     this.holdsImage = false,
     this.lineItemsPersisted = 0,
@@ -47,6 +48,10 @@ class PhotoScanFlowState {
   final List<ImportedSource> documentMatches;
 
   final List<LineItemCandidate> candidates;
+
+  /// The receipt's own total when it printed one — the review screen compares it
+  /// against the kept positions (ticket 035).
+  final int? printedTotalCents;
 
   /// Display name of the pick; empty for camera captures.
   final String filename;
@@ -78,6 +83,7 @@ class PhotoScanFlowState {
     PhotoScanPhase? phase,
     List<ImportedSource>? documentMatches,
     List<LineItemCandidate>? candidates,
+    int? printedTotalCents,
     String? filename,
     bool? holdsImage,
     int? lineItemsPersisted,
@@ -88,6 +94,7 @@ class PhotoScanFlowState {
         phase: phase ?? this.phase,
         documentMatches: documentMatches ?? this.documentMatches,
         candidates: candidates ?? this.candidates,
+        printedTotalCents: printedTotalCents ?? this.printedTotalCents,
         filename: filename ?? this.filename,
         holdsImage: holdsImage ?? this.holdsImage,
         lineItemsPersisted: lineItemsPersisted ?? this.lineItemsPersisted,
@@ -179,12 +186,12 @@ class PhotoScanFlowController extends AutoDisposeNotifier<PhotoScanFlowState> {
     if (_bytes == null) return;
 
     state = state.copyWith(phase: PhotoScanPhase.parsing);
-    final candidates =
-        ref.read(receiptLineItemParserProvider).parse(recognized);
+    final parsed = ref.read(receiptLineItemParserProvider).parse(recognized);
 
     state = state.copyWith(
       phase: PhotoScanPhase.awaitingConfirm,
-      candidates: candidates,
+      candidates: parsed.candidates,
+      printedTotalCents: parsed.printedTotalCents,
     );
   }
 

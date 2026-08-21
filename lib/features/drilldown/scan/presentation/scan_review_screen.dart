@@ -19,12 +19,14 @@ Future<List<LineItemCandidate>?> pushScanReview(
   BuildContext context, {
   required Transaction transaction,
   required List<LineItemCandidate> candidates,
+  int? printedTotalCents,
 }) {
   return Navigator.of(context).push<List<LineItemCandidate>>(
     MaterialPageRoute(
       builder: (_) => ScanReviewScreen(
         transaction: transaction,
         candidates: candidates,
+        printedTotalCents: printedTotalCents,
       ),
     ),
   );
@@ -35,10 +37,15 @@ class ScanReviewScreen extends ConsumerStatefulWidget {
     super.key,
     required this.transaction,
     required this.candidates,
+    this.printedTotalCents,
   });
 
   final Transaction transaction;
   final List<LineItemCandidate> candidates;
+
+  /// The receipt's own total, if it printed one. Compared against the positions
+  /// as the one check that does not depend on how the rows were grouped.
+  final int? printedTotalCents;
 
   @override
   ConsumerState<ScanReviewScreen> createState() => _ScanReviewScreenState();
@@ -55,6 +62,17 @@ class _ScanReviewScreenState extends ConsumerState<ScanReviewScreen> {
 
   int get _includedSum =>
       _included.fold<int>(0, (sum, c) => sum + (c.amountCents ?? 0));
+
+  /// Set as soon as the user changes the selection: a difference to the printed
+  /// total is then intended, and warning about it would be noise.
+  bool _selectionTouched = false;
+
+  int? get _totalMismatchCents {
+    final printed = widget.printedTotalCents;
+    if (printed == null || _selectionTouched) return null;
+    final difference = _includedSum - printed;
+    return difference == 0 ? null : difference;
+  }
 
   Future<void> _edit(int index) async {
     final edited = await showCandidateSheet(
@@ -126,6 +144,11 @@ class _ScanReviewScreenState extends ConsumerState<ScanReviewScreen> {
       body: ListView(
         padding: const EdgeInsets.only(bottom: 16),
         children: [
+          if (_totalMismatchCents != null)
+            _TotalMismatchBanner(
+              positionsCents: _sign * _includedSum,
+              printedCents: _sign * widget.printedTotalCents!,
+            ),
           if (_candidates.isEmpty)
             Padding(
               padding: const EdgeInsets.all(16),
@@ -140,10 +163,11 @@ class _ScanReviewScreenState extends ConsumerState<ScanReviewScreen> {
               key: ValueKey(index),
               candidate: _candidates[index],
               onTap: () => _edit(index),
-              onToggle: (value) => setState(
-                () => _candidates[index] =
-                    _candidates[index].copyWith(includeInSave: value),
-              ),
+              onToggle: (value) => setState(() {
+                _selectionTouched = true;
+                _candidates[index] =
+                    _candidates[index].copyWith(includeInSave: value);
+              }),
               onDelete: () => setState(() => _candidates.removeAt(index)),
             ),
           Padding(
@@ -224,7 +248,6 @@ class _CandidateRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final unparsed = candidate.parseState == LineItemParseState.unparsed;
     final ambiguous = candidate.parseState == LineItemParseState.ambiguous;
     final quantityLine = _quantityLine;
 
@@ -239,23 +262,14 @@ class _CandidateRow extends StatelessWidget {
               : null,
           value: candidate.includeInSave && candidate.isSavable,
         ),
-        title: unparsed
-            ? Text(
-                candidate.rawOcrText,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  fontFamily: 'monospace',
-                ),
-              )
-            : Text(
-                candidate.description.isEmpty
-                    ? 'Ohne Beschreibung'
-                    : candidate.description,
-              ),
+        title: Text(
+          candidate.description.isEmpty
+              ? 'Ohne Beschreibung'
+              : candidate.description,
+        ),
         subtitle: Row(
           children: [
-            if (unparsed)
-              Text('Nicht erkannt', style: theme.textTheme.bodySmall)
-            else if (ambiguous)
+            if (ambiguous)
               Text('Beschreibung fehlt', style: theme.textTheme.bodySmall)
             else if (candidate.categoryUuid != null)
               CategoryChip(categoryUuid: candidate.categoryUuid),
@@ -281,6 +295,33 @@ class _CandidateRow extends StatelessWidget {
           ],
         ),
         onTap: onTap,
+      ),
+    );
+  }
+}
+
+/// Says that the receipt's total and the kept positions disagree, with both
+/// figures — a shifted or missed row is invisible otherwise.
+class _TotalMismatchBanner extends StatelessWidget {
+  const _TotalMismatchBanner({
+    required this.positionsCents,
+    required this.printedCents,
+  });
+
+  final int positionsCents;
+  final int printedCents;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      color: scheme.errorContainer,
+      padding: const EdgeInsets.all(16),
+      child: Text(
+        'Positionen ergeben ${formatCentsEur(positionsCents)}, der Bon nennt '
+        '${formatCentsEur(printedCents)}. Bitte die Zeilen prüfen.',
+        style: TextStyle(color: scheme.onErrorContainer),
       ),
     );
   }
