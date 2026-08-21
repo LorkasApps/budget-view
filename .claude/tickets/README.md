@@ -33,7 +33,7 @@
 | 028-milestone-1-verification-pass.md | TechDebt | None | Infra | Done | 024, 025, 026 | One device + visual pass over all of milestone 1 — collects every check `make check` cannot make (native halves, rendering, gestures); carries 022 + 014 visual checks |
 | 030-r8-mlkit-missing-classes.md | Bug | Setup | Infra | Done | None | Release build dies in R8: google_mlkit_text_recognition references the unused Chinese/Devanagari/Japanese/Korean recognizers |
 | 031-theme-mode-setting.md | Feature | Setup | Infra | Ready | None | Theme mode row in Settings: Dunkel / Hell / Systemvorgabe (default), dark scheme from the same teal seed |
-| 032-transfers-between-own-accounts.md | Feature | None | Transaction | Ready | 037 | Transfers between own accounts count as expense + income and inflate the report; model has no notion of them |
+| 032-transfers-between-own-accounts.md | Feature | None | Transaction | In Progress | 037 | Transfers between own accounts count as expense + income and inflate the report; model has no notion of them |
 | 033-pdf-receipts-for-drilldown.md | Feature | Drilldown | Drilldown | Ready | 035 | PDF receipts as a line-item source: generic row parser validated against the printed total, scanned PDFs rendered through OCR |
 | 034-r8-strips-mlkit-recognizer.md | Bug | Setup | Infra | Done | None | Release APK cannot read receipts: R8 renames ML Kit's reflective internals; needs `-keep`, not `-dontwarn` |
 | 035-skewed-receipt-shifts-prices.md | Bug | Drilldown | Drilldown | Done | None | Skew pairs every price with the neighbouring item, and address/total/Bargeld/Rückgeld/EC rows arrive as positions |

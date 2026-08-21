@@ -20,12 +20,17 @@ Account _account({required String name, required int openingBalanceCents}) {
     ..openingDate = DateTime(2024, 1, 1);
 }
 
-Transaction _tx({required String accountUuid, required int amountCents}) {
+Transaction _tx({
+  required String accountUuid,
+  required int amountCents,
+  TransactionKind kind = TransactionKind.regular,
+}) {
   return Transaction()
     ..accountUuid = accountUuid
     ..amountCents = amountCents
     ..bookingDate = DateTime(2026, 8, 1)
-    ..description = 'test';
+    ..description = 'test'
+    ..kind = kind;
 }
 
 void main() {
@@ -110,5 +115,23 @@ void main() {
   test('watch of unknown account yields zero', () async {
     final balance = await service.watch('does-not-exist').first;
     expect(balance.totalCents, 0);
+  });
+
+  // Unlike the report, the balance has no exclusion for transfers: the money
+  // really left (or arrived), so it must count here.
+  test('a transfer still counts towards the balance', () async {
+    final acc =
+        await accounts.save(_account(name: 'Giro', openingBalanceCents: 5000));
+    await transactions.save(
+      _tx(
+        accountUuid: acc.uuid,
+        amountCents: -1500,
+        kind: TransactionKind.transfer,
+      ),
+    );
+
+    final balance = await service.watch(acc.uuid).first;
+    expect(balance.transactionSumCents, -1500);
+    expect(balance.totalCents, 3500);
   });
 }

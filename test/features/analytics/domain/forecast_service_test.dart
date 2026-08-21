@@ -74,13 +74,15 @@ void main() {
     String? categoryUuid,
     String? accountUuid,
     int year = 2026,
+    TransactionKind kind = TransactionKind.regular,
   }) => transactions.save(
     Transaction()
       ..accountUuid = accountUuid ?? giro.uuid
       ..amountCents = amountCents
       ..categoryUuid = categoryUuid ?? food.uuid
       ..bookingDate = DateTime(year, month, 15)
-      ..description = 'REWE',
+      ..description = 'REWE'
+      ..kind = kind,
   );
 
   Future<ForecastResult> forecast({
@@ -250,6 +252,18 @@ void main() {
       (await forecast(categoryUuid: household.uuid)).history.last.cents,
       400,
     );
+  });
+
+  test('a transfer does not feed the projection', () async {
+    await booking(month: 1, amountCents: -1000);
+    await booking(month: 2, amountCents: -2000);
+    await booking(month: 3, amountCents: -3000);
+    await booking(month: 3, amountCents: -9900, kind: TransactionKind.transfer);
+
+    final result = await forecast();
+
+    expect(result.history.map((value) => value.cents), [1000, 2000, 3000]);
+    expect(result.forecast.map((value) => value.cents), [4000, 5000]);
   });
 
   test('a category without any history reports zeros, not a crash', () async {

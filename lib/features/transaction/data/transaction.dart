@@ -4,6 +4,14 @@ import '../../../core/sync/syncable_entity.dart';
 
 part 'transaction.g.dart';
 
+/// What a booking means beyond its sign.
+///
+/// A [transfer] moves money between the user's own accounts: it leaves one
+/// balance and arrives in another, so it is neither spending nor income and the
+/// report leaves it out of both. The sign alone cannot express that — the
+/// outgoing leg looks exactly like a purchase (ticket 032).
+enum TransactionKind { regular, transfer }
+
 /// A bank transaction. [amountCents] is signed: negative = expense,
 /// positive = income. Soft-deleted via [deleted].
 @collection
@@ -42,6 +50,11 @@ class Transaction implements SyncableEntity {
   /// cannot reinforce itself. Nothing sets it until 014 lands.
   bool categoryAutoSuggested = false;
 
+  /// Stored by name so the payload stays readable and a later value cannot
+  /// shift meaning by index.
+  @Enumerated(EnumType.name)
+  TransactionKind kind = TransactionKind.regular;
+
   bool deleted = false;
 
   late DateTime createdAt;
@@ -64,6 +77,7 @@ class Transaction implements SyncableEntity {
         'note': note,
         'dedupeHash': dedupeHash,
         'categoryAutoSuggested': categoryAutoSuggested,
+        'kind': kind.name,
         'deleted': deleted,
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt.toIso8601String(),

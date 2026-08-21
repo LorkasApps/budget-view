@@ -72,7 +72,10 @@ class MonthlyCategoryReportService {
     }
     final directional = [
       for (final booking in bookings)
-        if (booking.bookingDate.isBefore(afterAnchor) &&
+        // Transfers move money between the user's own accounts, so they are
+        // neither spending nor income and belong in no total (ticket 032).
+        if (booking.kind != TransactionKind.transfer &&
+            booking.bookingDate.isBefore(afterAnchor) &&
             _matchesDirection(booking.amountCents, direction))
           booking,
     ];

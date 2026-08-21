@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:budget_view/features/transaction/data/transaction.dart';
 import 'package:budget_view/features/transaction/domain/transaction_validation.dart';
 
 void main() {
@@ -41,6 +42,32 @@ void main() {
       expect(TransactionValidation.bookingDate(now, now: now), isNull);
       expect(
         TransactionValidation.bookingDate(DateTime(2025, 1, 1), now: now),
+        isNull,
+      );
+    });
+  });
+
+  group('category', () {
+    test('rejects null / empty for a regular booking', () {
+      expect(TransactionValidation.category(null), isNotNull);
+      expect(TransactionValidation.category(''), isNotNull);
+    });
+    test('a transfer needs no category, null or empty', () {
+      expect(
+        TransactionValidation.category(null, kind: TransactionKind.transfer),
+        isNull,
+      );
+      expect(
+        TransactionValidation.category('', kind: TransactionKind.transfer),
+        isNull,
+      );
+    });
+    test('a transfer with a category set still passes', () {
+      expect(
+        TransactionValidation.category(
+          'cat-1',
+          kind: TransactionKind.transfer,
+        ),
         isNull,
       );
     });

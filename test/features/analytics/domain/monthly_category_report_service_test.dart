@@ -73,13 +73,15 @@ void main() {
     String? categoryUuid,
     DateTime? bookingDate,
     String description = 'REWE',
+    TransactionKind kind = TransactionKind.regular,
   }) => transactions.save(
     Transaction()
       ..accountUuid = accountUuid
       ..amountCents = amountCents
       ..categoryUuid = categoryUuid
       ..bookingDate = bookingDate ?? DateTime(2026, 8, 12)
-      ..description = description,
+      ..description = description
+      ..kind = kind,
   );
 
   Future<LineItem> position({
@@ -391,4 +393,45 @@ void main() {
 
     expect((await report()).isEmpty, isTrue);
   });
+
+  test('a transfer stays out of both the total and its category', () async {
+    final giro = await account();
+    final food = await category('Lebensmittel');
+    await booking(
+      accountUuid: giro.uuid,
+      amountCents: -500,
+      categoryUuid: food.uuid,
+    );
+    await booking(
+      accountUuid: giro.uuid,
+      amountCents: -700,
+      categoryUuid: food.uuid,
+      description: 'Umbuchung',
+      kind: TransactionKind.transfer,
+    );
+
+    final result = await report();
+
+    expect(result.totalCents, 500);
+    expect(result.rowFor(food.uuid)!.ownCents, 500);
+  });
+
+  test(
+    'an uncategorized transfer stays out of the uncategorized bucket',
+    () async {
+      final giro = await account();
+      await booking(
+        accountUuid: giro.uuid,
+        amountCents: -700,
+        description: 'Umbuchung',
+        kind: TransactionKind.transfer,
+      );
+
+      final result = await report();
+
+      expect(result.uncategorizedCents, 0);
+      expect(result.totalCents, 0);
+      expect(result.isEmpty, isTrue);
+    },
+  );
 }

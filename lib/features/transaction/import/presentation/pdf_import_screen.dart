@@ -168,6 +168,7 @@ class _PdfImportScreenState extends ConsumerState<PdfImportScreen> {
     if (edited.categoryChanged) {
       notifier.setRowCategory(index, edited.categoryUuid);
     }
+    if (edited.kind != row.kind) notifier.setRowKind(index, edited.kind);
   }
 
   Future<void> _pickRowCategory(int index, ImportRow row) async {
@@ -540,7 +541,12 @@ class _ImportSummary extends StatelessWidget {
 
 /// What the edit dialog hands back. The category travels separately because it
 /// is applied through `setRowCategory`, not through `editRow`.
-typedef _RowEdit = ({ImportRow row, bool categoryChanged, String? categoryUuid});
+typedef _RowEdit = ({
+  ImportRow row,
+  bool categoryChanged,
+  String? categoryUuid,
+  TransactionKind kind,
+});
 
 class _RowEditDialog extends ConsumerStatefulWidget {
   const _RowEditDialog({required this.row, this.suggestionHitCount});
@@ -562,6 +568,7 @@ class _RowEditDialogState extends ConsumerState<_RowEditDialog> {
   late DateTime _bookingDate;
   late bool _isExpense;
   late String? _categoryUuid;
+  late TransactionKind _kind;
 
   @override
   void initState() {
@@ -569,6 +576,7 @@ class _RowEditDialogState extends ConsumerState<_RowEditDialog> {
     final row = widget.row;
     _bookingDate = row.bookingDate;
     _categoryUuid = row.categoryUuid;
+    _kind = row.kind;
     _isExpense = row.amountCents < 0;
     _amount = TextEditingController(
       text: (row.amountCents.abs() / 100).toStringAsFixed(2).replaceAll(
@@ -688,6 +696,16 @@ class _RowEditDialogState extends ConsumerState<_RowEditDialog> {
               icon: const Icon(Icons.local_offer_outlined),
               label: _categoryLabel(),
             ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Umbuchung'),
+              subtitle: const Text('Zählt in keiner Report-Summe'),
+              value: _kind == TransactionKind.transfer,
+              onChanged: (value) => setState(
+                () => _kind =
+                    value ? TransactionKind.transfer : TransactionKind.regular,
+              ),
+            ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: _pickDate,
@@ -716,6 +734,7 @@ class _RowEditDialogState extends ConsumerState<_RowEditDialog> {
               ),
               categoryChanged: _categoryUuid != widget.row.categoryUuid,
               categoryUuid: _categoryUuid,
+              kind: _kind,
             ));
           },
           child: const Text('Übernehmen'),

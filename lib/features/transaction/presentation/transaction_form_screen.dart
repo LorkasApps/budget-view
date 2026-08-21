@@ -46,6 +46,7 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
   final _counterpartyFocus = FocusNode();
   late bool _isExpense;
   late DateTime _bookingDate;
+  late TransactionKind _kind;
   String? _accountUuid;
   String? _categoryUuid;
   List<CategorySuggestion> _suggestions = const [];
@@ -84,6 +85,7 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
         TextEditingController(text: existing?.counterparty ?? '');
     _noteController = TextEditingController(text: existing?.note ?? '');
     _bookingDate = existing?.bookingDate ?? DateTime.now();
+    _kind = existing?.kind ?? TransactionKind.regular;
     _accountUuid = existing?.accountUuid ?? widget.initialAccountUuid;
     _categoryUuid = existing?.categoryUuid;
     _counterpartyFocus.addListener(_onCounterpartyFocusChange);
@@ -227,7 +229,7 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
 
     final errors = [
       TransactionValidation.account(_accountUuid),
-      TransactionValidation.category(_categoryUuid),
+      TransactionValidation.category(_categoryUuid, kind: _kind),
       TransactionValidation.bookingDate(_bookingDate),
     ].whereType<String>();
     if (errors.isNotEmpty) {
@@ -252,7 +254,8 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
       ..note = _noteController.text.trim()
       // True only while the untouched suggestion is still in place; the learn
       // hook skips those rows so an accepted suggestion cannot reinforce itself.
-      ..categoryAutoSuggested = _isSuggested;
+      ..categoryAutoSuggested = _isSuggested
+      ..kind = _kind;
 
     await ref.read(transactionRepositoryProvider).save(transaction);
     await ref.read(taggingLearnServiceProvider).learnFrom(transaction);
@@ -290,6 +293,19 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
               ],
               selected: {_isExpense},
               onSelectionChanged: (s) => setState(() => _isExpense = s.first),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Umbuchung'),
+              subtitle: const Text(
+                'Geld zwischen eigenen Konten — zählt in keiner Report-Summe '
+                'und braucht keine Kategorie',
+              ),
+              value: _kind == TransactionKind.transfer,
+              onChanged: (value) => setState(
+                () => _kind =
+                    value ? TransactionKind.transfer : TransactionKind.regular,
+              ),
             ),
             const SizedBox(height: 16),
             TextFormField(

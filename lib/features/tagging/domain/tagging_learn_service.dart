@@ -14,8 +14,12 @@ class TaggingLearnService {
 
   /// No-op unless the booking carries a user-chosen category and a counterparty
   /// worth matching on. An accepted auto-suggestion teaches nothing — it would
-  /// only reinforce whatever the rule already claimed.
+  /// only reinforce whatever the rule already claimed. A transfer teaches
+  /// nothing either: a rule learned from it would later propose a spending
+  /// category for money that never left (ticket 032).
   Future<void> learnFrom(Transaction transaction) async {
+    if (transaction.kind == TransactionKind.transfer) return;
+
     final categoryUuid = transaction.categoryUuid;
     if (categoryUuid == null) return;
     if (transaction.categoryAutoSuggested) return;

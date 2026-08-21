@@ -26,6 +26,7 @@ class ImportRow {
     required this.counterparty,
     this.categoryUuid,
     this.categorySuggested = false,
+    this.kind = TransactionKind.regular,
     this.included = true,
   });
 
@@ -36,6 +37,7 @@ class ImportRow {
         counterparty = candidate.counterparty ?? '',
         categoryUuid = null,
         categorySuggested = false,
+        kind = TransactionKind.regular,
         included = true;
 
   final DateTime bookingDate;
@@ -50,6 +52,10 @@ class ImportRow {
   /// Travels into `Transaction.categoryAutoSuggested` on persist, which is what
   /// keeps the learn hook from reinforcing its own guess.
   final bool categorySuggested;
+
+  /// Marked while importing is where the user still knows that a row moved money
+  /// to another own account (ticket 032).
+  final TransactionKind kind;
 
   final bool included;
 
@@ -78,6 +84,7 @@ class ImportRow {
       counterparty: counterparty,
       categoryUuid: uuid,
       categorySuggested: suggested,
+      kind: kind,
       included: included,
     );
   }
@@ -87,6 +94,7 @@ class ImportRow {
     int? amountCents,
     String? description,
     String? counterparty,
+    TransactionKind? kind,
     bool? included,
   }) {
     return ImportRow(
@@ -96,6 +104,7 @@ class ImportRow {
       counterparty: counterparty ?? this.counterparty,
       categoryUuid: categoryUuid,
       categorySuggested: categorySuggested,
+      kind: kind ?? this.kind,
       included: included ?? this.included,
     );
   }
@@ -320,6 +329,12 @@ class ImportFlowController extends AutoDisposeNotifier<ImportFlowState> {
     await _applySuggestions();
   }
 
+  void setRowKind(int index, TransactionKind kind) {
+    final rows = [...state.rows];
+    rows[index] = rows[index].copyWith(kind: kind);
+    state = state.copyWith(rows: rows);
+  }
+
   void setRowCategory(int index, String? categoryUuid) {
     final rows = [...state.rows];
     rows[index] = rows[index].withCategory(categoryUuid);
@@ -348,7 +363,8 @@ class ImportFlowController extends AutoDisposeNotifier<ImportFlowState> {
       final transaction =
           candidateToTransaction(row.toCandidate(), accountUuid: accountUuid)
             ..categoryUuid = row.categoryUuid
-            ..categoryAutoSuggested = row.categorySuggested;
+            ..categoryAutoSuggested = row.categorySuggested
+            ..kind = row.kind;
       await repository.save(transaction);
       // A hand-picked category makes the statement a bulk teaching opportunity;
       // `learnFrom` skips the rows that only carry the machine's own guess.

@@ -6,7 +6,7 @@
 | **Epic** | None |
 | **Domain** | Transaction |
 | **Blocked By** | 037 (both extend the import preview edit dialog) |
-| **Status** | Ready |
+| **Status** | In Progress |
 
 ## Description
 A booking carries an amount and a sign, nothing else. Moving money from one own account to another therefore looks
@@ -52,18 +52,18 @@ counterpart is another account of the same user. Fixing it in the report alone w
 - **Fixtures** → none; the rollup tests build their bookings inline as they do today
 
 ## Acceptance Criteria
-- [ ] `Transaction` gains `kind` (`TransactionKind.regular` | `.transfer`), stored by name, default `regular`
-- [ ] `kDbSchemaVersion` is bumped and the sync payload carries the new key
-- [ ] The booking form has a transfer toggle; the import preview's edit dialog has the same toggle writing the same field
-- [ ] With `transfer` set, the category is no longer required — saving without one works, and setting one is still allowed
-- [ ] `TaggingLearnService` skips transfers: marking one and saving creates no rule and raises no `hitCount`
-- [ ] The monthly report rollup excludes transfers from **both** `Ausgaben` and `Einnahmen`, and the `Ohne Kategorie` row
+- [x] `Transaction` gains `kind` (`TransactionKind.regular` | `.transfer`), stored by name, default `regular`
+- [x] `kDbSchemaVersion` is bumped and the sync payload carries the new key
+- [x] The booking form has a transfer toggle; the import preview's edit dialog has the same toggle writing the same field
+- [x] With `transfer` set, the category is no longer required — saving without one works, and setting one is still allowed
+- [x] `TaggingLearnService` skips transfers: marking one and saving creates no rule and raises no `hitCount`
+- [x] The monthly report rollup excludes transfers from **both** `Ausgaben` and `Einnahmen`, and the `Ohne Kategorie` row
       does not collect them either
-- [ ] The forecast inherits the exclusion because it reads the same rollup — covered by a test rather than by assumption
-- [ ] Account balances still include transfers: the money did move, so a balance without them would be wrong
-- [ ] Tests: rollup with and without a transfer, the learn hook skipping one, the relaxed category requirement, and the
+- [x] The forecast inherits the exclusion because it reads the same rollup — covered by a test rather than by assumption
+- [x] Account balances still include transfers: the money did move, so a balance without them would be wrong
+- [x] Tests: rollup with and without a transfer, the learn hook skipping one, the relaxed category requirement, and the
       balance still counting it
-- [ ] `make check` green
+- [x] `make check` green
 - [ ] The report numbers of the 028 finding become reproducible: with the transfers of the imported statement marked,
       `Ausgaben` drops to the order the user expected
 

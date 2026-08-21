@@ -1,4 +1,5 @@
 import '../../../core/money/money.dart';
+import '../data/transaction.dart';
 
 /// Pure form validators for the transaction form.
 class TransactionValidation {
@@ -41,7 +42,14 @@ class TransactionValidation {
 
   /// Manual entry requires a category. PDF import deliberately does not call
   /// this — imported rows may stay uncategorized.
-  static String? category(String? categoryUuid) {
+  ///
+  /// A transfer is exempt: it belongs in no spending category, and the report
+  /// leaves it out of both totals anyway (ticket 032). Setting one stays legal.
+  static String? category(
+    String? categoryUuid, {
+    TransactionKind kind = TransactionKind.regular,
+  }) {
+    if (kind == TransactionKind.transfer) return null;
     if (categoryUuid == null || categoryUuid.isEmpty) {
       return 'Kategorie erforderlich';
     }

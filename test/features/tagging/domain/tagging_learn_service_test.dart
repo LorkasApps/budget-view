@@ -9,16 +9,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:isar_community/isar.dart';
 
 // Bare, unsaved Transaction: TaggingLearnService only reads categoryUuid,
-// categoryAutoSuggested and counterparty, so nothing else needs a value.
+// categoryAutoSuggested, counterparty and kind, so nothing else needs a value.
 Transaction _booking({
   String? categoryUuid = 'cat-groceries',
   String counterparty = 'REWE Berlin',
   bool categoryAutoSuggested = false,
+  TransactionKind kind = TransactionKind.regular,
 }) {
   return Transaction()
     ..categoryUuid = categoryUuid
     ..counterparty = counterparty
-    ..categoryAutoSuggested = categoryAutoSuggested;
+    ..categoryAutoSuggested = categoryAutoSuggested
+    ..kind = kind;
 }
 
 void main() {
@@ -107,4 +109,25 @@ void main() {
       expect(await rules.findAll(), hasLength(2));
     },
   );
+
+  test('a transfer teaches nothing', () async {
+    await service.learnFrom(_booking(kind: TransactionKind.transfer));
+
+    expect(await rules.findAll(), isEmpty);
+  });
+
+  test('the same booking as regular teaches a rule', () async {
+    await service.learnFrom(_booking(kind: TransactionKind.regular));
+
+    expect(await rules.findAll(), hasLength(1));
+  });
+
+  test("a transfer does not raise an existing rule's hitCount", () async {
+    await service.learnFrom(_booking());
+    await service.learnFrom(_booking(kind: TransactionKind.transfer));
+
+    final matches = await rules.findByCounterparty('rewe berlin');
+    expect(matches, hasLength(1));
+    expect(matches.single.hitCount, 1);
+  });
 }
