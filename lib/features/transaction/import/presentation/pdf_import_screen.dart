@@ -6,6 +6,7 @@ import '../../../../core/format/date_format.dart';
 import '../../../../core/money/money.dart';
 import '../../../account/data/account.dart';
 import '../../../account/domain/account_providers.dart';
+import '../../../category/domain/category_providers.dart';
 import '../../../category/presentation/category_chip.dart';
 import '../../../category/presentation/category_picker.dart';
 import '../../../import/data/imported_source.dart';
@@ -139,19 +140,34 @@ class _PdfImportScreenState extends ConsumerState<PdfImportScreen> {
   }
 
   Future<void> _editRow(int index, ImportRow row) async {
-    final edited = await showDialog<ImportRow>(
+    final suggestions =
+        ref.read(importFlowProvider).rowSuggestions[index] ??
+            const <CategorySuggestion>[];
+    final edited = await showDialog<_RowEdit>(
       context: context,
-      builder: (_) => _RowEditDialog(row: row),
+      builder: (_) => _RowEditDialog(
+        row: row,
+        suggestionHitCount:
+            row.categorySuggested && suggestions.isNotEmpty
+                ? suggestions.first.hitCount
+                : null,
+      ),
     );
     if (edited == null) return;
 
-    await ref.read(importFlowProvider.notifier).editRow(
-          index,
-          bookingDate: edited.bookingDate,
-          amountCents: edited.amountCents,
-          description: edited.description,
-          counterparty: edited.counterparty,
-        );
+    final notifier = ref.read(importFlowProvider.notifier);
+    await notifier.editRow(
+      index,
+      bookingDate: edited.row.bookingDate,
+      amountCents: edited.row.amountCents,
+      description: edited.row.description,
+      counterparty: edited.row.counterparty,
+    );
+    // Routed through the same call the row chip uses, so an override from the
+    // dialog drops the suggestion provenance exactly as one from the row does.
+    if (edited.categoryChanged) {
+      notifier.setRowCategory(index, edited.categoryUuid);
+    }
   }
 
   Future<void> _pickRowCategory(int index, ImportRow row) async {
@@ -522,27 +538,37 @@ class _ImportSummary extends StatelessWidget {
   }
 }
 
-class _RowEditDialog extends StatefulWidget {
-  const _RowEditDialog({required this.row});
+/// What the edit dialog hands back. The category travels separately because it
+/// is applied through `setRowCategory`, not through `editRow`.
+typedef _RowEdit = ({ImportRow row, bool categoryChanged, String? categoryUuid});
+
+class _RowEditDialog extends ConsumerStatefulWidget {
+  const _RowEditDialog({required this.row, this.suggestionHitCount});
 
   final ImportRow row;
 
+  /// Set when the row's category came from a learned rule — the count is what
+  /// makes visible *why* this category is here before it gets replaced.
+  final int? suggestionHitCount;
+
   @override
-  State<_RowEditDialog> createState() => _RowEditDialogState();
+  ConsumerState<_RowEditDialog> createState() => _RowEditDialogState();
 }
 
-class _RowEditDialogState extends State<_RowEditDialog> {
+class _RowEditDialogState extends ConsumerState<_RowEditDialog> {
   late final TextEditingController _amount;
   late final TextEditingController _description;
   late final TextEditingController _counterparty;
   late DateTime _bookingDate;
   late bool _isExpense;
+  late String? _categoryUuid;
 
   @override
   void initState() {
     super.initState();
     final row = widget.row;
     _bookingDate = row.bookingDate;
+    _categoryUuid = row.categoryUuid;
     _isExpense = row.amountCents < 0;
     _amount = TextEditingController(
       text: (row.amountCents.abs() / 100).toStringAsFixed(2).replaceAll(
@@ -567,6 +593,48 @@ class _RowEditDialogState extends State<_RowEditDialog> {
     if (magnitude == null || magnitude == 0) return null;
     final cents = (magnitude.abs() * 100).round();
     return _isExpense ? -cents : cents;
+  }
+
+  /// Resolved through the archived-inclusive list, so a row pointing at an
+  /// archived category still shows its name instead of nothing.
+  String _categoryName() {
+    final uuid = _categoryUuid;
+    if (uuid == null) return 'Keine Kategorie';
+    final categories = ref.watch(categoriesProvider(true)).valueOrNull;
+    for (final category in categories ?? const []) {
+      if (category.uuid == uuid) return category.name;
+    }
+    return 'Kategorie';
+  }
+
+  Widget _categoryLabel() {
+    final hits = widget.suggestionHitCount;
+    // The marker belongs to the category that came from the rule; once it is
+    // replaced in this dialog, the provenance is gone.
+    final stillSuggested =
+        hits != null && _categoryUuid == widget.row.categoryUuid;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Flexible(child: Text(_categoryName(), overflow: TextOverflow.ellipsis)),
+        if (stillSuggested) ...[
+          const SizedBox(width: 6),
+          const Icon(Icons.auto_awesome_outlined, size: 16),
+          const SizedBox(width: 2),
+          Text('$hits×'),
+        ],
+      ],
+    );
+  }
+
+  Future<void> _pickCategory() async {
+    final pick = await pickCategory(
+      context,
+      selected: _categoryUuid,
+      allowNone: true,
+    );
+    if (pick == null) return;
+    setState(() => _categoryUuid = pick.uuid);
   }
 
   Future<void> _pickDate() async {
@@ -616,6 +684,12 @@ class _RowEditDialogState extends State<_RowEditDialog> {
             ),
             const SizedBox(height: 12),
             OutlinedButton.icon(
+              onPressed: _pickCategory,
+              icon: const Icon(Icons.local_offer_outlined),
+              label: _categoryLabel(),
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
               onPressed: _pickDate,
               icon: const Icon(Icons.calendar_today_outlined),
               label: Text(formatDateCompactDe(_bookingDate)),
@@ -633,14 +707,16 @@ class _RowEditDialogState extends State<_RowEditDialog> {
             final cents = _parsedCents();
             final description = _description.text.trim();
             if (cents == null || description.isEmpty) return;
-            Navigator.of(context).pop(
-              widget.row.copyWith(
+            Navigator.of(context).pop((
+              row: widget.row.copyWith(
                 bookingDate: _bookingDate,
                 amountCents: cents,
                 description: description,
                 counterparty: _counterparty.text.trim(),
               ),
-            );
+              categoryChanged: _categoryUuid != widget.row.categoryUuid,
+              categoryUuid: _categoryUuid,
+            ));
           },
           child: const Text('Übernehmen'),
         ),

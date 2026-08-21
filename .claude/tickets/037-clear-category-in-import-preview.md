@@ -6,7 +6,7 @@
 | **Epic** | Import |
 | **Domain** | Transaction |
 | **Blocked By** | None |
-| **Status** | Ready |
+| **Status** | Done |
 
 ## Description
 Auto-tagging fills categories in the import preview from learned rules, and it is sometimes wrong — which is the learning
@@ -33,19 +33,19 @@ required. It also already works from the chip; see the resolution below, which i
 - **Fixtures** → none. Rows with and without a suggestion are built inline, as `import_preview_suggest_test.dart` does
 
 ## Acceptance Criteria
-- [ ] The per-row edit dialog carries a category row showing the row's current category, or `Keine Kategorie` when unset
-- [ ] Tapping it opens `pickCategory` with `selected` prefilled and `allowNone: true`, exactly as the row chip does
-- [ ] The result goes through `ImportFlowController.setRowCategory`, so the suggestion flag is cleared the same way as via
+- [x] The per-row edit dialog carries a category row showing the row's current category, or `Keine Kategorie` when unset
+- [x] Tapping it opens `pickCategory` with `selected` prefilled and `allowNone: true`, exactly as the row chip does
+- [x] The result goes through `ImportFlowController.setRowCategory`, so the suggestion flag is cleared the same way as via
       the chip — an override from the dialog must be indistinguishable from an override on the row
-- [ ] Clearing from the dialog sets the row to no category, and the row then persists uncategorized
-- [ ] When the row carries a suggestion, the dialog shows its marker and `<n>×` count, so it is visible *why* a category is
+- [x] Clearing from the dialog sets the row to no category, and the row then persists uncategorized
+- [x] When the row carries a suggestion, the dialog shows its marker and `<n>×` count, so it is visible *why* a category is
       there before it is replaced
-- [ ] Cancelling the dialog changes nothing, including the category
-- [ ] Nothing about the row chip, `Für alle`, or the manual entry form changes
-- [ ] Widget test: set a category from the dialog, clear it from the dialog, cancel without effect, and that the suggestion
+- [x] Cancelling the dialog changes nothing, including the category
+- [x] Nothing about the row chip, `Für alle`, or the manual entry form changes
+- [x] Widget test: set a category from the dialog, clear it from the dialog, cancel without effect, and that the suggestion
       flag is cleared on override
-- [ ] `manual_entry_category_required_test.dart` stays green — no clear option may leak into manual entry
-- [ ] `make check` green
+- [x] `manual_entry_category_required_test.dart` stays green — no clear option may leak into manual entry
+- [x] `make check` green
 
 ## Out of Scope (proposed, to confirm)
 - Changing what the learn loop learns; only the correction path in the preview is at stake
@@ -65,4 +65,14 @@ No — inline rows in the test, as the existing import suites do.
 - Output: ~2k tokens
 
 ### Implementation Tokens (estimate)
-_Filled after Done._
+- Input: ~35k tokens
+- Output: ~4k tokens
+
+## Outcome
+442 tests pass (6 new). The dialog became a `ConsumerStatefulWidget` so it can resolve the category name through
+`categoriesProvider(true)`, and it now pops a record instead of a bare `ImportRow`: the field edits still go through
+`editRow`, while a changed category goes through `setRowCategory` — the same call the row chip uses, which is what keeps an
+override from the dialog indistinguishable from one on the row.
+
+The suggestion marker is shown only while the category still is the suggested one; replacing it in the dialog drops the
+provenance, so the marker goes with it.
