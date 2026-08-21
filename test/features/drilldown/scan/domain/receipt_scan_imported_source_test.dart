@@ -1,9 +1,8 @@
 import 'dart:io';
 
 import 'package:budget_view/core/persistence/isar_db.dart';
-import 'package:budget_view/features/drilldown/scan/domain/photo_scan_flow_controller.dart';
-import 'package:budget_view/features/drilldown/scan/domain/photo_scan_providers.dart';
 import 'package:budget_view/features/drilldown/scan/domain/receipt_image_source.dart';
+import 'package:budget_view/features/drilldown/scan/domain/receipt_scan_providers.dart';
 import 'package:budget_view/features/import/data/imported_source.dart';
 import 'package:budget_view/features/import/data/imported_source_kind.dart';
 import 'package:budget_view/features/import/domain/content_hash.dart';
@@ -37,8 +36,6 @@ void main() {
   Future<Transaction> savedExpense(ProviderContainer container) =>
       container.read(transactionRepositoryProvider).save(expenseTransaction());
 
-  /// A prior import of the exact bytes [receiptBytes] returns, so a fresh
-  /// scan's content hash collides with it.
   Future<ImportedSource> seedPriorImport(ProviderContainer container) {
     return container.read(importedSourceRepositoryProvider).save(
           ImportedSource()
@@ -51,61 +48,24 @@ void main() {
         );
   }
 
-  test('no previous import runs straight through to awaitingConfirm',
-      () async {
+  test('no row exists while the flow sits in awaitingConfirm', () async {
     final container = containerWith(isar: isar);
     final transaction = await savedExpense(container);
-    final controller = container.read(photoScanFlowProvider.notifier);
+    final controller = container.read(receiptScanFlowProvider.notifier);
 
     await controller.startScan(
       transaction: transaction,
       source: ScanSource.gallery,
     );
 
-    final state = container.read(photoScanFlowProvider);
-    expect(state.phase, PhotoScanPhase.awaitingConfirm);
-    expect(state.documentMatches, isEmpty);
+    final repo = container.read(importedSourceRepositoryProvider);
+    expect(await repo.findAll(), isEmpty);
   });
 
-  test('a matching content hash parks the flow in duplicateWarning',
-      () async {
+  test('no row exists after cancel either', () async {
     final container = containerWith(isar: isar);
-    final prior = await seedPriorImport(container);
     final transaction = await savedExpense(container);
-    final controller = container.read(photoScanFlowProvider.notifier);
-
-    await controller.startScan(
-      transaction: transaction,
-      source: ScanSource.gallery,
-    );
-
-    final state = container.read(photoScanFlowProvider);
-    expect(state.phase, PhotoScanPhase.duplicateWarning);
-    expect(state.documentMatches.map((m) => m.uuid), [prior.uuid]);
-  });
-
-  test('proceedAfterWarning continues on into awaitingConfirm', () async {
-    final container = containerWith(isar: isar);
-    await seedPriorImport(container);
-    final transaction = await savedExpense(container);
-    final controller = container.read(photoScanFlowProvider.notifier);
-
-    await controller.startScan(
-      transaction: transaction,
-      source: ScanSource.gallery,
-    );
-    await controller.proceedAfterWarning();
-
-    final state = container.read(photoScanFlowProvider);
-    expect(state.phase, PhotoScanPhase.awaitingConfirm);
-    expect(state.candidates, isNotEmpty);
-  });
-
-  test('cancelling from duplicateWarning persists nothing', () async {
-    final container = containerWith(isar: isar);
-    await seedPriorImport(container);
-    final transaction = await savedExpense(container);
-    final controller = container.read(photoScanFlowProvider.notifier);
+    final controller = container.read(receiptScanFlowProvider.notifier);
 
     await controller.startScan(
       transaction: transaction,
@@ -113,11 +73,58 @@ void main() {
     );
     controller.cancel();
 
-    expect(
-      container.read(photoScanFlowProvider).phase,
-      PhotoScanPhase.cancelled,
-    );
     final repo = container.read(importedSourceRepositoryProvider);
-    expect(await repo.findAll(), hasLength(1));
+    expect(await repo.findAll(), isEmpty);
   });
+
+  test(
+    'confirm writes exactly one row matching the scan, note left unset',
+    () async {
+      final container = containerWith(isar: isar);
+      final transaction = await savedExpense(container);
+      final controller = container.read(receiptScanFlowProvider.notifier);
+
+      await controller.startScan(
+        transaction: transaction,
+        source: ScanSource.gallery,
+      );
+      final candidateCount =
+          container.read(receiptScanFlowProvider).candidates.length;
+      await controller.confirm();
+
+      final repo = container.read(importedSourceRepositoryProvider);
+      final rows = await repo.findAll();
+      expect(rows, hasLength(1));
+      final row = rows.single;
+      expect(row.kind, ImportedSourceKind.photo);
+      expect(row.lineItemsProduced, candidateCount);
+      expect(row.transactionsProduced, 0);
+      expect(row.contentHashSha256, computeContentHash(receiptBytes()));
+      expect(row.note, isNull);
+    },
+  );
+
+  test(
+    'proceeding through a duplicate warning notes the override',
+    () async {
+      final container = containerWith(isar: isar);
+      await seedPriorImport(container);
+      final transaction = await savedExpense(container);
+      final controller = container.read(receiptScanFlowProvider.notifier);
+
+      await controller.startScan(
+        transaction: transaction,
+        source: ScanSource.gallery,
+      );
+      await controller.proceedAfterWarning();
+      await controller.confirm();
+
+      final repo = container.read(importedSourceRepositoryProvider);
+      final rows = await repo.findAll();
+      expect(rows, hasLength(2));
+      // findAll sorts newest first; the seed row was dated in the past.
+      expect(rows.first.note, 'Erneuter Scan trotz Warnung');
+      expect(rows.last.note, isNull);
+    },
+  );
 }

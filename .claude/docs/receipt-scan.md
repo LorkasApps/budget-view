@@ -44,7 +44,7 @@ All in `lib/features/drilldown/scan/domain/` or `data/`.
 
 ## State machine
 
-`PhotoScanFlowController` (`AutoDisposeNotifier`) + `PhotoScanFlowState`:
+`ReceiptScanFlowController` (`AutoDisposeNotifier`) + `ReceiptScanFlowState`:
 
 | Phase | Meaning |
 |-------|---------|
@@ -64,7 +64,7 @@ State fields:
 
 | Field | Type | Notes |
 |-------|------|-------|
-| `phase` | `PhotoScanPhase` | Current step |
+| `phase` | `ReceiptScanPhase` | Current step |
 | `documentMatches` | `List<ImportedSource>` | Hits from doc-hash check, newest first (ticket 009) |
 | `candidates` | `List<LineItemCandidate>` | Parsed positions (empty until `parsing` completes) |
 | `filename` | `String` | Display name; empty for camera captures |
@@ -84,7 +84,7 @@ Methods:
 UI entry point: button in `LineItemsSection` (edit mode of `TransactionFormScreen`),
 next to `+ Position`.
 
-Modal chain: `showScanSourceSheet()` → `startPhotoScan(context, ref, transaction)`
+Modal chain: `showScanSourceSheet()` → `startReceiptScan(context, ref, transaction)`
 holds a `listenManual` subscription for the flow's duration.
 
 ## Providers
@@ -95,9 +95,9 @@ holds a `listenManual` subscription for the flow's duration.
 | `receiptImagePreprocessorProvider` | `JpegReceiptImagePreprocessor` instance |
 | `ocrServiceProvider` | `MlKitOcrService`; the native recognizer is long-lived and closed via `ref.onDispose` |
 | `receiptLineItemParserProvider` | `HeuristicReceiptLineItemParser` instance |
-| `photoScanFlowProvider` | `AutoDisposeNotifier<PhotoScanFlowState>` — **autoDispose on purpose** |
+| `receiptScanFlowProvider` | `AutoDisposeNotifier<ReceiptScanFlowState>` — **autoDispose on purpose** |
 
-All wired in `domain/photo_scan_providers.dart`.
+All wired in `domain/receipt_scan_providers.dart`.
 
 ## Parser — `HeuristicReceiptLineItemParser`
 
@@ -180,11 +180,11 @@ downscale). Otherwise a version bump in the `image` library or a deskew improvem
 would shift the hash of the same document, breaking the re-scan warning. Preprocessed
 bytes are handed to OCR only.
 
-**`photoScanFlowProvider` is `autoDispose`.**
+**`receiptScanFlowProvider` is `autoDispose`.**
 The flow is temporary and so is the photo. Without `autoDispose` the controller
-would persist after exiting the modal. The cost: `startPhotoScan` holds a
-`ref.listenManual(photoScanFlowProvider)` subscription for the flow's duration (see
-`presentation/photo_scan_flow.dart`). Without this listener the controller tears
+would persist after exiting the modal. The cost: `startReceiptScan` holds a
+`ref.listenManual(receiptScanFlowProvider)` subscription for the flow's duration (see
+`presentation/receipt_scan_flow.dart`). Without this listener the controller tears
 down between awaits (e.g., between `startScan` returning and the doc-hash warning),
 leaving `_bytes == null` and breaking the warning path.
 
@@ -272,11 +272,11 @@ re-scan of the same photo warns.
 
 | File | Path | Scope |
 |------|------|-------|
-| `photo_scan_flow_controller_test.dart` | `test/features/drilldown/scan/domain/` | State machine: happy path, cancel at each phase, error handling, bytes cleared on all exits |
-| `photo_scan_dochash_test.dart` | `test/features/drilldown/scan/domain/` | Doc-hash miss vs hit, user proceed, user cancel, warning modal, no ImportedSource on cancel |
-| `photo_scan_imported_source_test.dart` | `test/features/drilldown/scan/domain/` | ImportedSource row creation, correct field mapping, counts, no row on cancel, note only when warned |
-| `photo_scan_multi_test.dart` | `test/features/drilldown/scan/domain/` | "Scan another" within a flow: two passes produce two rows, each with correct counts |
-| `photo_scan_confirm_test.dart` | `test/features/drilldown/scan/domain/` | Confirm logic: sign application, filtering to savable rows, reconcile call, count in ImportedSource |
+| `receipt_scan_flow_controller_test.dart` | `test/features/drilldown/scan/domain/` | State machine: happy path, cancel at each phase, error handling, bytes cleared on all exits |
+| `receipt_scan_dochash_test.dart` | `test/features/drilldown/scan/domain/` | Doc-hash miss vs hit, user proceed, user cancel, warning modal, no ImportedSource on cancel |
+| `receipt_scan_imported_source_test.dart` | `test/features/drilldown/scan/domain/` | ImportedSource row creation, correct field mapping, counts, no row on cancel, note only when warned |
+| `receipt_scan_multi_test.dart` | `test/features/drilldown/scan/domain/` | "Scan another" within a flow: two passes produce two rows, each with correct counts |
+| `receipt_scan_confirm_test.dart` | `test/features/drilldown/scan/domain/` | Confirm logic: sign application, filtering to savable rows, reconcile call, count in ImportedSource |
 | `scan_test_support.dart` | `test/features/drilldown/scan/domain/` | Shared fakes: `FakeReceiptImageSource`, `FakeOcrService`, `FakeReceiptLineItemParser`, synthetic receipt bytes, test container builder |
 | `receipt_skew_test.dart` | `test/features/drilldown/scan/data/` | Tilt sign for positive and negative tilt, straightening end-to-end, same instance when already straight, blank image |
 | `mlkit_ocr_service_test.dart` | `test/features/drilldown/scan/data/` | OCR mapping (blocks, lines, boxes, confidence, `fullText`), bytes reach the temp file, empty result travels on, engine failure wrapped, temp file deleted on success and on throw |

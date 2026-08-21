@@ -4,8 +4,8 @@ import 'package:intl/intl.dart';
 
 import '../../../import/data/imported_source.dart';
 import '../../../transaction/data/transaction.dart';
-import '../domain/photo_scan_flow_controller.dart';
-import '../domain/photo_scan_providers.dart';
+import '../domain/receipt_scan_flow_controller.dart';
+import '../domain/receipt_scan_providers.dart';
 import 'scan_review_screen.dart';
 import 'scan_source_sheet.dart';
 
@@ -14,24 +14,24 @@ import 'scan_source_sheet.dart';
 /// Holds a manual subscription for the whole flow: the controller is
 /// `autoDispose`, and without a listener it would be torn down — together with
 /// the photo bytes — between two awaits.
-Future<void> startPhotoScan(
+Future<void> startReceiptScan(
   BuildContext context,
   WidgetRef ref,
   Transaction transaction,
 ) async {
-  final subscription = ref.listenManual(photoScanFlowProvider, (_, _) {});
+  final subscription = ref.listenManual(receiptScanFlowProvider, (_, _) {});
   try {
     while (true) {
       final source = await showScanSourceSheet(context);
       if (source == null) return;
 
-      final controller = ref.read(photoScanFlowProvider.notifier);
+      final controller = ref.read(receiptScanFlowProvider.notifier);
       await controller.startScan(transaction: transaction, source: source);
 
-      if (ref.read(photoScanFlowProvider).phase ==
-          PhotoScanPhase.duplicateWarning) {
+      if (ref.read(receiptScanFlowProvider).phase ==
+          ReceiptScanPhase.duplicateWarning) {
         if (!context.mounted) return;
-        final matches = ref.read(photoScanFlowProvider).documentMatches;
+        final matches = ref.read(receiptScanFlowProvider).documentMatches;
         if (!await _confirmRescan(context, matches)) {
           controller.cancel();
           return;
@@ -40,12 +40,12 @@ Future<void> startPhotoScan(
       }
 
       if (!context.mounted) return;
-      var state = ref.read(photoScanFlowProvider);
-      if (state.phase == PhotoScanPhase.failed) {
+      var state = ref.read(receiptScanFlowProvider);
+      if (state.phase == ReceiptScanPhase.failed) {
         _showError(context, state.errorMessage);
         return;
       }
-      if (state.phase != PhotoScanPhase.awaitingConfirm) return;
+      if (state.phase != ReceiptScanPhase.awaitingConfirm) return;
 
       final reviewed = await pushScanReview(
         context,
@@ -60,8 +60,8 @@ Future<void> startPhotoScan(
       await controller.confirm(edited: reviewed);
 
       if (!context.mounted) return;
-      state = ref.read(photoScanFlowProvider);
-      if (state.phase == PhotoScanPhase.failed) {
+      state = ref.read(receiptScanFlowProvider);
+      if (state.phase == ReceiptScanPhase.failed) {
         _showError(context, state.errorMessage);
         return;
       }

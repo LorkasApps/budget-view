@@ -3,10 +3,10 @@ import 'dart:io';
 import 'package:budget_view/core/persistence/isar_db.dart';
 import 'package:budget_view/features/drilldown/data/line_item.dart';
 import 'package:budget_view/features/drilldown/domain/line_item_providers.dart';
-import 'package:budget_view/features/drilldown/scan/domain/photo_scan_flow_controller.dart';
-import 'package:budget_view/features/drilldown/scan/domain/photo_scan_providers.dart';
 import 'package:budget_view/features/drilldown/scan/domain/receipt_image_source.dart';
 import 'package:budget_view/features/drilldown/scan/domain/receipt_line_item_parser.dart';
+import 'package:budget_view/features/drilldown/scan/domain/receipt_scan_flow_controller.dart';
+import 'package:budget_view/features/drilldown/scan/domain/receipt_scan_providers.dart';
 import 'package:budget_view/features/import/domain/import_providers.dart';
 import 'package:budget_view/features/transaction/data/transaction.dart';
 import 'package:budget_view/features/transaction/domain/transaction_providers.dart';
@@ -50,14 +50,14 @@ void main() {
         parser: parser,
       );
       final transaction = await savedExpense(container);
-      final controller = container.read(photoScanFlowProvider.notifier);
+      final controller = container.read(receiptScanFlowProvider.notifier);
 
       await controller.startScan(
         transaction: transaction,
         source: ScanSource.gallery,
       );
       await controller.confirm();
-      expect(container.read(photoScanFlowProvider).scansCompleted, 1);
+      expect(container.read(receiptScanFlowProvider).scansCompleted, 1);
 
       // Different bytes so the second pass gets its own content hash and
       // does not trip the duplicate warning against the first pass.
@@ -71,12 +71,12 @@ void main() {
         source: ScanSource.gallery,
       );
       expect(
-        container.read(photoScanFlowProvider).phase,
-        PhotoScanPhase.awaitingConfirm,
+        container.read(receiptScanFlowProvider).phase,
+        ReceiptScanPhase.awaitingConfirm,
       );
       await controller.confirm();
 
-      final state = container.read(photoScanFlowProvider);
+      final state = container.read(receiptScanFlowProvider);
       expect(state.scansCompleted, 2);
 
       final items = await container

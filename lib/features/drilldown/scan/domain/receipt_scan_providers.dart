@@ -5,9 +5,9 @@ import '../data/image_picker_receipt_image_source.dart';
 import '../data/jpeg_receipt_image_preprocessor.dart';
 import '../data/mlkit_ocr_service.dart';
 import 'ocr_service.dart';
-import 'photo_scan_flow_controller.dart';
 import 'receipt_image_source.dart';
 import 'receipt_line_item_parser.dart';
+import 'receipt_scan_flow_controller.dart';
 
 final receiptImageSourceProvider = Provider<ReceiptImageSource>(
   (_) => ImagePickerReceiptImageSource(),
@@ -30,7 +30,7 @@ final receiptLineItemParserProvider = Provider<ReceiptLineItemParser>(
 );
 
 /// `autoDispose` on purpose: leaving the flow must drop the photo bytes.
-final photoScanFlowProvider =
-    NotifierProvider.autoDispose<PhotoScanFlowController, PhotoScanFlowState>(
-  PhotoScanFlowController.new,
+final receiptScanFlowProvider = NotifierProvider.autoDispose<
+    ReceiptScanFlowController, ReceiptScanFlowState>(
+  ReceiptScanFlowController.new,
 );

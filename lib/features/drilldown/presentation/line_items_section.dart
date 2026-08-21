@@ -10,7 +10,7 @@ import '../data/line_item.dart';
 import '../domain/category_resolver.dart';
 import '../domain/line_item_providers.dart';
 import '../domain/line_item_validation.dart';
-import '../scan/presentation/photo_scan_flow.dart';
+import '../scan/presentation/receipt_scan_flow.dart';
 import 'line_item_edit_sheet.dart';
 
 /// Positions of one booking: reorderable list, live subtotal, add button.
@@ -26,7 +26,7 @@ class LineItemsSection extends ConsumerWidget {
       showLineItemSheet(context, parent: transaction);
 
   Future<void> _scan(BuildContext context, WidgetRef ref) =>
-      startPhotoScan(context, ref, transaction);
+      startReceiptScan(context, ref, transaction);
 
   Future<void> _edit(BuildContext context, LineItem item) =>
       showLineItemSheet(context, parent: transaction, existing: item);

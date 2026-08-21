@@ -2,9 +2,9 @@ import 'dart:typed_data';
 
 import 'package:budget_view/core/persistence/isar_provider.dart';
 import 'package:budget_view/features/drilldown/scan/domain/ocr_service.dart';
-import 'package:budget_view/features/drilldown/scan/domain/photo_scan_providers.dart';
 import 'package:budget_view/features/drilldown/scan/domain/receipt_image_source.dart';
 import 'package:budget_view/features/drilldown/scan/domain/receipt_line_item_parser.dart';
+import 'package:budget_view/features/drilldown/scan/domain/receipt_scan_providers.dart';
 import 'package:budget_view/features/transaction/data/transaction.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -119,7 +119,7 @@ Transaction incomeTransaction({
 
 /// Wires a container the way the app does, with the four scan seams and the
 /// duplicate/import machinery swapped for fakes or a real (test) [Isar].
-/// Keeps a listener on [photoScanFlowProvider] alive, since without one the
+/// Keeps a listener on [receiptScanFlowProvider] alive, since without one the
 /// `autoDispose` controller is torn down between awaits and the held bytes
 /// vanish mid-test.
 ProviderContainer containerWith({
@@ -148,7 +148,7 @@ ProviderContainer containerWith({
     ],
   );
   addTearDown(container.dispose);
-  final subscription = container.listen(photoScanFlowProvider, (_, _) {});
+  final subscription = container.listen(receiptScanFlowProvider, (_, _) {});
   addTearDown(subscription.close);
   return container;
 }

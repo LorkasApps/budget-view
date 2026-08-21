@@ -3,9 +3,9 @@ import 'dart:io';
 import 'package:budget_view/core/persistence/isar_db.dart';
 import 'package:budget_view/features/drilldown/data/line_item.dart';
 import 'package:budget_view/features/drilldown/domain/line_item_providers.dart';
-import 'package:budget_view/features/drilldown/scan/domain/photo_scan_providers.dart';
 import 'package:budget_view/features/drilldown/scan/domain/receipt_image_source.dart';
 import 'package:budget_view/features/drilldown/scan/domain/receipt_line_item_parser.dart';
+import 'package:budget_view/features/drilldown/scan/domain/receipt_scan_providers.dart';
 import 'package:budget_view/features/import/domain/import_providers.dart';
 import 'package:budget_view/features/transaction/data/transaction.dart';
 import 'package:budget_view/features/transaction/domain/transaction_providers.dart';
@@ -53,7 +53,7 @@ void main() {
       ]),
     );
     final transaction = await savedExpense(container);
-    final controller = container.read(photoScanFlowProvider.notifier);
+    final controller = container.read(receiptScanFlowProvider.notifier);
 
     await controller.startScan(
       transaction: transaction,
@@ -73,7 +73,7 @@ void main() {
     final expenseContainer = containerWith(isar: isar);
     final expense = await savedExpense(expenseContainer);
     final expenseController =
-        expenseContainer.read(photoScanFlowProvider.notifier);
+        expenseContainer.read(receiptScanFlowProvider.notifier);
     await expenseController.startScan(
       transaction: expense,
       source: ScanSource.gallery,
@@ -100,7 +100,7 @@ void main() {
     );
     final income = await savedIncome(incomeContainer);
     final incomeController =
-        incomeContainer.read(photoScanFlowProvider.notifier);
+        incomeContainer.read(receiptScanFlowProvider.notifier);
     await incomeController.startScan(
       transaction: income,
       source: ScanSource.gallery,
@@ -131,7 +131,7 @@ void main() {
       ]),
     );
     final transaction = await savedExpense(container);
-    final controller = container.read(photoScanFlowProvider.notifier);
+    final controller = container.read(receiptScanFlowProvider.notifier);
 
     await controller.startScan(
       transaction: transaction,
@@ -161,7 +161,7 @@ void main() {
       ]),
     );
     final transaction = await savedExpense(container);
-    final controller = container.read(photoScanFlowProvider.notifier);
+    final controller = container.read(receiptScanFlowProvider.notifier);
 
     await controller.startScan(
       transaction: transaction,
@@ -177,7 +177,7 @@ void main() {
   test('confirm reconciles once, leaving a restposten row behind', () async {
     final container = containerWith(isar: isar);
     final transaction = await savedExpense(container);
-    final controller = container.read(photoScanFlowProvider.notifier);
+    final controller = container.read(receiptScanFlowProvider.notifier);
 
     await controller.startScan(
       transaction: transaction,

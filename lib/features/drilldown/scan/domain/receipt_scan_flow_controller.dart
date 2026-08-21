@@ -10,11 +10,11 @@ import '../../data/line_item.dart';
 import '../../domain/line_item_providers.dart';
 import '../../domain/line_item_repository.dart';
 import 'ocr_service.dart';
-import 'photo_scan_providers.dart';
 import 'receipt_image_source.dart';
 import 'receipt_line_item_parser.dart';
+import 'receipt_scan_providers.dart';
 
-enum PhotoScanPhase {
+enum ReceiptScanPhase {
   idle,
   capturing,
   hashing,
@@ -29,9 +29,9 @@ enum PhotoScanPhase {
 }
 
 @immutable
-class PhotoScanFlowState {
-  const PhotoScanFlowState({
-    this.phase = PhotoScanPhase.idle,
+class ReceiptScanFlowState {
+  const ReceiptScanFlowState({
+    this.phase = ReceiptScanPhase.idle,
     this.documentMatches = const [],
     this.candidates = const [],
     this.expectedSumCents,
@@ -42,7 +42,7 @@ class PhotoScanFlowState {
     this.errorMessage,
   });
 
-  final PhotoScanPhase phase;
+  final ReceiptScanPhase phase;
 
   /// Earlier imports of this exact photo, newest first (ticket 009).
   final List<ImportedSource> documentMatches;
@@ -70,17 +70,17 @@ class PhotoScanFlowState {
   bool get documentSeenBefore => documentMatches.isNotEmpty;
 
   bool get busy => switch (phase) {
-        PhotoScanPhase.capturing ||
-        PhotoScanPhase.hashing ||
-        PhotoScanPhase.recognizing ||
-        PhotoScanPhase.parsing ||
-        PhotoScanPhase.persisting =>
+        ReceiptScanPhase.capturing ||
+        ReceiptScanPhase.hashing ||
+        ReceiptScanPhase.recognizing ||
+        ReceiptScanPhase.parsing ||
+        ReceiptScanPhase.persisting =>
           true,
         _ => false,
       };
 
-  PhotoScanFlowState copyWith({
-    PhotoScanPhase? phase,
+  ReceiptScanFlowState copyWith({
+    ReceiptScanPhase? phase,
     List<ImportedSource>? documentMatches,
     List<LineItemCandidate>? candidates,
     int? expectedSumCents,
@@ -90,7 +90,7 @@ class PhotoScanFlowState {
     int? scansCompleted,
     String? errorMessage,
   }) =>
-      PhotoScanFlowState(
+      ReceiptScanFlowState(
         phase: phase ?? this.phase,
         documentMatches: documentMatches ?? this.documentMatches,
         candidates: candidates ?? this.candidates,
@@ -107,15 +107,15 @@ class PhotoScanFlowState {
 ///
 /// The photo itself never leaves memory and never reaches a repository: only
 /// the extracted positions and one [ImportedSource] row survive the flow.
-class PhotoScanFlowController extends AutoDisposeNotifier<PhotoScanFlowState> {
+class ReceiptScanFlowController extends AutoDisposeNotifier<ReceiptScanFlowState> {
   Uint8List? _bytes;
   String _contentHash = '';
   Transaction? _transaction;
 
   @override
-  PhotoScanFlowState build() {
+  ReceiptScanFlowState build() {
     ref.onDispose(_dropImage);
-    return const PhotoScanFlowState();
+    return const ReceiptScanFlowState();
   }
 
   /// Starts a pass. Called again for "Scan another", which keeps only the
@@ -126,21 +126,21 @@ class PhotoScanFlowController extends AutoDisposeNotifier<PhotoScanFlowState> {
   }) async {
     _dropImage();
     _transaction = transaction;
-    state = PhotoScanFlowState(
-      phase: PhotoScanPhase.capturing,
+    state = ReceiptScanFlowState(
+      phase: ReceiptScanPhase.capturing,
       scansCompleted: state.scansCompleted,
     );
 
     try {
       final captured = await ref.read(receiptImageSourceProvider).pick(source);
       if (captured == null) {
-        state = state.copyWith(phase: PhotoScanPhase.cancelled);
+        state = state.copyWith(phase: ReceiptScanPhase.cancelled);
         return;
       }
 
       _bytes = captured.bytes;
       state = state.copyWith(
-        phase: PhotoScanPhase.hashing,
+        phase: ReceiptScanPhase.hashing,
         filename: captured.filename,
         holdsImage: true,
       );
@@ -155,7 +155,7 @@ class PhotoScanFlowController extends AutoDisposeNotifier<PhotoScanFlowState> {
         return;
       }
       state = state.copyWith(
-        phase: PhotoScanPhase.duplicateWarning,
+        phase: ReceiptScanPhase.duplicateWarning,
         documentMatches: matches,
       );
     } catch (error) {
@@ -165,7 +165,7 @@ class PhotoScanFlowController extends AutoDisposeNotifier<PhotoScanFlowState> {
 
   /// The user kept going after the "already scanned" warning.
   Future<void> proceedAfterWarning() async {
-    if (state.phase != PhotoScanPhase.duplicateWarning) return;
+    if (state.phase != ReceiptScanPhase.duplicateWarning) return;
     try {
       await _recognize();
     } catch (error) {
@@ -177,7 +177,7 @@ class PhotoScanFlowController extends AutoDisposeNotifier<PhotoScanFlowState> {
     final bytes = _bytes;
     if (bytes == null) return;
 
-    state = state.copyWith(phase: PhotoScanPhase.recognizing);
+    state = state.copyWith(phase: ReceiptScanPhase.recognizing);
     final prepared =
         await ref.read(receiptImagePreprocessorProvider).prepare(bytes);
     // The user may have cancelled while OCR was running.
@@ -185,11 +185,11 @@ class PhotoScanFlowController extends AutoDisposeNotifier<PhotoScanFlowState> {
     final recognized = await ref.read(ocrServiceProvider).recognize(prepared);
     if (_bytes == null) return;
 
-    state = state.copyWith(phase: PhotoScanPhase.parsing);
+    state = state.copyWith(phase: ReceiptScanPhase.parsing);
     final parsed = ref.read(receiptLineItemParserProvider).parse(recognized);
 
     state = state.copyWith(
-      phase: PhotoScanPhase.awaitingConfirm,
+      phase: ReceiptScanPhase.awaitingConfirm,
       candidates: parsed.candidates,
       expectedSumCents: parsed.expectedPositionSumCents,
     );
@@ -203,7 +203,7 @@ class PhotoScanFlowController extends AutoDisposeNotifier<PhotoScanFlowState> {
     final transaction = _transaction;
     if (transaction == null ||
         _bytes == null ||
-        state.phase != PhotoScanPhase.awaitingConfirm) {
+        state.phase != ReceiptScanPhase.awaitingConfirm) {
       return;
     }
 
@@ -214,7 +214,7 @@ class PhotoScanFlowController extends AutoDisposeNotifier<PhotoScanFlowState> {
         .toList();
     final seenBefore = state.documentSeenBefore;
     final sign = transaction.amountCents.isNegative ? -1 : 1;
-    state = state.copyWith(phase: PhotoScanPhase.persisting);
+    state = state.copyWith(phase: ReceiptScanPhase.persisting);
 
     try {
       final repository = ref.read(lineItemRepositoryProvider);
@@ -250,7 +250,7 @@ class PhotoScanFlowController extends AutoDisposeNotifier<PhotoScanFlowState> {
 
       _dropImage();
       state = state.copyWith(
-        phase: PhotoScanPhase.done,
+        phase: ReceiptScanPhase.done,
         holdsImage: false,
         candidates: const [],
         documentMatches: const [],
@@ -266,7 +266,7 @@ class PhotoScanFlowController extends AutoDisposeNotifier<PhotoScanFlowState> {
   void cancel() {
     _dropImage();
     state = state.copyWith(
-      phase: PhotoScanPhase.cancelled,
+      phase: ReceiptScanPhase.cancelled,
       holdsImage: false,
       candidates: const [],
       documentMatches: const [],
@@ -276,7 +276,7 @@ class PhotoScanFlowController extends AutoDisposeNotifier<PhotoScanFlowState> {
   void _fail(Object error) {
     _dropImage();
     state = state.copyWith(
-      phase: PhotoScanPhase.failed,
+      phase: ReceiptScanPhase.failed,
       holdsImage: false,
       candidates: const [],
       documentMatches: const [],
