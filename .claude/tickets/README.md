@@ -48,3 +48,4 @@
 | 044-render-scanned-pdf-receipts.md | Feature | Drilldown | Drilldown | Draft | None | Render a scanned PDF's pages through the OCR path; split out of 033 with the native-dependency risk |
 | 045-photographed-picnic-receipt-yields-nothing.md | Bug | Drilldown | Drilldown | Draft | None | Raised cents split the price across OCR lines; since 035 those rows are dropped, so a photo yields almost nothing |
 | 046-backup-local-and-google-drive.md | Feature | None | Infra | Draft | None | Backup to a local file and to Google Drive; first network access, and an unencrypted DB leaving the sandbox |
+| 047-merchant-behind-a-collective-payer.md | Feature | Auto-Tagging | Transaction | Draft | None | PayPal hides the real merchant in the purpose text; needs a `merchant` field, pattern to be read off real lines first |
