@@ -47,3 +47,4 @@
 | 043-ocr-path-misses-the-pdf-rules.md | Bug | Drilldown | Drilldown | Draft | None | A screenshot of a receipt is read by weaker rules than its PDF: struck-through price, credits, plausibility bound |
 | 044-render-scanned-pdf-receipts.md | Feature | Drilldown | Drilldown | Draft | None | Render a scanned PDF's pages through the OCR path; split out of 033 with the native-dependency risk |
 | 045-photographed-picnic-receipt-yields-nothing.md | Bug | Drilldown | Drilldown | Draft | None | Raised cents split the price across OCR lines; since 035 those rows are dropped, so a photo yields almost nothing |
+| 046-backup-local-and-google-drive.md | Feature | None | Infra | Draft | None | Backup to a local file and to Google Drive; first network access, and an unencrypted DB leaving the sandbox |
