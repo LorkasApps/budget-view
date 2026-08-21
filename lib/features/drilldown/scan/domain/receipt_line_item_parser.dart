@@ -84,10 +84,22 @@ class ReceiptParseResult {
   const ReceiptParseResult({
     required this.candidates,
     this.printedTotalCents,
+    this.creditCents = 0,
   });
 
   final List<LineItemCandidate> candidates;
   final int? printedTotalCents;
+
+  /// Sum of rows that reduce what was paid — returned deposits, refunds. They
+  /// cannot be positions, because a `LineItem` amount carries no sign, but the
+  /// printed total already accounts for them: the positions reconcile only after
+  /// this is subtracted.
+  final int creditCents;
+
+  /// What the positions have to add up to for the reading to be trusted, or null
+  /// when the document printed no total.
+  int? get expectedPositionSumCents =>
+      printedTotalCents == null ? null : printedTotalCents! + creditCents;
 }
 
 abstract interface class ReceiptLineItemParser {

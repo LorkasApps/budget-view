@@ -34,7 +34,7 @@ class PhotoScanFlowState {
     this.phase = PhotoScanPhase.idle,
     this.documentMatches = const [],
     this.candidates = const [],
-    this.printedTotalCents,
+    this.expectedSumCents,
     this.filename = '',
     this.holdsImage = false,
     this.lineItemsPersisted = 0,
@@ -49,9 +49,9 @@ class PhotoScanFlowState {
 
   final List<LineItemCandidate> candidates;
 
-  /// The receipt's own total when it printed one — the review screen compares it
-  /// against the kept positions (ticket 035).
-  final int? printedTotalCents;
+  /// What the kept positions have to add up to: the receipt's printed total plus
+  /// the credit rows it already accounted for (tickets 035, 033).
+  final int? expectedSumCents;
 
   /// Display name of the pick; empty for camera captures.
   final String filename;
@@ -83,7 +83,7 @@ class PhotoScanFlowState {
     PhotoScanPhase? phase,
     List<ImportedSource>? documentMatches,
     List<LineItemCandidate>? candidates,
-    int? printedTotalCents,
+    int? expectedSumCents,
     String? filename,
     bool? holdsImage,
     int? lineItemsPersisted,
@@ -94,7 +94,7 @@ class PhotoScanFlowState {
         phase: phase ?? this.phase,
         documentMatches: documentMatches ?? this.documentMatches,
         candidates: candidates ?? this.candidates,
-        printedTotalCents: printedTotalCents ?? this.printedTotalCents,
+        expectedSumCents: expectedSumCents ?? this.expectedSumCents,
         filename: filename ?? this.filename,
         holdsImage: holdsImage ?? this.holdsImage,
         lineItemsPersisted: lineItemsPersisted ?? this.lineItemsPersisted,
@@ -191,7 +191,7 @@ class PhotoScanFlowController extends AutoDisposeNotifier<PhotoScanFlowState> {
     state = state.copyWith(
       phase: PhotoScanPhase.awaitingConfirm,
       candidates: parsed.candidates,
-      printedTotalCents: parsed.printedTotalCents,
+      expectedSumCents: parsed.expectedPositionSumCents,
     );
   }
 

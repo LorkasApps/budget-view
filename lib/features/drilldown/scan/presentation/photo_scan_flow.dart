@@ -51,7 +51,7 @@ Future<void> startPhotoScan(
         context,
         transaction: transaction,
         candidates: state.candidates,
-        printedTotalCents: state.printedTotalCents,
+        expectedSumCents: state.expectedSumCents,
       );
       if (reviewed == null) {
         controller.cancel();

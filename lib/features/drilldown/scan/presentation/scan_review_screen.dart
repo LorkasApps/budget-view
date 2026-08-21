@@ -19,14 +19,14 @@ Future<List<LineItemCandidate>?> pushScanReview(
   BuildContext context, {
   required Transaction transaction,
   required List<LineItemCandidate> candidates,
-  int? printedTotalCents,
+  int? expectedSumCents,
 }) {
   return Navigator.of(context).push<List<LineItemCandidate>>(
     MaterialPageRoute(
       builder: (_) => ScanReviewScreen(
         transaction: transaction,
         candidates: candidates,
-        printedTotalCents: printedTotalCents,
+        expectedSumCents: expectedSumCents,
       ),
     ),
   );
@@ -37,15 +37,16 @@ class ScanReviewScreen extends ConsumerStatefulWidget {
     super.key,
     required this.transaction,
     required this.candidates,
-    this.printedTotalCents,
+    this.expectedSumCents,
   });
 
   final Transaction transaction;
   final List<LineItemCandidate> candidates;
 
-  /// The receipt's own total, if it printed one. Compared against the positions
-  /// as the one check that does not depend on how the rows were grouped.
-  final int? printedTotalCents;
+  /// What the kept positions have to add up to — the receipt's printed total plus
+  /// any credit rows it already accounted for. Null when the document printed no
+  /// total. The one check that does not depend on how the rows were grouped.
+  final int? expectedSumCents;
 
   @override
   ConsumerState<ScanReviewScreen> createState() => _ScanReviewScreenState();
@@ -68,9 +69,9 @@ class _ScanReviewScreenState extends ConsumerState<ScanReviewScreen> {
   bool _selectionTouched = false;
 
   int? get _totalMismatchCents {
-    final printed = widget.printedTotalCents;
-    if (printed == null || _selectionTouched) return null;
-    final difference = _includedSum - printed;
+    final expected = widget.expectedSumCents;
+    if (expected == null || _selectionTouched) return null;
+    final difference = _includedSum - expected;
     return difference == 0 ? null : difference;
   }
 
@@ -147,7 +148,7 @@ class _ScanReviewScreenState extends ConsumerState<ScanReviewScreen> {
           if (_totalMismatchCents != null)
             _TotalMismatchBanner(
               positionsCents: _sign * _includedSum,
-              printedCents: _sign * widget.printedTotalCents!,
+              expectedCents: _sign * widget.expectedSumCents!,
             ),
           if (_candidates.isEmpty)
             Padding(
@@ -305,11 +306,11 @@ class _CandidateRow extends StatelessWidget {
 class _TotalMismatchBanner extends StatelessWidget {
   const _TotalMismatchBanner({
     required this.positionsCents,
-    required this.printedCents,
+    required this.expectedCents,
   });
 
   final int positionsCents;
-  final int printedCents;
+  final int expectedCents;
 
   @override
   Widget build(BuildContext context) {
@@ -319,8 +320,8 @@ class _TotalMismatchBanner extends StatelessWidget {
       color: scheme.errorContainer,
       padding: const EdgeInsets.all(16),
       child: Text(
-        'Positionen ergeben ${formatCentsEur(positionsCents)}, der Bon nennt '
-        '${formatCentsEur(printedCents)}. Bitte die Zeilen prüfen.',
+        'Positionen ergeben ${formatCentsEur(positionsCents)}, der Beleg erwartet '
+        '${formatCentsEur(expectedCents)}. Bitte die Zeilen prüfen.',
         style: TextStyle(color: scheme.onErrorContainer),
       ),
     );
