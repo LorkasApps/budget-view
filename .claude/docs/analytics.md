@@ -28,6 +28,7 @@ Named ctor `.of(DateTime)`, getter `monthStart`, and copies `shiftMonths(int)`, 
 
 `Future<List<MonthlyReportPoint>> computeSeries({required DateTime anchorMonth, required int? windowMonths, String? accountUuid, required ReportDirection direction})` — the months `[anchor − (windowMonths − 1) … anchor]`, oldest first.
 
+- **Transfers excluded before rollup** — a transfer (booking with `kind == transfer`) is filtered out before anything else, so it appears in neither `Ausgaben` nor `Einnahmen`, and an uncategorized transfer does not land in the uncategorized row either. **Forecast inherits this exclusion** because it reads the same rollup.
 - Bookings, positions and the category tree each load **once** for the whole span; the per-month loop only re-aggregates.
 - Bookings come from `TransactionRepository.findByAccount`; with `accountUuid == null` it loops `AccountRepository.findAll()` (non-archived only, so an archived account drops out).
 - `windowMonths == null` starts the series at the first month with anything in scope, and returns `[]` when there is none. Otherwise the window is exactly `windowMonths` long regardless of data.

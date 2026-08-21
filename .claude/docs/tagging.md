@@ -31,10 +31,11 @@ One counterparty may hold rules for several categories — each keeps its own co
 Sorting happens in Dart, not in a query: the table is small and it keeps the ordering rule in one readable place.
 
 ## Learn service (`domain/tagging_learn_service.dart`)
-`TaggingLearnService(repository).learnFrom(Transaction)` — a no-op unless all three hold:
+`TaggingLearnService(repository).learnFrom(Transaction)` — a no-op unless all four hold:
 
 | Condition | Reason |
 |-----------|--------|
+| `kind == regular` | a transfer is money between own accounts; no rule should propose spending category for it |
 | `categoryUuid != null` | nothing to learn from an uncategorized booking |
 | `categoryAutoSuggested == false` | an accepted suggestion would only reinforce itself |
 | normalized `counterparty` non-empty | no reliable signal to match on |

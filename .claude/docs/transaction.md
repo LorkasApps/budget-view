@@ -12,6 +12,7 @@ Implements `SyncableEntity` (`entityType = 'transaction'`).
 | `accountUuid` | String | Indexed FK to `Account.uuid` |
 | `categoryUuid` | String? | Indexed FK to `Category.uuid`; null while uncategorized. Required by manual-entry form, optional in PDF import. |
 | `amountCents` | int | **Signed**: negative = expense, positive = income |
+| `kind` | `TransactionKind` | `regular` \| `transfer`; default `regular`. A transfer is money between user's own accounts: leaves one balance, arrives in another. Transfers need no category, exclude from reports. |
 | `bookingDate` | DateTime | Buchungstag |
 | `description` | String | Required, non-empty |
 | `counterparty` | String | May be empty |
@@ -57,7 +58,11 @@ Normalization lives in `lib/core/text/normalize.dart` because tagging (ticket 01
 ## Validation (`domain/transaction_validation.dart`)
 Pure statics: `description`, `amount` (magnitude — must be unsigned and ≠ 0), `bookingDate` (not future), `account`, `category` (manual entry only; PDF import skips this check). The sign comes from the form's expense/income toggle, not the text field.
 
+**Category check** (`category(String? categoryUuid, {TransactionKind kind})`): Returns `null` for a transfer (no category needed); for `regular` returns `'Kategorie erforderlich'` if missing.
+
 ## Form (`presentation/transaction_form_screen.dart`)
+
+**Transfer toggle** — `SwitchListTile` labelled `Umbuchung` under the Ausgabe/Einnahme toggle; subtitle says it counts in no report total and needs no category. The saved booking carries the chosen `kind`. The category row stays visible and still renders its required marker even for a transfer, although saving succeeds — known, ticket 041.
 
 **Category suggestion**
 - Counterparty field carries a `FocusNode`; **on blur** the form asks
@@ -88,10 +93,11 @@ Pure statics: `description`, `amount` (magnitude — must be unsigned and ≠ 0)
 PDF import preview displays `ImportRow` list. Each row has:
 - Checkbox toggle (included in final persist or not)
 - `CategoryChip` (per-row, optional — rows may be imported uncategorized)
-- Edit button (opens full edit for description, amount, date, counterparty)
+- Edit button — full edit for description, amount, date, counterparty, **category and the `Umbuchung` switch**. Both of
+  those live in the dialog only; the row itself has no transfer switch
 - Header has a "Für alle" batch action (opens category picker, applies to all rows regardless of inclusion status)
 
-Final persist reads `ImportRow.categoryUuid` and assigns to each transaction.
+`ImportRow.kind` field (default `regular`) travels into persisted `Transaction`. Per-row edit dialog uses `ImportFlowController.setRowKind(index, kind)` to update.
 
 ## Navigation
 Account list row tap → `TransactionListScreen`. (Before ticket 006 it opened the account edit form; that moved into the transaction list's app bar.)

@@ -184,14 +184,14 @@ Typedef: `PdfParserRanking = ({PdfParser parser, double confidence})`
      it opens `pickSuggestion` (only when more than one suggestion exists) and the
      pick goes through `setRowCategory`, i.e. as an override.
   8. Per-row duplicate marker (copy icon, red) opens modal listing existing bookings; intra-batch duplicates flag **both** copies (user decides which to keep)
-  9. Per-row edit dialog: expense/income toggle, amount, description, counterparty, date, and the row's **category** —
-     button shows the resolved name or `Keine Kategorie`, plus the suggestion marker and `<n>×` while the category still is
+  9. Per-row edit dialog: expense/income toggle, amount, description, counterparty, date, **`Umbuchung` switch**, and the row's **category** —
+     category button shows the resolved name or `Keine Kategorie`, plus the suggestion marker and `<n>×` while the category still is
      the suggested one. Opens the same `pickCategory(allowNone: true)` as the row chip; a change is applied through
-     `setRowCategory`, so it counts as an override exactly like one on the row. Field edits keep going through `editRow` —
+     `setRowCategory`, so it counts as an override exactly like one on the row. Transfer toggle updates via `setRowKind(index, kind)`. Field edits keep going through `editRow` —
      the dialog returns both separately
   10. Target-account dropdown (pre-filled with entry account), import button (shows included count)
   11. Persist → summary screen: `N importiert / M übersprungen / K Hinweise`
-- Persistence: wired via `TransactionRepository.save` + writes `ImportedSource` row
+- Persistence: wired via `TransactionRepository.save` + writes `ImportedSource` row; `ImportRow.kind` carries into persisted `Transaction.kind`
 
 ## Import History (`presentation/import_history_screen.dart`)
 
