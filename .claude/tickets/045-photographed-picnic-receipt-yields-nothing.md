@@ -34,7 +34,22 @@ was option two in that refinement and was declined.
 
 ## Expected vs Actual
 - **Expected:** roughly what the PDF path produces from the same receipt — around 30 positions
-- **Actual:** almost nothing; the count still has to be recorded (see open questions)
+- **Actual:** only the summary rows — `Bestellung`, `Betrag`, `Eingereichtes Pfand`, `Endsumme`. Not one item
+
+## Evidence, recorded on the device 2026-08-21
+The surviving rows are exactly the ones whose amount is rendered as a **single** token. Every item row, where the cents are
+raised, is gone. That is the hypothesis above, confirmed: the item price splits across OCR lines, neither half is a money
+token, and since 035 such a row is dropped.
+
+Two further findings fall out of the same observation:
+
+| Finding | Consequence |
+|---------|-------------|
+| `Endsumme` was read as a **position**, not as the total | Skip and total matching is on **prefix**. `Endsumme` contains `summe` but does not start with it, so the receipt's total went unrecognised — and without a total there is no checksum and no plausibility bound, so 043's fix could not help here either |
+| `Eingereichtes Pfand` became a position | The credit handling exists only in the PDF parser (ticket 043). Here it makes the sum wrong on top of everything else |
+
+German compounds put the keyword at the end more often than at the start: `Endsumme`, `Rechnungsbetrag`, `Kartenzahlung`. The
+prefix rule was derived from one shop's receipts and does not generalise.
 
 ## Affected Envs
 Verified on a release APK on the device, 2026-08-21.
@@ -47,8 +62,8 @@ The drop-rule since ticket 035 (2026-08-21). Whether the layout ever worked befo
 been photographed until now, and 035's own findings came from a different shop's receipt.
 
 ## Open questions for refinement
-- **How many positions did the review screen actually show** — zero with "Es wurde keine Position erkannt", or a handful?
-  That number decides whether the drop rule is the whole story
+- **Prefix, substring or word match** for the skip and total vocabulary? Substring catches `Endsumme` and risks false hits;
+  matching whole words inside the row is the middle ground and needs a rule for compounds
 - **How do we see what ML Kit read?** There is no harness for it: ML Kit has no test-VM binding, so the only place the raw
   text can surface is the app itself. Options: bring back unrecognised rows behind a collapsed line, or a debug-only dump
 - **Reassemble prices across lines, as the PDF parser does?** It joins a band of fragments and reads the last two digits as
