@@ -48,7 +48,7 @@ Per-feature `{presentation,domain,data}` folders are created by each feature tic
 
 **Encryption:** none. Relies on Android file-based encryption + app-scoped storage (see decisions.md). Adding a collection = add its `Schema` to `appIsarSchemas` + run `make gen`.
 
-**Schema versioning:** dev = nuke+rebuild on bump (`DevTools.wipeDatabase`); prod (v1.0+) = migration steps in `openAppIsar`'s reconcile, keyed on stored `schemaVersion`.
+**Schema versioning:** a bump is only *recorded* — `openAppIsar`'s reconcile writes the new `schemaVersion` into `AppMeta` and deletes nothing. Nuking is a deliberate `DevTools.wipeDatabase` call, wired to no UI. Additive changes need no wipe at all: Isar returns the field default for rows written before it existed (ticket 032 added `Transaction.kind` this way, and the existing bookings read back as `regular`). Prod (v1.0+) = migration steps in that reconcile, keyed on the stored version.
 
 ## Developer Commands
 All Flutter commands run via the root `Makefile` (Flutter cannot run in the agent sandbox). Key targets: `make get`, `make check` (analyze+test), `make gen` (build_runner, from ticket 002), `make run`, `make build-apk`. Branding: `make icon-png` (SVG→PNG), `make icons` (`flutter_launcher_icons`), `make splash` (`flutter_native_splash`). `make help` lists all.

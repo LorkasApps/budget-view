@@ -6,7 +6,7 @@
 | **Epic** | None |
 | **Domain** | Transaction |
 | **Blocked By** | 037 (both extend the import preview edit dialog) |
-| **Status** | In Progress |
+| **Status** | Done |
 
 ## Description
 A booking carries an amount and a sign, nothing else. Moving money from one own account to another therefore looks
@@ -64,8 +64,9 @@ counterpart is another account of the same user. Fixing it in the report alone w
 - [x] Tests: rollup with and without a transfer, the learn hook skipping one, the relaxed category requirement, and the
       balance still counting it
 - [x] `make check` green
-- [ ] The report numbers of the 028 finding become reproducible: with the transfers of the imported statement marked,
-      `Ausgaben` drops to the order the user expected
+- [x] The report numbers of the 028 finding become reproducible: with the transfers of the imported statement marked,
+      `Ausgaben` drops to the order the user expected. Verified on the device against the existing data — no re-import was
+      needed, since the added field is additive and old rows read back as `regular`
 
 ## Out of Scope
 - Multi-currency
@@ -87,4 +88,14 @@ No — inline bookings, as the report suites do today.
 - Output: ~3k tokens
 
 ### Implementation Tokens (estimate)
-_Filled after Done._
+- Input: ~55k tokens
+- Output: ~6k tokens
+
+## Outcome
+452 tests pass (10 new). One belief did not survive contact: the schema bump does **not** wipe the dev database. Reconcile
+only records the new version, so the existing 77 bookings stayed and read back as `regular` — which is the wanted meaning
+anyway. `infrastructure.md` said "dev = nuke+rebuild on bump" and has been corrected.
+
+Two follow-ups came out of the device check: the category field still renders its red required hint for a transfer even
+though saving works (ticket 041), and a transfer cannot yet name the account on the other side so the counter-leg gets
+booked there (ticket 042).
