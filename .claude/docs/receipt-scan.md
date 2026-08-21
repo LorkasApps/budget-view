@@ -137,6 +137,26 @@ warning instead of being invented.
 or `ambiguous` (amount but no description). `includeInSave` defaults to true for
 `ok` rows, false for `ambiguous`. Rows without a money token are dropped.
 
+## Known sender layouts
+
+Measured on real documents, kept here because the same receipt can arrive as a PDF **or** as a photo/screenshot, and the
+two paths use different parsers. The PDF parser (`pdf_receipt_parser.dart`, ticket 033) implements all of these; the OCR
+parser above implements the ones marked accordingly.
+
+**Picnic** (delivery service; PDF is a browser print of the confirmation mail):
+
+| Trait | Consequence | In OCR parser |
+|-------|-------------|---------------|
+| Columns: quantity far left (x≈149), description (x≈212), price right (x≈430) | A lone number in its own column is the quantity | no — OCR reads a leading `2x` instead |
+| A price is three words on three baselines: large integer, raised cents, period | Digits of a band are read left to right, last two are cents | no — an OCR row is one string |
+| Two prices per row: struck-through original **above**, real price **below** | The **bottom-most** band of a block wins | **no — the OCR parser takes the rightmost token of a row, so a struck-through price can win** |
+| `Eingereichtes Pfand` is a credit the printed total already accounts for | Subtracted in the checksum, never a position — a `LineItem` amount has no sign | no — the checksum would report a false mismatch |
+| Page furniture (mail header, register number, URLs) reassembles into amounts | Nothing may cost more than the printed total | no |
+| `Pfand` total is a real position; `Tüten` / `Flaschen` breakdown is not | Skip the breakdown, keep the total | partly — `pfand` is not in the OCR skip list |
+| PDF text layers split words at ligatures (`Röstkaf` + `fee`, gap 0 vs 3+ for a real space) | Glue below an eighth of the block tolerance | not applicable |
+
+The gaps in the right-hand column are ticket **043**.
+
 ## Review screen
 
 `pushScanReview(context, transaction:, candidates:)` presents the parser's output

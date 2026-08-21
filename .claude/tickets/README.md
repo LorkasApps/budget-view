@@ -44,3 +44,4 @@
 | 040-trade-republic-import.md | Feature | Import | Transaction | Ready | 032 | Trade Republic cash/Tagesgeld parser; securities lines are plain expenses/income, no holdings model |
 | 041-transfer-still-shows-category-required.md | Bug | None | Transaction | Draft | None | Category field keeps its red required marker on a transfer although saving works |
 | 042-transfer-counter-leg-on-target-account.md | Feature | None | Transaction | Draft | 032 | Name the target account of a transfer and book the counter-leg there; collides with dedupe on later import |
+| 043-ocr-path-misses-the-pdf-rules.md | Bug | Drilldown | Drilldown | Draft | None | A screenshot of a receipt is read by weaker rules than its PDF: struck-through price, credits, plausibility bound |
