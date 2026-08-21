@@ -54,11 +54,34 @@ row-and-amount reader that can tell whether it succeeded — see the resolution 
   path handed in through an environment variable, and the user drops one or two real invoices in a temp dir for the design
   round. Deterministic parser rules are covered by unit tests over synthetic words with coordinates
 
+## Layout findings from a real receipt (Picnic, printed from Gmail via Chrome)
+Read with `tool/pdf_text_dump.py`, which exists because the agent cannot run the Dart equivalent.
+
+| Finding | Consequence for the parser |
+|---------|---------------------------|
+| A price arrives as **three fragments** — integer, `.`, decimals — at nearly equal x with y differing by up to 9 units | Fragments must be joined into words before any money token is recognisable |
+| An item is a **block, not a line**: quantity far left, an image, the name (one or two lines), a unit like `250g` / `1,25L` / `2 Stück`, and the price right. The name sits *below* the price | Cluster by y with a tolerance around 20 units — the gap between items is ~70, so clustering separates them, while a small tolerance tears one item into three rows |
+| A row may carry **two prices**: a struck-through original in black and the real one in red **below** it | The rule is not "rightmost token" alone but the **bottom-most** price of the block. Position decides, so no colour information is needed |
+| `Gesamtbetrag` is the total | Caught by the existing `gesamt` prefix |
+| `Zwischensumme`, `Mwst 19% (…)` and `Du sparst` are not items | The first two are already skipped; `du sparst` is new |
+| Deposit: only the **`Pfand` total** is a position. Its breakdown (`Tüten`, `Flaschen`) is not, and `Eingereichtes Pfand` is irrelevant to the booking | Skip the breakdown and the credit, keep the total |
+| The email's legal and address block carries no amount | Dropped by the rule from 035: no money token, no candidate |
+
+## Constraint: one document, one booking
+The first sample turned out to contain **three** transactions — an order, a re-order and a deposit return. That contradicts
+the premise this flow rests on, and the premise stays: a document belongs to exactly one booking, chosen by the user. A
+document holding several transactions is the wrong input, not a case to split automatically. The checksum is what surfaces
+it — positions from three transactions cannot match one printed total, so the rows arrive `ambiguous` instead of silently
+wrong.
+
 ## Acceptance Criteria
 - [ ] The receipt source picker offers a PDF entry; `file_selector` returns a single `.pdf`
 - [ ] The flow is only reachable from an open booking, and the resulting positions are written to that booking
-- [ ] Text-layer path: words with coordinates come from `syncfusion_flutter_pdf`, are grouped into rows by vertical
-      position, and the rightmost money token of a row is its amount, the remainder its description
+- [ ] Text-layer path: words with coordinates come from `syncfusion_flutter_pdf`; fragments are joined into words, words
+      into blocks by vertical clustering, and the **bottom-most** money token of a block is its amount — which is what makes
+      a struck-through price lose to the real one below it
+- [ ] The quantity column left of the description is read as `quantity` where present, and a unit like `250g` stays in the
+      description, since `LineItem` has no unit field (ticket 023)
 - [ ] All pages are read as one sequence
 - [ ] The document total is located and compared against the sum of the parsed positions: a match leaves rows `ok`, a
       mismatch or a missing total leaves **every** row `ambiguous` rather than asserting a result
