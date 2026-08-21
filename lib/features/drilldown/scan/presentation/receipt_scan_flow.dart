@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 
 import '../../../import/data/imported_source.dart';
 import '../../../transaction/data/transaction.dart';
+import '../domain/receipt_document_source.dart';
 import '../domain/receipt_scan_flow_controller.dart';
 import '../domain/receipt_scan_providers.dart';
 import 'scan_review_screen.dart';
@@ -26,7 +27,13 @@ Future<void> startReceiptScan(
       if (source == null) return;
 
       final controller = ref.read(receiptScanFlowProvider.notifier);
-      await controller.startScan(transaction: transaction, source: source);
+      final imageSource = source.asScanSource;
+      await (imageSource == null
+          ? controller.startPdfScan(transaction: transaction)
+          : controller.startScan(
+              transaction: transaction,
+              source: imageSource,
+            ));
 
       if (ref.read(receiptScanFlowProvider).phase ==
           ReceiptScanPhase.duplicateWarning) {

@@ -6,7 +6,7 @@
 | **Epic** | Drilldown |
 | **Domain** | Drilldown |
 | **Blocked By** | 035 (its total-as-checksum comparison and deskew are reused here) |
-| **Status** | Ready |
+| **Status** | In Progress |
 
 ## Description
 The receipt flow accepts a camera capture or a gallery image. But a growing share of receipts never exists on paper:
@@ -64,43 +64,50 @@ Read with `tool/pdf_text_dump.py`, which exists because the agent cannot run the
 | A row may carry **two prices**: a struck-through original in black and the real one in red **below** it | The rule is not "rightmost token" alone but the **bottom-most** price of the block. Position decides, so no colour information is needed |
 | `Gesamtbetrag` is the total | Caught by the existing `gesamt` prefix |
 | `Zwischensumme`, `Mwst 19% (…)` and `Du sparst` are not items | The first two are already skipped; `du sparst` is new |
-| Deposit: only the **`Pfand` total** is a position. Its breakdown (`Tüten`, `Flaschen`) is not, and `Eingereichtes Pfand` is irrelevant to the booking | Skip the breakdown and the credit, keep the total |
+| Deposit: only the **`Pfand` total** is a position; its breakdown (`Tüten`, `Flaschen`) is not | Skip the breakdown, keep the total |
+| `Eingereichtes Pfand` is a **credit** the printed total already accounts for | It cannot be a position (a `LineItem` amount has no sign), but dropping it silently would break the checksum forever: it is **subtracted** in the comparison instead. On the sample this makes the positions reconcile to the cent — 101,08 minus 1,47 equals the printed 99,61 |
+| Page furniture — a mail header, a register number, four Gmail URLs — reassembles into amounts of up to 15 million euros | **Nothing may cost more than the printed total.** One bound removed all of it, without naming a single sender's vocabulary |
+| Syncfusion splits words at ligatures and kerning pairs (`Röstkaf` + `fee`) with a gap of 0, while a real space is over 3 | Glue below an eighth of the block tolerance. It matters beyond looks: price trends group by normalised description |
 | The email's legal and address block carries no amount | Dropped by the rule from 035: no money token, no candidate |
 
 ## Constraint: one document, one booking
-The first sample turned out to contain **three** transactions — an order, a re-order and a deposit return. That contradicts
-the premise this flow rests on, and the premise stays: a document belongs to exactly one booking, chosen by the user. A
-document holding several transactions is the wrong input, not a case to split automatically. The checksum is what surfaces
-it — positions from three transactions cannot match one printed total, so the rows arrive `ambiguous` instead of silently
-wrong.
+The premise stays: a document belongs to exactly one booking, chosen by the user. A document holding several transactions is
+the wrong input, not a case to split automatically.
+
+The first sample was believed to hold three transactions — an order, a re-order and a deposit return. Measuring it settled
+that: the positions reconcile to the printed total on the cent, so the **document** is one receipt. The three transactions
+are three debits on the bank statement, which is a different question and belongs to whoever attaches the document to a
+booking.
 
 ## Acceptance Criteria
-- [ ] The receipt source picker offers a PDF entry; `file_selector` returns a single `.pdf`
-- [ ] The flow is only reachable from an open booking, and the resulting positions are written to that booking
-- [ ] Text-layer path: words with coordinates come from `syncfusion_flutter_pdf`; fragments are joined into words, words
+- [x] The receipt source picker offers a PDF entry; `file_selector` returns a single `.pdf`
+- [x] The flow is only reachable from an open booking, and the resulting positions are written to that booking
+- [x] Text-layer path: words with coordinates come from `syncfusion_flutter_pdf`; fragments are joined into words, words
       into blocks by vertical clustering, and the **bottom-most** money token of a block is its amount — which is what makes
       a struck-through price lose to the real one below it
-- [ ] The quantity column left of the description is read as `quantity` where present, and a unit like `250g` stays in the
+- [x] The quantity column left of the description is read as `quantity` where present, and a unit like `250g` stays in the
       description, since `LineItem` has no unit field (ticket 023)
-- [ ] All pages are read as one sequence
-- [ ] The document total is located and compared against the sum of the parsed positions: a match leaves rows `ok`, a
-      mismatch or a missing total leaves **every** row `ambiguous` rather than asserting a result
-- [ ] The total row itself never becomes a position
+- [x] All pages are read as one sequence
+- [x] The document total is located and compared against the sum of the parsed positions. **Amended during
+      implementation**: a mismatch shows the review banner from 035 with both figures instead of marking every row
+      `ambiguous`. Marking them would clear `includeInSave` on all of them, so a 30-position receipt would need 30 fresh
+      ticks — and changing the selection silences the very banner that says whether it adds up now
+- [x] The total row itself never becomes a position
 - [ ] Scanned path: a PDF without a usable text layer has its pages rendered and run through the existing OCR path,
       including the deskew of 035
 - [ ] The renderer dependency is KGP-clean (no Kotlin-Gradle-Plugin warning) and the release APK is verified on a device —
       not only `make run`, per the lesson of 034; keep rules are added if it needs them
-- [ ] `ImportedSourceKind` gains `receiptPdf` appended at the end; `kDbSchemaVersion` is untouched and existing rows keep
+- [x] `ImportedSourceKind` gains `receiptPdf` appended at the end; `kDbSchemaVersion` is untouched and existing rows keep
       their meaning
-- [ ] The import history shows such a row with the document's filename and a label that says PDF receipt, not `Foto`
-- [ ] Re-picking the same document triggers the doc-hash warning, with wording that fits a receipt rather than a statement
-- [ ] Candidates land in the existing scan review screen; confirming writes line-items and one `ImportedSource` row, and the
+- [x] The import history shows such a row with the document's filename and a label that says PDF receipt, not `Foto`
+- [x] Re-picking the same document triggers the doc-hash warning, with wording that fits a receipt rather than a statement
+- [x] Candidates land in the existing scan review screen; confirming writes line-items and one `ImportedSource` row, and the
       Restposten closes the remaining gap
-- [ ] Unit tests over synthetic words with coordinates: row grouping, rightmost-amount rule, total validation match and
+- [x] Unit tests over synthetic words with coordinates: row grouping, rightmost-amount rule, total validation match and
       mismatch, multi-page sequencing
-- [ ] An env-gated harness parses a real document from a path in an environment variable, like `ing_geometry_dump_test.dart`
+- [x] An env-gated harness parses a real document from a path in an environment variable, like `ing_geometry_dump_test.dart`
       does for statements; no document is committed
-- [ ] `make check` green. Device and real-document checks live in 036
+- [x] `make check` green. Device and real-document checks live in 036
 
 ## Out of Scope (proposed, to confirm)
 - Fetching invoices from a mailbox or a shop account — the user picks a file, nothing goes online

@@ -84,11 +84,11 @@ class _SourceTile extends ConsumerWidget {
         return false; // the list updates reactively; don't drop the tile itself
       },
       child: ListTile(
-        leading: Icon(
-          source.kind == ImportedSourceKind.pdf
-              ? Icons.picture_as_pdf_outlined
-              : Icons.photo_camera_outlined,
-        ),
+        leading: Icon(switch (source.kind) {
+          ImportedSourceKind.pdf => Icons.picture_as_pdf_outlined,
+          ImportedSourceKind.photo => Icons.photo_camera_outlined,
+          ImportedSourceKind.receiptPdf => Icons.receipt_long_outlined,
+        }),
         title: Text(_sourceLabel(source)),
         subtitle: Text(_subtitle(source)),
         isThreeLine: source.note != null && source.note!.isNotEmpty,

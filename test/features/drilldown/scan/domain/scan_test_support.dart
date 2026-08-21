@@ -2,8 +2,10 @@ import 'dart:typed_data';
 
 import 'package:budget_view/core/persistence/isar_provider.dart';
 import 'package:budget_view/features/drilldown/scan/domain/ocr_service.dart';
+import 'package:budget_view/features/drilldown/scan/domain/receipt_document_source.dart';
 import 'package:budget_view/features/drilldown/scan/domain/receipt_image_source.dart';
 import 'package:budget_view/features/drilldown/scan/domain/receipt_line_item_parser.dart';
+import 'package:budget_view/features/drilldown/scan/domain/receipt_pdf_reader.dart';
 import 'package:budget_view/features/drilldown/scan/domain/receipt_scan_providers.dart';
 import 'package:budget_view/features/transaction/data/transaction.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -89,6 +91,59 @@ List<LineItemCandidate> defaultCandidates() => [
       LineItemCandidate(description: 'Brot', amountCents: 249),
     ];
 
+/// Deterministic bytes for a "picked PDF" — a different pattern from
+/// [receiptBytes] so a photo and a PDF never collide by content hash.
+Uint8List pdfBytes([int seed = 1]) =>
+    Uint8List.fromList(List.generate(8, (i) => 100 + seed + i));
+
+/// Returns a fixed picked document, analogous to [FakeReceiptImageSource].
+class FakeReceiptPdfSource implements ReceiptPdfSource {
+  FakeReceiptPdfSource(this._next);
+
+  PickedReceiptDocument? _next;
+
+  void setNext(PickedReceiptDocument? document) => _next = document;
+
+  @override
+  Future<PickedReceiptDocument?> pick() async => _next;
+}
+
+/// The user backed out of the file picker.
+class CancellingReceiptPdfSource implements ReceiptPdfSource {
+  const CancellingReceiptPdfSource();
+
+  @override
+  Future<PickedReceiptDocument?> pick() async => null;
+}
+
+/// Returns a fixed parse result (or null, for "no text layer") regardless of
+/// the bytes handed in.
+class FakeReceiptPdfReader implements ReceiptPdfReader {
+  const FakeReceiptPdfReader(this.result);
+
+  final ReceiptParseResult? result;
+
+  @override
+  ReceiptParseResult? read(Uint8List bytes) => result;
+}
+
+/// Would blow up if the PDF path ever fell through to the image parser.
+class ThrowingReceiptLineItemParser implements ReceiptLineItemParser {
+  const ThrowingReceiptLineItemParser();
+
+  @override
+  ReceiptParseResult parse(OcrResult result) =>
+      throw StateError('image parser reached from the PDF path');
+}
+
+/// What the PDF reader hands back by default: the same two positions as
+/// [defaultCandidates], with a printed total so `expectedPositionSumCents` is
+/// non-null and observable in a test.
+ReceiptParseResult defaultPdfParseResult() => ReceiptParseResult(
+      candidates: defaultCandidates(),
+      printedTotalCents: 368,
+    );
+
 /// An unsaved expense booking. Callers persist it via
 /// `transactionRepositoryProvider` before starting a scan against it.
 Transaction expenseTransaction({
@@ -128,6 +183,8 @@ ProviderContainer containerWith({
   ReceiptImagePreprocessor? preprocessor,
   OcrService? ocr,
   ReceiptLineItemParser? parser,
+  ReceiptPdfSource? pdfSource,
+  ReceiptPdfReader? pdfReader,
 }) {
   final container = ProviderContainer(
     overrides: [
@@ -144,6 +201,15 @@ ProviderContainer containerWith({
       ocrServiceProvider.overrideWithValue(ocr ?? const FakeOcrService()),
       receiptLineItemParserProvider.overrideWithValue(
         parser ?? FakeReceiptLineItemParser(defaultCandidates()),
+      ),
+      receiptPdfSourceProvider.overrideWithValue(
+        pdfSource ??
+            FakeReceiptPdfSource(
+              PickedReceiptDocument(bytes: pdfBytes(), filename: 'beleg.pdf'),
+            ),
+      ),
+      receiptPdfReaderProvider.overrideWithValue(
+        pdfReader ?? FakeReceiptPdfReader(defaultPdfParseResult()),
       ),
     ],
   );

@@ -35,6 +35,7 @@ class ReceiptScanFlowState {
     this.documentMatches = const [],
     this.candidates = const [],
     this.expectedSumCents,
+    this.kind = ImportedSourceKind.photo,
     this.filename = '',
     this.holdsImage = false,
     this.lineItemsPersisted = 0,
@@ -52,6 +53,9 @@ class ReceiptScanFlowState {
   /// What the kept positions have to add up to: the receipt's printed total plus
   /// the credit rows it already accounted for (tickets 035, 033).
   final int? expectedSumCents;
+
+  /// What the completed pass will record — a capture or a picked document.
+  final ImportedSourceKind kind;
 
   /// Display name of the pick; empty for camera captures.
   final String filename;
@@ -84,6 +88,7 @@ class ReceiptScanFlowState {
     List<ImportedSource>? documentMatches,
     List<LineItemCandidate>? candidates,
     int? expectedSumCents,
+    ImportedSourceKind? kind,
     String? filename,
     bool? holdsImage,
     int? lineItemsPersisted,
@@ -95,6 +100,7 @@ class ReceiptScanFlowState {
         documentMatches: documentMatches ?? this.documentMatches,
         candidates: candidates ?? this.candidates,
         expectedSumCents: expectedSumCents ?? this.expectedSumCents,
+        kind: kind ?? this.kind,
         filename: filename ?? this.filename,
         holdsImage: holdsImage ?? this.holdsImage,
         lineItemsPersisted: lineItemsPersisted ?? this.lineItemsPersisted,
@@ -163,14 +169,83 @@ class ReceiptScanFlowController extends AutoDisposeNotifier<ReceiptScanFlowState
     }
   }
 
+  /// Starts a pass over a PDF receipt. Shares hashing, the re-import warning and
+  /// persistence with the photo path; only the reading differs.
+  Future<void> startPdfScan({required Transaction transaction}) async {
+    _dropImage();
+    _transaction = transaction;
+    state = ReceiptScanFlowState(
+      phase: ReceiptScanPhase.capturing,
+      kind: ImportedSourceKind.receiptPdf,
+      scansCompleted: state.scansCompleted,
+    );
+
+    try {
+      final picked = await ref.read(receiptPdfSourceProvider).pick();
+      if (picked == null) {
+        state = state.copyWith(phase: ReceiptScanPhase.cancelled);
+        return;
+      }
+
+      _bytes = picked.bytes;
+      state = state.copyWith(
+        phase: ReceiptScanPhase.hashing,
+        filename: picked.filename,
+        holdsImage: true,
+      );
+
+      _contentHash = computeContentHash(picked.bytes);
+      final matches =
+          await ref.read(duplicateCheckerProvider).findDocumentMatches(
+                _contentHash,
+              );
+      if (matches.isEmpty) {
+        await _read();
+        return;
+      }
+      state = state.copyWith(
+        phase: ReceiptScanPhase.duplicateWarning,
+        documentMatches: matches,
+      );
+    } catch (error) {
+      _fail(error);
+    }
+  }
+
   /// The user kept going after the "already scanned" warning.
   Future<void> proceedAfterWarning() async {
     if (state.phase != ReceiptScanPhase.duplicateWarning) return;
     try {
-      await _recognize();
+      await _read();
     } catch (error) {
       _fail(error);
     }
+  }
+
+  /// Routes to the reader the current source needs.
+  Future<void> _read() => state.kind == ImportedSourceKind.receiptPdf
+      ? _readPdf()
+      : _recognize();
+
+  Future<void> _readPdf() async {
+    final bytes = _bytes;
+    if (bytes == null) return;
+
+    state = state.copyWith(phase: ReceiptScanPhase.parsing);
+    // No cancel check after the read: it is synchronous, unlike OCR.
+    final parsed = ref.read(receiptPdfReaderProvider).read(bytes);
+    if (parsed == null) {
+      _fail(
+        'Dieses PDF enthält keinen Text. Fotografiere den Beleg stattdessen.',
+      );
+      return;
+    }
+
+    state = state.copyWith(
+      phase: ReceiptScanPhase.awaitingConfirm,
+      candidates: parsed.candidates,
+      expectedSumCents: parsed.expectedPositionSumCents,
+    );
   }
 
   Future<void> _recognize() async {
@@ -239,7 +314,7 @@ class ReceiptScanFlowController extends AutoDisposeNotifier<ReceiptScanFlowState
 
       await ref.read(importedSourceRepositoryProvider).save(
             ImportedSource()
-              ..kind = ImportedSourceKind.photo
+              ..kind = state.kind
               ..contentHashSha256 = _contentHash
               ..filename = state.filename
               ..importedAt = DateTime.now()
