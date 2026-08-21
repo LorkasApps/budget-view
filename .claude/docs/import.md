@@ -12,12 +12,12 @@ Metadata of one completed import. The document itself is not persisted; this row
 |---|---|---|
 | `id` | Id | Isar auto-inc, internal |
 | `uuid` | String | UUID v4, unique index |
-| `kind` | ImportedSourceKind | `pdf` / `photo`, @enumerated |
+| `kind` | ImportedSourceKind | `pdf` / `photo` / `receiptPdf`, @enumerated; `pdf` = statement from bank (transaction rows), `photo` = receipt photo (line-items), `receiptPdf` = receipt PDF with text layer (line-items) |
 | `contentHashSha256` | String | Indexed (intentionally **not unique**): same file re-imported after override creates a second row for history |
 | `filename` | String | Display name from picker; empty for camera captures |
 | `importedAt` | DateTime | Wall-clock at persistence |
 | `transactionsProduced` | int | Count from this import |
-| `lineItemsProduced` | int | Count from this import (0 for PDF, filled by photo flow) |
+| `lineItemsProduced` | int | Count from this import (0 for `pdf` statement, filled by photo and receiptPdf flows) |
 | `note` | String? | Optional narrative, e.g. "Erneuter Import trotz Warnung" when file was seen before |
 | `createdAt` / `updatedAt` | DateTime | Maintained by repo |
 

@@ -1,14 +1,14 @@
-# Receipt photo capture (Drilldown domain)
+# Receipt capture (Drilldown domain)
 
-Ephemeral one-shot capture workflow: camera or gallery source picker → optional
-doc-hash warning (ticket 009) → OCR (ticket 017) / line-item parsing (ticket 018)
-seams → user confirm → line-items persisted + ImportedSource row + bytes discarded.
-`lib/features/drilldown/scan/`.
+Ephemeral one-shot capture workflow: camera / gallery / PDF source picker → optional
+doc-hash warning (ticket 009) → parse (OCR via ticket 017, or PDF via ticket 033) / line-item
+parsing (ticket 018) seams → user confirm → line-items persisted + ImportedSource row + bytes
+discarded. `lib/features/drilldown/scan/`.
 
 ## Flow
 
 ```
-[Scan source: Camera | Gallery]
+[Scan source: Camera | Gallery | PDF]
         ↓
 [Get bytes (Uint8List)]
         ↓
@@ -18,10 +18,16 @@ seams → user confirm → line-items persisted + ImportedSource row + bytes dis
         ↓                       ↓ user cancel: bytes dropped, exit
       no or proceed
         ↓
-[OCR: hand bytes to OcrService (ticket 017)]
-        ↓
-[Parse: hand OcrResult to ReceiptLineItemParser (ticket 018)]
-        ↓
+    ┌─────────────────────────────────┬──────────────────────────────┐
+    ↓ Camera/Gallery                   ↓ PDF
+[OCR: hand bytes to OcrService]   [Read: hand bytes to ReceiptPdfReader]
+(ticket 017)                      (ticket 033)
+    ↓                                 ↓ null? ──> fail: "no text layer,
+[Parse: hand OcrResult to]        photograph instead"
+ReceiptLineItemParser (018)           ↓
+    │                           [Parse: hand ReceiptWord list to
+    └─────────────────┬──────────────────────────────┘ parseReceiptPdf]
+                      ↓
 [Review screen: user edits → returns edited list or null (ticket 018)]
         ↓         ↓ user discard: bytes dropped, exit
       proceed
@@ -33,14 +39,17 @@ seams → user confirm → line-items persisted + ImportedSource row + bytes dis
 
 | Contract | Stub |
 |----------|------|
-| `OcrService.recognize(Uint8List) → Future<OcrResult>` — `OcrResult(fullText, blocks)`, `OcrBlock(text, boundingBox, lines)`, `OcrLine(text, boundingBox, confidence?)`; throws `OcrEngineException` | `MlKitOcrService` (ticket 017) via `google_mlkit_text_recognition` 0.16.0 |
-| `ReceiptLineItemParser.parse(OcrResult) → ReceiptParseResult(candidates, printedTotalCents)` — `ReceiptParseResult(List<LineItemCandidate>, int?)`, `LineItemCandidate(description, amountCents?, quantity?, unitPriceCents?, rawOcrText, parseState, includeInSave, categoryUuid?)`, unsigned magnitudes | `HeuristicReceiptLineItemParser` — groups lines by vertical overlap across block boundaries, skips rows by prefix, rightmost price, reads printed total from totals row, drops rows without money tokens, quantity prefix parsing |
-| `CapturedReceiptImage` — `bytes` + `filename` (empty for camera) | — |
-| `ScanSource` enum: `camera` \| `gallery` | — |
+| `OcrService.recognize(Uint8List) → Future<OcrResult>` — `OcrResult(fullText, blocks)`, `OcrBlock(text, boundingBox, lines)`, `OcrLine(text, boundingBox, confidence?)`; throws `OcrEngineException` | `MlKitOcrService` (ticket 017) via `google_mlkit_text_recognition` 0.17.1 |
+| `ReceiptLineItemParser.parse(OcrResult) → ReceiptParseResult` | `HeuristicReceiptLineItemParser` — groups lines by vertical overlap, skips rows by prefix, rightmost price, printed total from totals row, drops rows without money tokens, quantity parsing |
+| `ReceiptPdfReader.read(Uint8List) → ReceiptParseResult?` — null = no text layer (document is scan; route to OCR) | `SyncfusionReceiptPdfReader` (ticket 033) — extracts words via `syncfusion_flutter_pdf`, delegates to `parseReceiptPdf` |
+| `ReceiptParseResult(List<LineItemCandidate>, int? printedTotalCents, int creditCents = 0)` with derived `expectedPositionSumCents` = total + credits — `LineItemCandidate(description, amountCents?, quantity?, unitPriceCents?, rawOcrText, parseState, includeInSave, categoryUuid?)`, unsigned magnitudes | — |
+| `PickedReceiptDocument` — `bytes` + `filename` | — |
+| `ReceiptSource` enum: `camera` \| `gallery` \| `pdf` | — |
 | `ReceiptImageSource.pick(ScanSource) → Future<CapturedReceiptImage?>` | `ImagePickerReceiptImageSource` via `image_picker` 1.2.3 |
-| `ReceiptImagePreprocessor.prepare(Uint8List) → Future<Uint8List>` | `JpegReceiptImagePreprocessor` — estimate tilt via projection profile, deskew, downscale to 2000 px max edge, re-encode JPEG @ 85% quality, returns original bytes if no changes, runs on helper isolate |
+| `ReceiptPdfSource.pick() → Future<PickedReceiptDocument?>` | `FileSelectorReceiptPdfSource` (ticket 033) via `file_selector` |
+| `ReceiptImagePreprocessor.prepare(Uint8List) → Future<Uint8List>` | `JpegReceiptImagePreprocessor` — estimate tilt via projection profile, deskew, downscale to 2000 px max edge, re-encode JPEG @ 85% quality, returns original if unchanged, runs on helper isolate |
 
-All in `lib/features/drilldown/scan/domain/` or `data/`.
+All in `lib/features/drilldown/scan/domain/` or `data/`. `ReceiptSource.asScanSource` maps camera/gallery to `ScanSource`, yields null for pdf (diverges after picking).
 
 ## State machine
 
@@ -49,10 +58,10 @@ All in `lib/features/drilldown/scan/domain/` or `data/`.
 | Phase | Meaning |
 |-------|---------|
 | `idle` | Waiting for `startScan()` |
-| `capturing` | Picking image from source |
+| `capturing` | Picking image or PDF from source |
 | `hashing` | Computing SHA-256 of raw bytes |
 | `duplicateWarning` | Doc-hash matched prior import; user decides `proceedAfterWarning()` or `cancel()` |
-| `recognizing` | Running OCR on preprocessed bytes |
+| `recognizing` | Running OCR on preprocessed image bytes. The PDF path skips this phase — reading a text layer is synchronous and goes straight to `parsing` |
 | `parsing` | Line-item parser executing |
 | `awaitingConfirm` | Candidates ready; `confirm()` or `cancel()` |
 | `persisting` | Saving line-items + ImportedSource row |
@@ -65,6 +74,7 @@ State fields:
 | Field | Type | Notes |
 |-------|------|-------|
 | `phase` | `ReceiptScanPhase` | Current step |
+| `kind` | `ImportedSourceKind` | `photo` or `receiptPdf`; set by source, written to ImportedSource row |
 | `documentMatches` | `List<ImportedSource>` | Hits from doc-hash check, newest first (ticket 009) |
 | `candidates` | `List<LineItemCandidate>` | Parsed positions (empty until `parsing` completes) |
 | `filename` | `String` | Display name; empty for camera captures |
@@ -75,10 +85,10 @@ State fields:
 
 Methods:
 
-- `startScan({transaction, source})` — begins a pass; clears prior bytes/candidates/matches
-- `proceedAfterWarning()` — user chose "Fortfahren" after doc-hash hit; proceeds to OCR
+- `startScan({transaction, source})` — begins a pass; clears prior bytes/candidates/matches; sets `kind` from source
+- `proceedAfterWarning()` — user chose "Fortfahren" after doc-hash hit; proceeds to read (OCR or PDF per `kind`)
 - `confirm({edited})` — persist candidates (or edited list from 018's review), write
-  ImportedSource row, drop bytes; moves to `done`
+  ImportedSource row with `kind`, drop bytes; moves to `done`
 - `cancel()` — exit cleanly without persisting anything
 
 UI entry point: button in `LineItemsSection` (edit mode of `TransactionFormScreen`),
@@ -92,14 +102,16 @@ holds a `listenManual` subscription for the flow's duration.
 | Provider | Purpose |
 |----------|---------|
 | `receiptImageSourceProvider` | `ImagePickerReceiptImageSource` instance |
+| `receiptPdfSourceProvider` | `FileSelectorReceiptPdfSource` instance |
 | `receiptImagePreprocessorProvider` | `JpegReceiptImagePreprocessor` instance |
 | `ocrServiceProvider` | `MlKitOcrService`; the native recognizer is long-lived and closed via `ref.onDispose` |
+| `receiptPdfReaderProvider` | `SyncfusionReceiptPdfReader` instance |
 | `receiptLineItemParserProvider` | `HeuristicReceiptLineItemParser` instance |
 | `receiptScanFlowProvider` | `AutoDisposeNotifier<ReceiptScanFlowState>` — **autoDispose on purpose** |
 
 All wired in `domain/receipt_scan_providers.dart`.
 
-## Parser — `HeuristicReceiptLineItemParser`
+## Parser — `HeuristicReceiptLineItemParser` (Photo OCR)
 
 **Row grouping.** Lines are extracted from all blocks, sorted by vertical position,
 then grouped into rows: two lines belong to the same row if their vertical centers
@@ -120,6 +132,10 @@ with a readable money token, records that token as the receipt's printed total
 (rightmost match wins if multiple). `zwischensumme` is deliberately excluded.
 Rows without a money token are dropped entirely instead of becoming candidates.
 
+**Credits.** Rows starting with `eingereichtes`, `rückgabe`, `gutschrift`, or `erstattung`
+are summed into `ReceiptParseResult.creditCents` instead of becoming line-item candidates.
+The review screen compares `lineItemsSumCents + creditCents` against `printedTotalCents`.
+
 **Money tokens.** The parser searches for price patterns: one to three digits per
 group, groups separated by `,`, `.`, or space (e.g., `1,23`, `1.23`, `1.234,56`,
 `1 234,56`), always ending in `,DD` (two decimal places). Optional `€` or `EUR` on
@@ -137,25 +153,59 @@ warning instead of being invented.
 or `ambiguous` (amount but no description). `includeInSave` defaults to true for
 `ok` rows, false for `ambiguous`. Rows without a money token are dropped.
 
+## Parser — `parseReceiptPdf` (PDF Text Layer)
+
+**Word extraction.** `ReceiptWord(page, left, top, width, height, text)` plus derived
+`right`, `bottom`, `centerY`. Coordinates are top-left origin; larger `top` = further down
+page. Words extracted via Syncfusion and passed to `parseReceiptPdf(List<ReceiptWord>)`.
+
+**Item clustering.** Words are grouped vertically into item blocks: two words belong to the
+same block if their baselines are within `1.6 × median-word-height` of each other. Each
+block contributes one candidate.
+
+**Price column detection.** Rightmost price-shaped fragment (money token or digit band) in
+the right half of the page wins; no fixed fraction. Money patterns: 1–3 digits per group,
+separated by `,` / `.` / space, ending in `,DD` (cents). Optional `€` or `EUR`.
+
+**Amount reassembly.** A printed price splits across baselines: large integer, raised cents,
+period. A band of fragments (words within one cluster's vertical span) is read left-to-right;
+last two digits become cents. The **bottom-most** band of a block wins (strikes through
+original, keeps real price).
+
+**Row gluing.** Words whose gap is under 1/8 of the tolerance are joined (`Röstkaf` + `fee`
+→ `Röstkaffee`).
+
+**Printed total and credits.** Rows starting with total prefixes (`summe`, `gesamt`, `total`)
+set `printedTotalCents`; rows starting with credit prefixes (`eingereichtes`, `rückgabe`,
+`gutschrift`, `erstattung`) add to `creditCents`. Rows matching skip vocabulary are dropped
+(same list as OCR: `zwischensumme`, `mwst`, etc.). Rows without an amount are dropped.
+
+**Quantity and unit price.** A leftmost column number is the quantity (one fragment in its own
+column at left edge). `unitPriceCents` derived only if `amountCents / quantity` lands within
+a cent.
+
+**Plausibility.** **No position may cost more than the printed total** — bounds page furniture
+without sender vocabulary.
+
 ## Known sender layouts
 
 Measured on real documents, kept here because the same receipt can arrive as a PDF **or** as a photo/screenshot, and the
-two paths use different parsers. The PDF parser (`pdf_receipt_parser.dart`, ticket 033) implements all of these; the OCR
-parser above implements the ones marked accordingly.
+two paths use different parsers. The PDF parser (`parseReceiptPdf`, `data/pdf_receipt_parser.dart`, ticket 033)
+implements all of these; the OCR parser (`HeuristicReceiptLineItemParser`, above) implements the ones marked accordingly.
 
 **Picnic** (delivery service; PDF is a browser print of the confirmation mail):
 
-| Trait | Consequence | In OCR parser |
-|-------|-------------|---------------|
-| Columns: quantity far left (x≈149), description (x≈212), price right (x≈430) | A lone number in its own column is the quantity | no — OCR reads a leading `2x` instead |
-| A price is three words on three baselines: large integer, raised cents, period | Digits of a band are read left to right, last two are cents | no — an OCR row is one string |
-| Two prices per row: struck-through original **above**, real price **below** | The **bottom-most** band of a block wins | **no — the OCR parser takes the rightmost token of a row, so a struck-through price can win** |
-| `Eingereichtes Pfand` is a credit the printed total already accounts for | Subtracted in the checksum, never a position — a `LineItem` amount has no sign | no — the checksum would report a false mismatch |
-| Page furniture (mail header, register number, URLs) reassembles into amounts | Nothing may cost more than the printed total | no |
-| `Pfand` total is a real position; `Tüten` / `Flaschen` breakdown is not | Skip the breakdown, keep the total | partly — `pfand` is not in the OCR skip list |
-| PDF text layers split words at ligatures (`Röstkaf` + `fee`, gap 0 vs 3+ for a real space) | Glue below an eighth of the block tolerance | not applicable |
+| Trait | Consequence | In OCR parser | In PDF parser |
+|-------|-------------|---------------|--------------| 
+| Columns: quantity far left (x≈149), description (x≈212), price right (x≈430) | A lone number in its own column is the quantity | no — OCR reads a leading `2x` instead | yes |
+| A price is three words on three baselines: large integer, raised cents, period | Digits of a band are read left to right, last two are cents | no — an OCR row is one string | yes |
+| Two prices per row: struck-through original **above**, real price **below** | The **bottom-most** band of a block wins | **no — OCR parser takes rightmost token, struck-through can win** | yes |
+| `Eingereichtes Pfand` is a credit the printed total already accounts for | Subtracted in checksum, never a position | ticket **043** (OCR mismatch report) | yes |
+| Page furniture (mail header, register number, URLs) reassembles into amounts | Nothing may cost more than the printed total | no | yes |
+| `Pfand` total is a real position; `Tüten` / `Flaschen` breakdown is not | Skip breakdown, keep total | partly — `pfand` not in OCR skip list | yes |
+| PDF text layers split words at ligatures (`Röstkaf` + `fee`, gap 0 vs 3+) | Glue below 1/8 of tolerance | not applicable | yes |
 
-The gaps in the right-hand column are ticket **043**.
+The gaps in the OCR column are ticket **043**.
 
 ## Review screen
 
@@ -170,9 +220,9 @@ The include-checkbox is **disabled for non-savable rows** — those lacking a
 non-empty trimmed description or a positive amount. Disabled rows are skipped at
 `confirm()`.
 
-**Printed total banner.** Review screen shows a banner when the kept positions do
-not sum to the printed total, naming both figures. Banner disappears when user
-edits the selection (difference now intended).
+**Printed total banner.** Review screen shows a banner when the kept positions plus
+credits do not sum to the printed total, naming both figures. Banner disappears when
+user edits the selection (difference now intended).
 
 **Row actions:** tap opens `showCandidateSheet`, a trailing icon deletes the row,
 "Zeile hinzufügen" appends an empty one. Deliberately no swipe-to-delete: the rows
@@ -275,9 +325,9 @@ inherits it.
 
 **One `ImportedSource` row per confirmed pass.**
 On `confirm()`, exactly one row is written:
-- `kind = photo`
+- `kind = photo | receiptPdf` (set from `ReceiptSource`, written to state.kind)
 - `contentHashSha256 = raw-capture hash`
-- `filename = user-visible name` (empty for camera)
+- `filename = user-visible name` (empty for camera; PDF picker provides it)
 - `importedAt = now`
 - `transactionsProduced = 0` (017/018 handle line-items only, not splits)
 - `lineItemsProduced = length(items)` (count of actually saved candidates)
@@ -292,15 +342,18 @@ re-scan of the same photo warns.
 
 | File | Path | Scope |
 |------|------|-------|
-| `receipt_scan_flow_controller_test.dart` | `test/features/drilldown/scan/domain/` | State machine: happy path, cancel at each phase, error handling, bytes cleared on all exits |
-| `receipt_scan_dochash_test.dart` | `test/features/drilldown/scan/domain/` | Doc-hash miss vs hit, user proceed, user cancel, warning modal, no ImportedSource on cancel |
-| `receipt_scan_imported_source_test.dart` | `test/features/drilldown/scan/domain/` | ImportedSource row creation, correct field mapping, counts, no row on cancel, note only when warned |
-| `receipt_scan_multi_test.dart` | `test/features/drilldown/scan/domain/` | "Scan another" within a flow: two passes produce two rows, each with correct counts |
-| `receipt_scan_confirm_test.dart` | `test/features/drilldown/scan/domain/` | Confirm logic: sign application, filtering to savable rows, reconcile call, count in ImportedSource |
-| `scan_test_support.dart` | `test/features/drilldown/scan/domain/` | Shared fakes: `FakeReceiptImageSource`, `FakeOcrService`, `FakeReceiptLineItemParser`, synthetic receipt bytes, test container builder |
-| `receipt_skew_test.dart` | `test/features/drilldown/scan/data/` | Tilt sign for positive and negative tilt, straightening end-to-end, same instance when already straight, blank image |
-| `mlkit_ocr_service_test.dart` | `test/features/drilldown/scan/data/` | OCR mapping (blocks, lines, boxes, confidence, `fullText`), bytes reach the temp file, empty result travels on, engine failure wrapped, temp file deleted on success and on throw |
-| `heuristic_receipt_line_item_parser_test.dart` | `test/features/drilldown/scan/data/` | Row grouping across block boundaries, skip list (including new `gesamt`, `bargeld`, etc.), money tokens, printed total detection, `zwischensumme` not a total, quantity/unit parsing, rows without money dropped, parse states, candidates |
-| `scan_review_screen_test.dart` | `test/features/drilldown/scan/presentation/` | UI: row states rendering, include-checkbox disabled rule, edit/add/delete/categorize, footer, return contract |
+| `receipt_scan_flow_controller_test.dart` | `test/features/drilldown/scan/domain/` | State machine: photo and PDF paths, cancel at each phase, error handling, bytes cleared on all exits |
+| `receipt_scan_dochash_test.dart` | `test/features/drilldown/scan/domain/` | Doc-hash miss vs hit, user proceed/cancel, warning modal, no ImportedSource on cancel |
+| `receipt_scan_imported_source_test.dart` | `test/features/drilldown/scan/domain/` | ImportedSource row creation, `kind` field set from source, correct field mapping, counts, note only when warned |
+| `receipt_scan_multi_test.dart` | `test/features/drilldown/scan/domain/` | "Scan another" within a flow: two passes produce two rows with correct `kind` and counts |
+| `receipt_scan_confirm_test.dart` | `test/features/drilldown/scan/domain/` | Confirm logic: sign application, filtering to savable rows, reconcile call, `kind` persisted to ImportedSource |
+| `receipt_scan_pdf_test.dart` | `test/features/drilldown/scan/domain/` | PDF flow: pick, hashing, doc-hash path, successful read, null read (no text layer), error handling |
+| `scan_test_support.dart` | `test/features/drilldown/scan/domain/` | Shared fakes: `FakeReceiptImageSource`, `FakeReceiptPdfSource`, `FakeOcrService`, `FakeReceiptLineItemParser`, `FakePdfReader`, synthetic bytes, test container |
+| `receipt_skew_test.dart` | `test/features/drilldown/scan/data/` | Tilt sign (positive/negative), straightening, same instance when straight, blank image |
+| `mlkit_ocr_service_test.dart` | `test/features/drilldown/scan/data/` | OCR mapping (blocks, lines, boxes, confidence), temp file lifecycle, empty result, engine failure wrapped, cleanup on throw |
+| `heuristic_receipt_line_item_parser_test.dart` | `test/features/drilldown/scan/data/` | Row grouping across blocks, skip list, money tokens, printed total, `zwischensumme` excluded, credit rows, quantity/unit parsing, rows without money dropped |
+| `pdf_receipt_parser_test.dart` | `test/features/drilldown/scan/data/` | Item clustering, price column detection, amount reassembly, bottom-most band wins, quantity parsing, word gluing, printed total, credits, plausibility bound, synthetic words |
+| `receipt_pdf_dump_test.dart` (env-gated `RECEIPT_PDF`) | `test/tool/` | Real PDF parsing, decision reporting via test output |
+| `scan_review_screen_test.dart` | `test/features/drilldown/scan/presentation/` | UI: row states, include-checkbox disabled rule, edit/add/delete/categorize, footer, return contract |
 
-Not covered automatically: real ML Kit recognition (native plugin, device check).
+Not covered automatically: real ML Kit recognition (native plugin, device check), real PDF text extraction (Syncfusion).
