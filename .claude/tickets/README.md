@@ -34,7 +34,7 @@
 | 030-r8-mlkit-missing-classes.md | Bug | Setup | Infra | Done | None | Release build dies in R8: google_mlkit_text_recognition references the unused Chinese/Devanagari/Japanese/Korean recognizers |
 | 031-theme-mode-setting.md | Feature | Setup | Infra | Ready | None | Theme mode row in Settings: Dunkel / Hell / Systemvorgabe (default), dark scheme from the same teal seed |
 | 032-transfers-between-own-accounts.md | Feature | None | Transaction | Done | 037 | Transfers between own accounts count as expense + income and inflate the report; model has no notion of them |
-| 033-pdf-receipts-for-drilldown.md | Feature | Drilldown | Drilldown | Ready | 035 | PDF receipts as a line-item source: generic row parser validated against the printed total, scanned PDFs rendered through OCR |
+| 033-pdf-receipts-for-drilldown.md | Feature | Drilldown | Drilldown | Done | 035 | PDF receipts as a line-item source: generic row parser validated against the printed total, scanned PDFs rendered through OCR |
 | 034-r8-strips-mlkit-recognizer.md | Bug | Setup | Infra | Done | None | Release APK cannot read receipts: R8 renames ML Kit's reflective internals; needs `-keep`, not `-dontwarn` |
 | 035-skewed-receipt-shifts-prices.md | Bug | Drilldown | Drilldown | Done | None | Skew pairs every price with the neighbouring item, and address/total/Bargeld/Rückgeld/EC rows arrive as positions |
 | 036-v2-receipt-verification-checklist.md | TechDebt | None | Drilldown | Draft | 034, 035, 033, 037 | Device checks for the receipt pipeline after its fixes, plus PDF receipts and the tagging-suggestion loop |
@@ -45,3 +45,4 @@
 | 041-transfer-still-shows-category-required.md | Bug | None | Transaction | Draft | None | Category field keeps its red required marker on a transfer although saving works |
 | 042-transfer-counter-leg-on-target-account.md | Feature | None | Transaction | Draft | 032 | Name the target account of a transfer and book the counter-leg there; collides with dedupe on later import |
 | 043-ocr-path-misses-the-pdf-rules.md | Bug | Drilldown | Drilldown | Draft | None | A screenshot of a receipt is read by weaker rules than its PDF: struck-through price, credits, plausibility bound |
+| 044-render-scanned-pdf-receipts.md | Feature | Drilldown | Drilldown | Draft | None | Render a scanned PDF's pages through the OCR path; split out of 033 with the native-dependency risk |

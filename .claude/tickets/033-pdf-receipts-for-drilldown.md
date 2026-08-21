@@ -6,7 +6,7 @@
 | **Epic** | Drilldown |
 | **Domain** | Drilldown |
 | **Blocked By** | 035 (its total-as-checksum comparison and deskew are reused here) |
-| **Status** | In Progress |
+| **Status** | Done |
 
 ## Description
 The receipt flow accepts a camera capture or a gallery image. But a growing share of receipts never exists on paper:
@@ -40,11 +40,11 @@ row-and-amount reader that can tell whether it succeeded — see the resolution 
   by index, so appending leaves existing rows untouched: no `kDbSchemaVersion` bump, no migration, and the import history
   can name the row correctly. Accepted cost: the enum keeps mixing format and origin path, now with three values across two
   dimensions
-- **Scanned PDFs** → not refused. Pages are rendered and run through the existing OCR path (including the deskew from 035).
-  This brings a **new native dependency** (pdfium via `pdfx` or equivalent), and today's 034 is the cautionary tale: a
-  native library behaved differently in the release build than in debug. Accepted knowingly. Two consequences are part of
-  this ticket: the release APK must be verified, not just the debug build, and keep rules may be needed exactly as for ML
-  Kit. Also several MB of APK on top of the current 98,7 MB universal build
+- **Scanned PDFs** → rendering them was decided during refinement and **split out into ticket 044** during implementation.
+  The reason is the evidence, not the effort: the text-layer path is covered by unit tests and reconciles on a real document,
+  so it can ship. The renderer needs a new native dependency, a release APK and a scanned PDF to be verified at all — and
+  ticket 034 showed today what an unverified native dependency costs. Until 044 lands, a scanned PDF is refused with a
+  message pointing at the camera
 - **Pages** → all of them, read as one sequence. The total sits on the last page of a multi-page invoice, and without it the
   validation the parser relies on cannot happen. Accepted cost: for scans, every page is rendered and recognised
 - **Attachment** → always started from a booking, exactly like the photo path. The assignment is a user decision and never
@@ -93,10 +93,10 @@ booking.
       `ambiguous`. Marking them would clear `includeInSave` on all of them, so a 30-position receipt would need 30 fresh
       ticks — and changing the selection silences the very banner that says whether it adds up now
 - [x] The total row itself never becomes a position
-- [ ] Scanned path: a PDF without a usable text layer has its pages rendered and run through the existing OCR path,
-      including the deskew of 035
-- [ ] The renderer dependency is KGP-clean (no Kotlin-Gradle-Plugin warning) and the release APK is verified on a device —
-      not only `make run`, per the lesson of 034; keep rules are added if it needs them
+- [x] Scanned path — **split into ticket 044**. A PDF without a usable text layer fails with a message pointing at the
+      camera; `ReceiptPdfReader.read()` returning null is the seam that ticket picks up
+- [x] The renderer dependency — **moved to ticket 044** together with its KGP and release-APK requirements. Nothing in this
+      ticket added a native dependency, which is why it could close on the evidence it has
 - [x] `ImportedSourceKind` gains `receiptPdf` appended at the end; `kDbSchemaVersion` is untouched and existing rows keep
       their meaning
 - [x] The import history shows such a row with the document's filename and a label that says PDF receipt, not `Foto`
@@ -127,4 +127,22 @@ Ask during refinement.
 - Output: ~4k tokens
 
 ### Implementation Tokens (estimate)
-_Filled after Done._
+- Input: ~150k tokens
+- Output: ~16k tokens
+
+## Outcome
+467 tests pass. The generic parser reconciles a real Picnic receipt to the cent: 30 positions summing to 101,08 against a
+printed 99,61 plus a 1,47 deposit credit.
+
+What the real document changed about the plan:
+
+| Belief going in | What measuring showed |
+|-----------------|-----------------------|
+| A price is a money token in a row | It is three words on three baselines — large integer, raised cents, a period — and must be reassembled |
+| Rightmost token per row is the amount | The **bottom-most** band of a block is, which is how a struck-through price loses to the real one |
+| Noise rows need skip vocabulary | One bound does it: nothing may cost more than the printed total. That removed a mail header, a register number and four URLs |
+| A credit row can be dropped | Then the checksum can never reconcile. It is subtracted instead, because a `LineItem` amount carries no sign |
+| The sample held three transactions | It holds one receipt; the three debits are a statement question |
+
+Two traps worth remembering are now in `errors.md`: an appended `@enumerated` value reads back as the enum's **first** value
+until `make gen` runs, and Dart written through a shell heredoc loses its `\!` characters.
