@@ -68,6 +68,13 @@ void main() {
     }
   }
 
+  /// The dialog's name field: the sheet behind it carries a search field of its
+  /// own, so the plain type finder matches two.
+  final dialogField = find.descendant(
+    of: find.byType(AlertDialog),
+    matching: find.byType(TextField),
+  );
+
   Future<_PickResult> openPicker(
     WidgetTester tester, {
     required List<Category> categories,
@@ -146,7 +153,7 @@ void main() {
 
       expect(find.text('Neue Unterkategorie in Lebensmittel'), findsOneWidget);
 
-      await tester.enterText(find.byType(TextField), 'Bio');
+      await tester.enterText(dialogField, 'Bio');
       await tester.tap(find.text('Anlegen'));
       await settle(tester);
 
@@ -172,7 +179,7 @@ void main() {
       await tester.tap(find.widgetWithText(ListTile, 'Neue Kategorie'));
       await settle(tester);
 
-      await tester.enterText(find.byType(TextField), 'Sonstiges');
+      await tester.enterText(dialogField, 'Sonstiges');
       await tester.tap(find.text('Anlegen'));
       await settle(tester);
 
@@ -193,7 +200,7 @@ void main() {
 
       await tester.tap(find.byTooltip('Unterkategorie in Lebensmittel'));
       await settle(tester);
-      await tester.enterText(find.byType(TextField), 'Bio');
+      await tester.enterText(dialogField, 'Bio');
       await tester.tap(find.text('Anlegen'));
       await settle(tester);
 

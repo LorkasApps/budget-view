@@ -6,7 +6,7 @@
 | **Epic** | Categories |
 | **Domain** | Category |
 | **Blocked By** | None (026 shipped the quick-create rows this has to coexist with) |
-| **Status** | Ready |
+| **Status** | Done |
 
 ## Description
 The picker shows the whole tree with every node expanded, which stops working as the tree grows: finding one category
@@ -21,21 +21,32 @@ So a hit pulls its whole subtree along. Searching a parent name is how you get a
 about their parent (`Bio`, `Wochenmarkt`), which is exactly when the flat filter of most pickers fails.
 
 ## Acceptance Criteria
-- [ ] Search field in the picker sheet; empty input shows the full tree as today
-- [ ] A category matches when its name contains the query, case-insensitively
-- [ ] Every descendant of a matching category is shown too, at any depth, whether or not it matches itself
-- [ ] Matching rows stay in their tree shape, with their indentation — a hit deep in the tree still reads as belonging
+- [x] Search field in the picker sheet; empty input shows the full tree as today
+- [x] A category matches when its name contains the query, case-insensitively
+- [x] Every descendant of a matching category is shown too, at any depth, whether or not it matches itself
+- [x] Matching rows stay in their tree shape, with their indentation — a hit deep in the tree still reads as belonging
       where it belongs
-- [ ] `Neue Kategorie` and the per-row `+` from ticket 026 keep working while a search is active
-- [ ] The none-option keeps its first slot and its `noneLabel` wording
-- [ ] The path to a hit is shown and stays selectable, so indentation keeps its meaning
-- [ ] Matching is case-insensitive substring; umlauts are compared literally
-- [ ] Archived categories never appear, filtered or not
-- [ ] Clearing the field restores the full tree, and a quick-create closes the sheet as it does today
-- [ ] `CategoryTreeScreen` is untouched
-- [ ] Tests over a three-level tree: a hit, a descendant of a hit at depth three, an ancestor shown as path, no match, and
+- [x] `Neue Kategorie` and the per-row `+` from ticket 026 keep working while a search is active
+- [x] The none-option keeps its first slot and its `noneLabel` wording
+- [x] The path to a hit is shown and stays selectable, so indentation keeps its meaning
+- [x] Matching is case-insensitive substring; umlauts are compared literally
+- [x] Archived categories never appear, filtered or not
+- [x] Clearing the field restores the full tree, and a quick-create closes the sheet as it does today
+- [x] `CategoryTreeScreen` is untouched
+- [x] Tests over a three-level tree: a hit, a descendant of a hit at depth three, an ancestor shown as path, no match, and
       quick-create while filtered
-- [ ] `make check` green
+- [x] `make check` green
+
+## How it was built
+- `filterCategoryTree(roots, query)` next to `flattenVisible` in `domain/category_tree.dart`: a matching node is kept
+  whole, a non-matching one only as the path to a matching descendant. `depth` is carried over, so the indentation of a
+  filtered row still states where it really sits — asserted on the `contentPadding` of the depth-three row
+- The sheet became a `ConsumerStatefulWidget` for the query; the tree stays fully expanded as before
+- Archived categories keep falling out through `categoriesProvider(false)`, untouched by this ticket — the filter never
+  sees them
+- New suite `test/features/category/presentation/category_picker_search_test.dart` (8 tests) over a three-level tree.
+  Collateral: the three quick-create tests entered text through `find.byType(TextField)`, which now matches two fields;
+  they were scoped to the `AlertDialog`
 
 ## Resolved during refinement
 - **Ancestors** → the path to a hit is shown and behaves like any other row: selectable, with its `+`. The sheet stays "the
@@ -71,4 +82,5 @@ No file. A three-level tree built inline in the test, deeper than the two-level 
 - Output: ~2k tokens
 
 ### Implementation Tokens (estimate)
-_Filled after Done._
+- Input: ~55k tokens
+- Output: ~7k tokens

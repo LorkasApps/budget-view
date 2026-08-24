@@ -70,6 +70,42 @@ List<CategoryNode> flattenVisible(
   return visible;
 }
 
+/// Prunes the tree to what a search shows: a node whose name contains [query]
+/// keeps its whole subtree, and the path down to such a node is kept too, so a
+/// hit deep in the tree still reads as belonging where it belongs.
+///
+/// Matching is case-insensitive substring and otherwise literal — `Bruehe` does
+/// not find `Brühe`. `normalizeForMatching` is deliberately not used: it exists
+/// for machine comparison in dedupe and tagging, and widening it later would
+/// silently change what search does.
+List<CategoryNode> filterCategoryTree(List<CategoryNode> roots, String query) {
+  final needle = query.trim().toLowerCase();
+  if (needle.isEmpty) return roots;
+
+  List<CategoryNode> prune(List<CategoryNode> nodes) {
+    final kept = <CategoryNode>[];
+    for (final node in nodes) {
+      if (node.category.name.toLowerCase().contains(needle)) {
+        kept.add(node);
+        continue;
+      }
+      final children = prune(node.children);
+      if (children.isNotEmpty) {
+        kept.add(
+          CategoryNode(
+            category: node.category,
+            children: children,
+            depth: node.depth,
+          ),
+        );
+      }
+    }
+    return kept;
+  }
+
+  return prune(roots);
+}
+
 /// Uuids that may not become [category]'s parent: itself and its descendants.
 Set<String> ineligibleParents(List<Category> categories, Category category) {
   if (category.uuid.isEmpty) return const {};

@@ -42,7 +42,7 @@ Future<CategoryPick?> pickCategory(
   );
 }
 
-class _CategoryPickerSheet extends ConsumerWidget {
+class _CategoryPickerSheet extends ConsumerStatefulWidget {
   const _CategoryPickerSheet({
     required this.selected,
     required this.allowNone,
@@ -54,9 +54,24 @@ class _CategoryPickerSheet extends ConsumerWidget {
   final String noneLabel;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_CategoryPickerSheet> createState() =>
+      _CategoryPickerSheetState();
+}
+
+class _CategoryPickerSheetState extends ConsumerState<_CategoryPickerSheet> {
+  final _search = TextEditingController();
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final categoriesAsync = ref.watch(categoriesProvider(false));
     final theme = Theme.of(context);
+    final query = _search.text;
 
     return SafeArea(
       child: categoriesAsync.when(
@@ -72,7 +87,7 @@ class _CategoryPickerSheet extends ConsumerWidget {
           // Every node expanded: a picker should show the whole tree at once.
           final expanded = {for (final c in categories) c.uuid};
           final visible = flattenVisible(
-            buildCategoryTree(categories),
+            filterCategoryTree(buildCategoryTree(categories), query),
             expanded,
           );
 
@@ -86,11 +101,31 @@ class _CategoryPickerSheet extends ConsumerWidget {
                   style: theme.textTheme.titleMedium,
                 ),
               ),
-              if (allowNone) ...[
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: TextField(
+                  controller: _search,
+                  decoration: InputDecoration(
+                    isDense: true,
+                    prefixIcon: const Icon(Icons.search),
+                    hintText: 'Suchen',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: query.isEmpty
+                        ? null
+                        : IconButton(
+                            icon: const Icon(Icons.clear),
+                            tooltip: 'Suche leeren',
+                            onPressed: () => setState(_search.clear),
+                          ),
+                  ),
+                  onChanged: (_) => setState(() {}),
+                ),
+              ),
+              if (widget.allowNone) ...[
                 ListTile(
                   leading: const Icon(Icons.block_outlined),
-                  title: Text(noneLabel),
-                  selected: selected == null,
+                  title: Text(widget.noneLabel),
+                  selected: widget.selected == null,
                   onTap: () =>
                       Navigator.pop(context, const CategoryPick(null)),
                 ),
@@ -100,13 +135,18 @@ class _CategoryPickerSheet extends ConsumerWidget {
               ListTile(
                 leading: const Icon(Icons.add),
                 title: const Text('Neue Kategorie'),
-                onTap: () => _quickCreate(context, ref),
+                onTap: () => _quickCreate(context),
               ),
               const Divider(height: 1),
               if (categories.isEmpty)
                 const Padding(
                   padding: EdgeInsets.all(16),
                   child: Text('Noch keine Kategorien angelegt.'),
+                )
+              else if (visible.isEmpty)
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text('Kein Treffer.'),
                 ),
               for (final node in visible)
                 ListTile(
@@ -119,13 +159,13 @@ class _CategoryPickerSheet extends ConsumerWidget {
                     color: categoryColor(node.category.colorHex),
                   ),
                   title: Text(node.category.name),
-                  selected: node.category.uuid == selected,
+                  selected: node.category.uuid == widget.selected,
                   // Its own hit area: tapping the row still selects.
                   trailing: IconButton(
                     icon: const Icon(Icons.add),
                     tooltip: 'Unterkategorie in ${node.category.name}',
                     onPressed: () =>
-                        _quickCreate(context, ref, parent: node.category),
+                        _quickCreate(context, parent: node.category),
                   ),
                   onTap: () => Navigator.pop(
                     context,
@@ -141,11 +181,7 @@ class _CategoryPickerSheet extends ConsumerWidget {
 
   /// Creates a category and returns it as the pick, so the caller that opened
   /// this sheet is left with it selected.
-  Future<void> _quickCreate(
-    BuildContext context,
-    WidgetRef ref, {
-    Category? parent,
-  }) async {
+  Future<void> _quickCreate(BuildContext context, {Category? parent}) async {
     final created = await showDialog<String>(
       context: context,
       builder: (_) => _QuickCreateDialog(parent: parent),
