@@ -99,7 +99,7 @@ Typedef: `PdfParserRanking = ({PdfParser parser, double confidence})`
 
 ## Provider
 
-- `pdfParserRegistryProvider` (`pdf/pdf_parser_providers.dart`) — registers `const IngGiroParser()`, yielding exactly one parser: `ing-giro-v1`
+- `pdfParserRegistryProvider` (`pdf/pdf_parser_providers.dart`) — registers parsers in order: `const IngGiroParser()` (id `ing-giro-v1`) then `const TradeRepublicParser()` (id `trade-republic-cash-v1`)
 
 ## Conversion
 
@@ -118,11 +118,46 @@ Typedef: `PdfParserRanking = ({PdfParser parser, double confidence})`
 | `canParse(bytes)` | Returns `0.95` if first page text contains both `ING-DiBa AG` AND `Girokonto`, else `0.0`; never throws on corrupt/non-PDF bytes |
 | `parse(bytes)` | Converts PDF to positioned words via Syncfusion, delegates table logic to `parseIngStatement` |
 
-## PositionedWord & parseIngStatement (`pdf/ing_giro_layout.dart`)
+## TradeRepublicParser (`pdf/trade_republic_parser.dart`)
+
+| Property | Value |
+|---|---|
+| `id` | `trade-republic-cash-v1` |
+| `displayName` | `Trade Republic Cashkonto` |
+| `canParse(bytes)` | Returns `0.95` if first page text contains (`TRADE REPUBLIC BANK GMBH` OR `Trade Republic Bank GmbH`) AND `UMSATZÜBERSICHT`, else `0.0`; never throws |
+| `parse(bytes)` | Converts PDF to positioned words via Syncfusion, delegates table logic to `parseTradeRepublicStatement` |
+
+## parseTradeRepublicStatement (`pdf/trade_republic_layout.dart`)
+
+Pure function: `List<PositionedWord> → ParseResult`
+
+**Table Structure:** `DATUM | TYP | BESCHREIBUNG | ZAHLUNGSEINGANG | ZAHLUNGSAUSGANG | SALDO`. Column boundaries from each page's own header band (must carry `DATUM`, `TYP`, `BESCHREIBUNG`, `SALDO`); pages without this header skipped.
+
+**Row Direction:** Derived from running `SALDO` column (`new balance − previous balance`), not from which amount column holds the value. Printed amount compared against balance step; mismatch → warning.
+
+**Opening/Closing Balances:** From `KONTOÜBERSICHT` section — first band after header carrying `ANFANGSSALDO` and `ENDSALDO` with ≥2 amounts (first = opening, last = closing). Without them nothing is parsed (warning); direction would be unknown.
+
+**Reconciliation:** Rows must sum to `closing − opening`. Mismatch → NO transactions + warning (refuses half-read statement). `statementBalanceCents` = closing balance.
+
+**Row Grammar:** Band with ≥2 amounts starts a row (rightmost = new balance, prior = movement); band with description-column words but no amounts continues current row. Headings `BARMITTELÜBERSICHT`, `TRANSAKTIONSÜBERSICHT`, `HINWEISE` end table.
+
+**Counterparty Priority:** ISIN from description (e.g. `IE00077FRP95`); else payee from `for <name> (` pattern; else row's `TYP`.
+
+**Text Quirks:** Amount is ONE word with currency (`38,71 €`). Date wraps: `01 Juli` 3.8pt above baseline, `2026` 3.8pt below → band tolerance = 5.0pt (ING uses 3.0pt).
+
+**Exclusions:** `TRANSAKTIONSÜBERSICHT` (page 2, money-market sweep) deliberately not imported — its rows mirror cash rows that triggered them (e.g. `38,71 €` interest on 1st comes back as fund purchase on 2nd), so both would double-count and break reconciliation.
+
+## PositionedWord & groupIntoBands (`pdf/positioned_word.dart`)
 
 | Item | Details |
 |---|---|
 | `PositionedWord` | Immutable: `{page: int, left: double, top: double, text: String}` |
+| `groupIntoBands` | Pure function: `(List<PositionedWord>, {required double tolerance}) → List<List<PositionedWord>>`; a band holds words whose `top` differs by less than `tolerance`. Inside a band words come in reading order: visual lines split at a fixed 1.0pt, then left to right per line — sorting by `left` alone interleaves a wrapped cell with the line above it |
+
+## parseIngStatement (`pdf/ing_giro_layout.dart`)
+
+| Item | Details |
+|---|---|
 | `parseIngStatement` | Pure function: `List<PositionedWord> → ParseResult`; word text is trimmed on ingestion |
 
 **Row Grammar:**
@@ -209,8 +244,11 @@ Typedef: `PdfParserRanking = ({PdfParser parser, double confidence})`
 
 ## Testing
 
-- **Layout logic:** synthetic word coordinates (`test/features/transaction/import/pdf/ing_giro_layout_test.dart`); no PDF required
-- **Parser detection:** `canParse` behaviour and shipped registry contents (`test/features/transaction/import/pdf/ing_giro_can_parse_test.dart`)
+- **ING layout logic:** synthetic word coordinates (`test/features/transaction/import/pdf/ing_giro_layout_test.dart`); no PDF required
+- **ING parser detection:** `canParse` behaviour and shipped registry contents (`test/features/transaction/import/pdf/ing_giro_can_parse_test.dart`)
+- **Trade Republic layout logic:** synthetic coordinates from real statement geometry dump (`test/features/transaction/import/pdf/trade_republic_layout_test.dart`); covers row reading, ISIN counterparty, transfer payee with wrapped IBAN, sweep page ignored, two payouts staying distinct, reconciliation mismatch, contradicting amount, foreign layout refused, missing overview
+- **Trade Republic parser detection:** `canParse` behaviour (`test/features/transaction/import/pdf/trade_republic_can_parse_test.dart`); id, displayName, garbage/empty bytes
+- **Trade Republic geometry harness:** env-gated on `TR_PDF` (`test/tool/trade_republic_geometry_dump_test.dart`); optional `TR_PAGES`, `TR_DUMP_OUT`; dumps geometry to temp file and reports parsed rows, sum, closing balance, warnings
 - **Controller:** ranking, parse, toggle, edit, persist, summary (`test/features/transaction/import/domain/import_flow_controller_test.dart`)
 - **Widget:** UI wiring without database (`test/features/transaction/import/import_flow_widget_test.dart`)
 - **Dedupe:** hash units (`dedupe_hash_test.dart`, `content_hash_test.dart`, `core/text/normalize_test.dart`), `duplicate_checker_test.dart`, `imported_source_repository_test.dart`, and `pdf_dedupe_integration_test.dart` for the flow — re-import, row matches, account scoping, intra-batch, `ImportedSource` counts
