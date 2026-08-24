@@ -169,6 +169,25 @@ warning instead of being invented.
 or `ambiguous` (amount but no description). `includeInSave` defaults to true for
 `ok` rows, false for `ambiguous`. Rows without a money token are dropped.
 
+## Scanned PDFs (`domain/receipt_pdf_renderer.dart`, ticket 044)
+
+A PDF **without** a text layer is rasterised and read like a photo, instead of the
+old dead end (`Dieses PDF enthält keinen Text.`).
+
+| Item | Details |
+|---|---|
+| `ReceiptPdfRenderer` | `pageCount(bytes)` and `renderPage(bytes, pageNumber:, longestEdge:)`; `PdfxReceiptPdfRenderer` behind it |
+| Package | `pdfx` — on Android it renders through the OS's own `android.graphics.pdf.PdfRenderer`, so no pdfium enters the APK |
+| Resolution | `kRenderedPageEdge` = 2000 px longest edge, the photo path's downscale, so 035's tuning applies unchanged |
+| Page gate | above `kPageConfirmThreshold` = 10 pages the flow stops in `manyPagesWarning` and asks; `proceedAfterPageWarning()` continues |
+| Progress | `rendering` phase carries `pageCount` / `pagesRead`; the flow's `listenManual` opens a modal dialog naming the page |
+| Stacking | `stackOcrPages` shifts every page below the previous one and parses **once**, so a total on the last page still bounds positions on the first |
+
+Deliberately per **document**, not per page: a hybrid PDF (text on one page, a scan
+on the next) keeps the text-layer path, and the warning naming the unread pages is a
+noted gap, not built — no hybrid document is known here, and the figures of the text
+pages stay correct.
+
 ## Shared row rules (`domain/receipt_row_rules.dart`, ticket 043)
 
 Layout-independent rules both parsers use. Skip vocabulary stays per parser, because

@@ -5,12 +5,14 @@ import '../data/heuristic_receipt_line_item_parser.dart';
 import '../data/image_picker_receipt_image_source.dart';
 import '../data/jpeg_receipt_image_preprocessor.dart';
 import '../data/mlkit_ocr_service.dart';
+import '../data/pdfx_receipt_pdf_renderer.dart';
 import '../data/syncfusion_receipt_pdf_reader.dart';
 import 'ocr_service.dart';
 import 'receipt_document_source.dart';
 import 'receipt_image_source.dart';
 import 'receipt_line_item_parser.dart';
 import 'receipt_pdf_reader.dart';
+import 'receipt_pdf_renderer.dart';
 import 'receipt_scan_flow_controller.dart';
 
 final receiptImageSourceProvider = Provider<ReceiptImageSource>(
@@ -39,6 +41,10 @@ final receiptPdfSourceProvider = Provider<ReceiptPdfSource>(
 
 final receiptPdfReaderProvider = Provider<ReceiptPdfReader>(
   (_) => const SyncfusionReceiptPdfReader(),
+);
+
+final receiptPdfRendererProvider = Provider<ReceiptPdfRenderer>(
+  (_) => const PdfxReceiptPdfRenderer(),
 );
 
 /// `autoDispose` on purpose: leaving the flow must drop the photo bytes.

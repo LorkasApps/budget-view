@@ -6,6 +6,7 @@ import 'package:budget_view/features/drilldown/scan/domain/receipt_document_sour
 import 'package:budget_view/features/drilldown/scan/domain/receipt_image_source.dart';
 import 'package:budget_view/features/drilldown/scan/domain/receipt_line_item_parser.dart';
 import 'package:budget_view/features/drilldown/scan/domain/receipt_pdf_reader.dart';
+import 'package:budget_view/features/drilldown/scan/domain/receipt_pdf_renderer.dart';
 import 'package:budget_view/features/drilldown/scan/domain/receipt_scan_providers.dart';
 import 'package:budget_view/features/transaction/data/transaction.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -127,6 +128,30 @@ class FakeReceiptPdfReader implements ReceiptPdfReader {
   ReceiptParseResult? read(Uint8List bytes) => result;
 }
 
+/// Renders a fixed number of pages, recording what it was asked for so a test can
+/// assert page order and the scale the flow requests (ticket 044).
+class FakeReceiptPdfRenderer implements ReceiptPdfRenderer {
+  FakeReceiptPdfRenderer({this.pages = 1});
+
+  final int pages;
+  final List<int> renderedPages = [];
+  final List<int> requestedEdges = [];
+
+  @override
+  Future<int> pageCount(Uint8List bytes) async => pages;
+
+  @override
+  Future<Uint8List> renderPage(
+    Uint8List bytes, {
+    required int pageNumber,
+    required int longestEdge,
+  }) async {
+    renderedPages.add(pageNumber);
+    requestedEdges.add(longestEdge);
+    return Uint8List.fromList([pageNumber, 0, 0]);
+  }
+}
+
 /// Would blow up if the PDF path ever fell through to the image parser.
 class ThrowingReceiptLineItemParser implements ReceiptLineItemParser {
   const ThrowingReceiptLineItemParser();
@@ -185,6 +210,7 @@ ProviderContainer containerWith({
   ReceiptLineItemParser? parser,
   ReceiptPdfSource? pdfSource,
   ReceiptPdfReader? pdfReader,
+  ReceiptPdfRenderer? pdfRenderer,
 }) {
   final container = ProviderContainer(
     overrides: [
@@ -210,6 +236,9 @@ ProviderContainer containerWith({
       ),
       receiptPdfReaderProvider.overrideWithValue(
         pdfReader ?? FakeReceiptPdfReader(defaultPdfParseResult()),
+      ),
+      receiptPdfRendererProvider.overrideWithValue(
+        pdfRenderer ?? FakeReceiptPdfRenderer(),
       ),
     ],
   );

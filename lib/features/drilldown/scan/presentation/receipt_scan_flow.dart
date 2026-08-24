@@ -20,7 +20,26 @@ Future<void> startReceiptScan(
   WidgetRef ref,
   Transaction transaction,
 ) async {
-  final subscription = ref.listenManual(receiptScanFlowProvider, (_, _) {});
+  // The progress dialog is opened from the listener rather than around an await:
+  // rendering starts inside the controller call, after the file picker is gone.
+  var progressOpen = false;
+  final subscription = ref.listenManual(receiptScanFlowProvider, (
+    previous,
+    next,
+  ) {
+    final rendering = next.phase == ReceiptScanPhase.rendering;
+    if (rendering && !progressOpen && context.mounted) {
+      progressOpen = true;
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const _PageProgressDialog(),
+      ).then((_) => progressOpen = false);
+    } else if (!rendering && progressOpen && context.mounted) {
+      progressOpen = false;
+      Navigator.of(context).pop();
+    }
+  });
   try {
     while (true) {
       final source = await showScanSourceSheet(context);
@@ -44,6 +63,17 @@ Future<void> startReceiptScan(
           return;
         }
         await controller.proceedAfterWarning();
+      }
+
+      if (ref.read(receiptScanFlowProvider).phase ==
+          ReceiptScanPhase.manyPagesWarning) {
+        if (!context.mounted) return;
+        final pages = ref.read(receiptScanFlowProvider).pageCount;
+        if (!await _confirmPageCount(context, pages)) {
+          controller.cancel();
+          return;
+        }
+        await controller.proceedAfterPageWarning();
       }
 
       if (!context.mounted) return;
@@ -109,6 +139,56 @@ Future<bool> _confirmRescan(
     ),
   );
   return proceed ?? false;
+}
+
+/// A scan with more pages than a receipt has is worth a question — reading it
+/// means rendering and recognising every page.
+Future<bool> _confirmPageCount(BuildContext context, int pages) async {
+  final proceed = await showDialog<bool>(
+    context: context,
+    builder: (dialogContext) => AlertDialog(
+      title: const Text('Langes Dokument'),
+      content: Text('Dieses PDF hat $pages Seiten. Alle lesen?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: const Text('Abbrechen'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(dialogContext, true),
+          child: const Text('Alle lesen'),
+        ),
+      ],
+    ),
+  );
+  return proceed ?? false;
+}
+
+/// Says which page is being read. Several seconds of silence reads as a frozen
+/// app, and a scanned document takes about a second per page.
+class _PageProgressDialog extends ConsumerWidget {
+  const _PageProgressDialog();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(receiptScanFlowProvider);
+    final page = state.pagesRead + 1;
+    return AlertDialog(
+      content: Row(
+        children: [
+          const CircularProgressIndicator(),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Text(
+              state.pageCount <= 1
+                  ? 'Beleg wird gelesen…'
+                  : 'Seite $page von ${state.pageCount} wird gelesen…',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 Future<bool> _askScanAnother(BuildContext context, int persisted) async {

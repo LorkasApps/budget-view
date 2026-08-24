@@ -91,11 +91,13 @@ void main() {
   );
 
   test(
-    'a PDF with no text layer fails, pointing the user at the camera instead',
+    'a PDF with no text layer is rendered page by page and read like a photo',
     () async {
+      final renderer = FakeReceiptPdfRenderer(pages: 3);
       final container = containerWith(
         isar: isar,
         pdfReader: const FakeReceiptPdfReader(null),
+        pdfRenderer: renderer,
       );
       final transaction = await savedExpense(container);
       final controller = container.read(receiptScanFlowProvider.notifier);
@@ -103,10 +105,51 @@ void main() {
       await controller.startPdfScan(transaction: transaction);
 
       final state = container.read(receiptScanFlowProvider);
-      expect(state.phase, ReceiptScanPhase.failed);
-      expect(state.errorMessage, contains('Fotografiere'));
+      expect(state.phase, ReceiptScanPhase.awaitingConfirm);
+      expect(state.candidates.map((c) => c.description), ['Milch', 'Brot']);
+      expect(renderer.renderedPages, [1, 2, 3], reason: 'in page order');
+      // The photo path's downscale, so 035's tuning applies unchanged.
+      expect(renderer.requestedEdges, everyElement(2000));
+      expect(state.pageCount, 3);
+      expect(state.pagesRead, 3);
     },
   );
+
+  test('a long scan asks before reading, and proceeding reads it', () async {
+    final renderer = FakeReceiptPdfRenderer(pages: 34);
+    final container = containerWith(
+      isar: isar,
+      pdfReader: const FakeReceiptPdfReader(null),
+      pdfRenderer: renderer,
+    );
+    final transaction = await savedExpense(container);
+    final controller = container.read(receiptScanFlowProvider.notifier);
+
+    await controller.startPdfScan(transaction: transaction);
+
+    var state = container.read(receiptScanFlowProvider);
+    expect(state.phase, ReceiptScanPhase.manyPagesWarning);
+    expect(state.pageCount, 34);
+    expect(renderer.renderedPages, isEmpty, reason: 'nothing read yet');
+
+    await controller.proceedAfterPageWarning();
+
+    state = container.read(receiptScanFlowProvider);
+    expect(state.phase, ReceiptScanPhase.awaitingConfirm);
+    expect(renderer.renderedPages, hasLength(34));
+  });
+
+  test('a PDF that carries a text layer is never rendered', () async {
+    final renderer = FakeReceiptPdfRenderer(pages: 2);
+    final container = containerWith(isar: isar, pdfRenderer: renderer);
+    final transaction = await savedExpense(container);
+    final controller = container.read(receiptScanFlowProvider.notifier);
+
+    await controller.startPdfScan(transaction: transaction);
+
+    expect(renderer.renderedPages, isEmpty);
+    expect(container.read(receiptScanFlowProvider).pageCount, 0);
+  });
 
   test(
     'a duplicate PDF stops at duplicateWarning; proceeding reads via the PDF '

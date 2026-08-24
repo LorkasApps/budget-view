@@ -9,6 +9,7 @@ import '../../../transaction/data/transaction.dart';
 import '../../data/line_item.dart';
 import '../../domain/line_item_providers.dart';
 import '../../domain/line_item_repository.dart';
+import 'ocr_page_stack.dart';
 import 'ocr_service.dart';
 import 'receipt_image_source.dart';
 import 'receipt_line_item_parser.dart';
@@ -19,6 +20,12 @@ enum ReceiptScanPhase {
   capturing,
   hashing,
   duplicateWarning,
+
+  /// A scanned PDF whose page count is worth asking about before reading it.
+  manyPagesWarning,
+
+  /// Rasterising and recognising a scanned PDF page by page (ticket 044).
+  rendering,
   recognizing,
   parsing,
   awaitingConfirm,
@@ -28,6 +35,14 @@ enum ReceiptScanPhase {
   failed,
 }
 
+/// Above this, reading is worth a question: a handful of pages is a receipt, a
+/// hundred is a document picked by accident.
+const kPageConfirmThreshold = 10;
+
+/// Longest edge a rendered page is scaled to, matching the photo path's downscale
+/// so everything ticket 035 tuned against real receipts applies unchanged.
+const kRenderedPageEdge = 2000;
+
 @immutable
 class ReceiptScanFlowState {
   const ReceiptScanFlowState({
@@ -36,6 +51,8 @@ class ReceiptScanFlowState {
     this.candidates = const [],
     this.expectedSumCents,
     this.unreadRows = const [],
+    this.pageCount = 0,
+    this.pagesRead = 0,
     this.kind = ImportedSourceKind.photo,
     this.filename = '',
     this.holdsImage = false,
@@ -59,6 +76,11 @@ class ReceiptScanFlowState {
   /// collapsed diagnostic (ticket 045).
   final List<String> unreadRows;
 
+  /// Pages of a scanned PDF, and how many of them are through OCR — zero for
+  /// every other source (ticket 044).
+  final int pageCount;
+  final int pagesRead;
+
   /// What the completed pass will record — a capture or a picked document.
   final ImportedSourceKind kind;
 
@@ -81,6 +103,7 @@ class ReceiptScanFlowState {
   bool get busy => switch (phase) {
         ReceiptScanPhase.capturing ||
         ReceiptScanPhase.hashing ||
+        ReceiptScanPhase.rendering ||
         ReceiptScanPhase.recognizing ||
         ReceiptScanPhase.parsing ||
         ReceiptScanPhase.persisting =>
@@ -94,6 +117,8 @@ class ReceiptScanFlowState {
     List<LineItemCandidate>? candidates,
     int? expectedSumCents,
     List<String>? unreadRows,
+    int? pageCount,
+    int? pagesRead,
     ImportedSourceKind? kind,
     String? filename,
     bool? holdsImage,
@@ -107,6 +132,8 @@ class ReceiptScanFlowState {
         candidates: candidates ?? this.candidates,
         expectedSumCents: expectedSumCents ?? this.expectedSumCents,
         unreadRows: unreadRows ?? this.unreadRows,
+        pageCount: pageCount ?? this.pageCount,
+        pagesRead: pagesRead ?? this.pagesRead,
         kind: kind ?? this.kind,
         filename: filename ?? this.filename,
         holdsImage: holdsImage ?? this.holdsImage,
@@ -242,11 +269,77 @@ class ReceiptScanFlowController extends AutoDisposeNotifier<ReceiptScanFlowState
     // No cancel check after the read: it is synchronous, unlike OCR.
     final parsed = ref.read(receiptPdfReaderProvider).read(bytes);
     if (parsed == null) {
-      _fail(
-        'Dieses PDF enthält keinen Text. Fotografiere den Beleg stattdessen.',
+      // No text layer — a scan. Its pages go through OCR like photos (044).
+      await _countPages(bytes);
+      return;
+    }
+
+    state = state.copyWith(
+      phase: ReceiptScanPhase.awaitingConfirm,
+      candidates: parsed.candidates,
+      expectedSumCents: parsed.expectedPositionSumCents,
+      unreadRows: parsed.unreadRows,
+    );
+  }
+
+  /// Asks before reading a document that is longer than a receipt.
+  Future<void> _countPages(Uint8List bytes) async {
+    final pages = await ref.read(receiptPdfRendererProvider).pageCount(bytes);
+    if (_bytes == null) return;
+    if (pages > kPageConfirmThreshold) {
+      state = state.copyWith(
+        phase: ReceiptScanPhase.manyPagesWarning,
+        pageCount: pages,
       );
       return;
     }
+    await _renderPages(pages);
+  }
+
+  /// The user kept going after the "this many pages?" question.
+  Future<void> proceedAfterPageWarning() async {
+    if (state.phase != ReceiptScanPhase.manyPagesWarning) return;
+    try {
+      await _renderPages(state.pageCount);
+    } catch (error) {
+      _fail(error);
+    }
+  }
+
+  /// Renders and recognises page by page, then parses the stacked pages once, so
+  /// a total on the last page still bounds the positions on the first.
+  Future<void> _renderPages(int pages) async {
+    final bytes = _bytes;
+    if (bytes == null) return;
+
+    final renderer = ref.read(receiptPdfRendererProvider);
+    final preprocessor = ref.read(receiptImagePreprocessorProvider);
+    final ocr = ref.read(ocrServiceProvider);
+
+    final recognized = <OcrResult>[];
+    for (var page = 1; page <= pages; page++) {
+      state = state.copyWith(
+        phase: ReceiptScanPhase.rendering,
+        pageCount: pages,
+        pagesRead: page - 1,
+      );
+      final image = await renderer.renderPage(
+        bytes,
+        pageNumber: page,
+        longestEdge: kRenderedPageEdge,
+      );
+      // The user may have cancelled while a page was rendering.
+      if (_bytes == null) return;
+      final prepared = await preprocessor.prepare(image);
+      if (_bytes == null) return;
+      recognized.add(await ocr.recognize(prepared));
+      if (_bytes == null) return;
+    }
+
+    state = state.copyWith(phase: ReceiptScanPhase.parsing, pagesRead: pages);
+    final parsed = ref
+        .read(receiptLineItemParserProvider)
+        .parse(stackOcrPages(recognized));
 
     state = state.copyWith(
       phase: ReceiptScanPhase.awaitingConfirm,

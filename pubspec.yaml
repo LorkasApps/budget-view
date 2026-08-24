@@ -73,6 +73,10 @@ dependencies:
   # On-device OCR for receipt scanning (Latin script).
   google_mlkit_text_recognition: ^0.17.1
 
+  # Rasterising scanned PDF receipts for the OCR path. Renders through Android's
+  # own PdfRenderer, so no pdfium enters the APK.
+  pdfx: ^2.11.0
+
   # Donut chart for the monthly category report.
   fl_chart: ^1.2.0
 

@@ -6,7 +6,7 @@
 | **Epic** | Drilldown |
 | **Domain** | Drilldown |
 | **Blocked By** | 043 (the OCR parser must carry the borrowed rules first) |
-| **Status** | Ready |
+| **Status** | In Progress |
 
 ## Description
 Split out of 033. A PDF that carries a text layer is read directly — no OCR involved — and that path is done. A **scanned**
@@ -49,17 +49,39 @@ available when 033 closed.
   than produced text, the flow warns which pages carried none — same bar as the statement import, never silently half-read
 
 ## Acceptance Criteria
-- [ ] `pdfx` added; the Android path renders through the OS `PdfRenderer` and the release APK grows by no more than a
-      megabyte (measured before and after, `make release-check`)
-- [ ] `ReceiptPdfRenderer` interface with the `pdfx` implementation behind it; every flow test still runs without a real PDF
-- [ ] A PDF **with** a text layer behaves exactly as today — no rendering, no OCR involved
-- [ ] A PDF **without** a text layer renders each page at 2000 px longest edge and runs the existing OCR pipeline, deskew
+- [x] `pdfx` added; the Android path renders through the OS `PdfRenderer`
+- [ ] The release APK grows by no more than a megabyte (measured before and after, `make release-check`) — **open, needs the
+      user's build**
+- [x] `ReceiptPdfRenderer` interface with the `pdfx` implementation behind it; every flow test still runs without a real PDF
+- [x] A PDF **with** a text layer behaves exactly as today — no rendering, no OCR involved (asserted: the renderer is never
+      called)
+- [x] A PDF **without** a text layer renders each page at 2000 px longest edge and runs the existing OCR pipeline, deskew
       included, instead of failing with `Dieses PDF enthält keinen Text.`
-- [ ] The busy state names the page being read (`Seite 2 von 4 wird gelesen…`)
-- [ ] A document with more than 10 pages asks for confirmation before it is read
-- [ ] A document whose pages partly carry text keeps the text-layer path and warns which pages carried none
-- [ ] Checksum and credits behave exactly like the photo path — inherited from 043, not reimplemented here
-- [ ] `make check` green
+- [x] The busy state names the page being read (`Seite 2 von 4 wird gelesen…`)
+- [x] A document with more than 10 pages asks for confirmation before it is read
+- [x] Checksum and credits behave exactly like the photo path — inherited from 043, not reimplemented here
+- [x] `make check` green — 513 passed, 0 failed
+
+## Noted instead of built: the hybrid warning
+> ~~A document whose pages partly carry text keeps the text-layer path and warns which pages carried none.~~
+
+Deferred deliberately (user decision, 2026-08-24). The reader hands back a parse result without saying which pages carried
+words, so the warning needs either a field on the shared `ReceiptParseResult` that the OCR path would never fill, or a second
+method on `ReceiptPdfReader`. Against that: the refinement already recorded that no hybrid document is known here, and the
+case is not silently wrong about figures — a scanned page contributes no words, so the positions of the text pages stay
+correct and still reconcile against their own total. What is missing is a hint, and it gets written when a real hybrid PDF
+shows up.
+
+## How it was built
+- `ReceiptPdfRenderer` (domain) with `PdfxReceiptPdfRenderer` (data). It opens the document per call rather than holding a
+  native handle across awaits, which the flow has no lifecycle for
+- The controller routes: `read()` returning null now leads to `_countPages` instead of a failure. Above
+  `kPageConfirmThreshold` (10) it stops in a new `manyPagesWarning` phase, mirroring the existing `duplicateWarning` handshake
+- Pages are rendered and recognised one by one in a new `rendering` phase carrying `pageCount` / `pagesRead`, then **stacked
+  into one `OcrResult`** by `stackOcrPages` and parsed once. Parsing per page would have left a total on the last page unable
+  to bound the positions on the first
+- The progress dialog is opened from the flow's existing `listenManual` subscription when the phase turns `rendering`, not
+  around an await — rendering begins inside the controller call, after the file picker is gone
 
 ## Device checks (release APK — the lesson of 034)
 - [ ] A real scanned PDF is read end to end on a **release** build, not on `make run`
@@ -84,4 +106,5 @@ No committed documents. A scanned PDF is handed over out of band, like the recei
 - Output: ~3k tokens
 
 ### Implementation Tokens (estimate)
-_Filled after Done._
+- Input: ~75k tokens
+- Output: ~10k tokens
