@@ -41,7 +41,7 @@
 | 037-clear-category-in-import-preview.md | Feature | Import | Transaction | Done | None | Reach the row category from the import edit dialog; chip already allows change and clear |
 | 038-category-picker-search.md | Feature | Categories | Category | Done | None | Search in the category picker: a name hit pulls its whole subtree along, at any depth |
 | 039-back-from-a-tab-exits-the-app.md | Bug | None | Infra | In Progress | None | Back at tab root closes the app instead of returning to Konten; the IndexedStack has no history around it |
-| 040-trade-republic-import.md | Feature | Import | Transaction | In Progress | 032 | Trade Republic cash/Tagesgeld parser; securities lines are plain expenses/income, no holdings model |
+| 040-trade-republic-import.md | Feature | Import | Transaction | Done | 032 | Trade Republic cash/Tagesgeld parser; securities lines are plain expenses/income, no holdings model |
 | 041-transfer-still-shows-category-required.md | Bug | None | Transaction | Draft | None | Category field keeps its red required marker on a transfer although saving works |
 | 042-transfer-counter-leg-on-target-account.md | Feature | None | Transaction | Draft | 032 | Name the target account of a transfer and book the counter-leg there; collides with dedupe on later import |
 | 043-ocr-path-misses-the-pdf-rules.md | Bug | Drilldown | Drilldown | Draft | None | A screenshot of a receipt is read by weaker rules than its PDF: struck-through price, credits, plausibility bound |

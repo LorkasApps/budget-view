@@ -6,7 +6,7 @@
 | **Epic** | Import |
 | **Domain** | Transaction |
 | **Blocked By** | 032 (transfers in and out of the Tagesgeld account) |
-| **Status** | In Progress |
+| **Status** | Done |
 
 ## Description
 A second concrete parser behind the `PdfParser` seam from ticket 007, next to `IngGiroParser`. The registry already ranks
@@ -47,8 +47,8 @@ OCR, no new dependency.
 - [x] A statement of the wrong kind or an unknown layout is refused with a readable message, never half-parsed — same bar the
       device pass confirmed for foreign documents
 - [x] Securities lines become ordinary bookings: purchase as expense, dividend and interest as income — dividends and
-      interest are confirmed against the real statement; a **purchase** does not occur on a TR cash statement at all (see
-      the scope correction below), so that half rides on the ING cross-check
+      interest are confirmed against the real statement; a **purchase** occurs on neither document this ticket can read
+      (see the scope correction and the struck AC below)
 - [x] Their counterparty is the instrument name; ISIN and remaining detail go into the description — the document prints no
       instrument name, only `Cash Dividend for ISIN IE00077FRP95`, so the ISIN *is* the counterparty
 - [x] Monthly savings-plan executions of the same instrument do not collide in the dedupe check — same amount, same
@@ -58,9 +58,20 @@ OCR, no new dependency.
 - [x] Unit tests over synthetic extracted text: row parsing, securities lines, interest, balance reconciliation match and
       mismatch, refusal of a foreign layout
 - [x] Env-gated harness parses a real statement from a path in an environment variable; no document is committed
-- [ ] Verified once that securities charges on a real **ING** Giro statement already arrive as bookings, so the claim in the
-      resolution holds
 - [x] `make check` green
+
+## Struck AC — the ING cross-check has no document to run against
+> ~~Verified once that securities charges on a real **ING** Giro statement already arrive as bookings, so the claim in the
+> resolution holds.~~
+
+The refinement resolution assumed ING securities charges appear as ordinary lines on the Giro statement. That only holds
+when the depot settles through the Girokonto. Here it settles through a **Wertpapier-Referenzkonto**, and that account
+gets no monthly statement at all — only Abrechnungen and Depotauszüge. So the line the AC wanted to see does not exist on
+any document this parser reads, and the AC is struck rather than left open.
+
+What holds instead: dividends and interest arrive as income through the Trade Republic cash statement (confirmed against
+the real document), and ING securities transactions are entered by hand. The Abrechnung and the Depotauszug are PDFs, so a
+parser behind the same `PdfParser` seam stays possible later — decided against filing it now.
 
 ## Scope correction from the real document
 `TRANSAKTIONSÜBERSICHT` on page 2 is **not** a securities table: it is the money-market sweep of idle cash
@@ -85,10 +96,6 @@ the doc comment of `trade_republic_layout.dart`.
   row read `Outgoing (DE0750…) transfer for Lukas Kochniss` and the payee fell back to the type
 - Verified against the real statement: 7 bookings, sum −93707 cents, closing balance 2134471, no warnings
 
-## Open
-- The ING cross-check. Needs a real Giro statement carrying a securities charge:
-  `ING_PDF=/pfad/auszug.pdf flutter test test/tool/ing_geometry_dump_test.dart` — the charge has to show up as an ordinary
-  booking in the dumped rows
 
 ## Out of Scope
 - Live prices, portfolio valuation, performance — nothing that needs a network call
@@ -109,4 +116,5 @@ No committed documents. A real statement is handed over out of band and read by 
 - Output: ~3k tokens
 
 ### Implementation Tokens (estimate)
-_Filled after Done._
+- Input: ~110k tokens
+- Output: ~14k tokens

@@ -241,6 +241,7 @@ Pure function: `List<PositionedWord> → ParseResult`
 - Password-protected PDFs (out of scope)
 - Batch import (out of scope; one file at a time)
 - `valueDate` has nowhere to go — `Transaction` entity lacks Wertstellung field
+- ING securities transactions: no parseable document. The depot settles through a Wertpapier-Referenzkonto, which gets no monthly statement — only Abrechnungen and Depotauszüge, for which no parser exists. Entered by hand. Dividends and interest do arrive through the Trade Republic cash statement
 
 ## Testing
 
