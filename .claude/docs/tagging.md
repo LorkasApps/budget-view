@@ -38,7 +38,13 @@ Sorting happens in Dart, not in a query: the table is small and it keeps the ord
 | `kind == regular` | a transfer is money between own accounts; no rule should propose spending category for it |
 | `categoryUuid != null` | nothing to learn from an uncategorized booking |
 | `categoryAutoSuggested == false` | an accepted suggestion would only reinforce itself |
-| normalized `counterparty` non-empty | no reliable signal to match on |
+| normalized `taggingKey` non-empty | no reliable signal to match on |
+
+**The key is `Transaction.taggingKey`** — `merchant` when one was read out of the purpose text, `counterparty` otherwise
+(ticket 047). A collective payer like PayPal signs every booking with its own name, so keying on the counterparty produced
+one rule for every shop and suggested whichever category was assigned first. Exactly **one** rule per booking: a parallel
+counterparty rule would grow its `hitCount` across all merchants and mislead in the rule list. `ImportRow.taggingKey`
+mirrors it, so the import preview suggests what the booking will later learn.
 
 Normalization is `normalizeForMatching` from `lib/core/text/normalize.dart` — the same function the dedupe hash uses, deliberately shared so a rule matches exactly what dedupe considers the same counterparty.
 

@@ -12,6 +12,7 @@ import '../../domain/dedupe_hash.dart';
 import '../../domain/transaction_providers.dart';
 import '../candidate_conversion.dart';
 import '../pdf/parse_result.dart';
+import 'merchant_extraction.dart';
 import '../pdf/pdf_parser.dart';
 import '../pdf/pdf_parser_providers.dart';
 import '../pdf/pdf_parser_registry.dart';
@@ -24,6 +25,7 @@ class ImportRow {
     required this.amountCents,
     required this.description,
     required this.counterparty,
+    this.merchant = '',
     this.categoryUuid,
     this.categorySuggested = false,
     this.kind = TransactionKind.regular,
@@ -35,6 +37,7 @@ class ImportRow {
         amountCents = candidate.amountCents,
         description = candidate.description,
         counterparty = candidate.counterparty ?? '',
+        merchant = candidate.merchant ?? '',
         categoryUuid = null,
         categorySuggested = false,
         kind = TransactionKind.regular,
@@ -44,6 +47,14 @@ class ImportRow {
   final int amountCents;
   final String description;
   final String counterparty;
+
+  /// The shop behind a collective payer, read out of the purpose text on parse.
+  /// Empty for every ordinary row (ticket 047).
+  final String merchant;
+
+  /// What the suggestion for this row keys on — mirrors `Transaction.taggingKey`,
+  /// so the preview offers what the booking will later learn.
+  String get taggingKey => merchant.isEmpty ? counterparty : merchant;
 
   /// Null while uncategorized — imported rows are allowed to stay that way.
   final String? categoryUuid;
@@ -72,6 +83,7 @@ class ImportRow {
         amountCents: amountCents,
         description: description,
         counterparty: counterparty,
+        merchant: merchant.isEmpty ? null : merchant,
       );
 
   /// Separate from [copyWith] because copyWith cannot express "set back to
@@ -82,6 +94,7 @@ class ImportRow {
       amountCents: amountCents,
       description: description,
       counterparty: counterparty,
+      merchant: merchant,
       categoryUuid: uuid,
       categorySuggested: suggested,
       kind: kind,
@@ -102,6 +115,7 @@ class ImportRow {
       amountCents: amountCents ?? this.amountCents,
       description: description ?? this.description,
       counterparty: counterparty ?? this.counterparty,
+      merchant: merchant,
       categoryUuid: categoryUuid,
       categorySuggested: categorySuggested,
       kind: kind ?? this.kind,
@@ -287,7 +301,15 @@ class ImportFlowController extends AutoDisposeNotifier<ImportFlowState> {
     try {
       final result = await parser.parse(bytes);
       state = state.copyWith(
-        rows: result.transactions.map(ImportRow.fromCandidate).toList(),
+        // The merchant is read here, after parsing: a purpose text has the same
+        // shape whatever bank printed it, while the column it came from does not,
+        // so a second parser inherits this for free (ticket 047).
+        rows: [
+          for (final candidate in result.transactions)
+            ImportRow.fromCandidate(
+              candidate.withMerchant(extractMerchant(candidate.description)),
+            ),
+        ],
         warnings: result.warnings,
         rowMatches: const {},
         rowSuggestions: const {},
@@ -411,8 +433,8 @@ class ImportFlowController extends AutoDisposeNotifier<ImportFlowState> {
 
     for (var index = 0; index < rows.length; index++) {
       final row = rows[index];
-      final found = cache[row.counterparty] ??=
-          await service.suggest(row.counterparty);
+      final found =
+          cache[row.taggingKey] ??= await service.suggest(row.taggingKey);
       if (found.isNotEmpty) suggestions[index] = found;
 
       if (row.categoryUuid != null && !row.categorySuggested) continue;

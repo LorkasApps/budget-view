@@ -101,6 +101,24 @@ Typedef: `PdfParserRanking = ({PdfParser parser, double confidence})`
 
 - `pdfParserRegistryProvider` (`pdf/pdf_parser_providers.dart`) — registers parsers in order: `const IngGiroParser()` (id `ing-giro-v1`) then `const TradeRepublicParser()` (id `trade-republic-cash-v1`)
 
+## Merchant extraction (`domain/merchant_extraction.dart`, ticket 047)
+
+`extractMerchant(description)` reads the shop hidden behind a collective payer, or
+null. Run **after** parsing over every candidate (in `ImportFlowController.parse`,
+not inside a parser): a purpose text has the same shape whatever bank printed it,
+the column it came from does not, so a second parser inherits it for free.
+
+PayPal's shape: `<reference>/PP.4163.PP/. <merchant>, Ihr Einkauf bei <merchant>`.
+The merchant appears **twice**, and ING wraps the purpose text mid-word, so on a
+`Lastschrift` the second spelling is clean while on a `Gutschrift` the first one is.
+Both are read and the one with fewer whitespace runs wins — `normalizeForMatching`
+keeps single spaces, so `picnic g mbh` and `picnic gmbh` would otherwise be two
+rule keys for one shop. Missing merchant → null → the row keys on its counterparty.
+
+Verified against a real January statement: 13 of 60 rows carried a merchant, every
+one unbroken. Harness: `_merchantTest` in `test/tool/ing_geometry_dump_test.dart`,
+env-gated on `ING_PDF`.
+
 ## Conversion
 
 `candidateToTransaction(candidate, {required accountUuid})` (`candidate_conversion.dart`)

@@ -13,12 +13,14 @@ import 'package:isar_community/isar.dart';
 Transaction _booking({
   String? categoryUuid = 'cat-groceries',
   String counterparty = 'REWE Berlin',
+  String merchant = '',
   bool categoryAutoSuggested = false,
   TransactionKind kind = TransactionKind.regular,
 }) {
   return Transaction()
     ..categoryUuid = categoryUuid
     ..counterparty = counterparty
+    ..merchant = merchant
     ..categoryAutoSuggested = categoryAutoSuggested
     ..kind = kind;
 }
@@ -129,5 +131,58 @@ void main() {
     final matches = await rules.findByCounterparty('rewe berlin');
     expect(matches, hasLength(1));
     expect(matches.single.hitCount, 1);
+  });
+
+  group('collective payers (ticket 047)', () {
+    test('the merchant wins over the counterparty as the rule key', () async {
+      await service.learnFrom(
+        _booking(
+          counterparty: 'PayPal Europe S.a.r.l. et Cie S.C.A',
+          merchant: 'Picnic GmbH',
+        ),
+      );
+
+      expect(await rules.findByCounterparty('picnic gmbh'), hasLength(1));
+      // Exactly one rule per booking: a parallel PayPal rule would keep growing
+      // its hitCount across every shop and suggest a lottery.
+      expect(await rules.findAll(), hasLength(1));
+    });
+
+    test('two shops behind one payer learn two separate rules', () async {
+      await service.learnFrom(
+        _booking(
+          counterparty: 'PayPal Europe S.a.r.l. et Cie S.C.A',
+          merchant: 'Picnic GmbH',
+          categoryUuid: 'cat-groceries',
+        ),
+      );
+      await service.learnFrom(
+        _booking(
+          counterparty: 'PayPal Europe S.a.r.l. et Cie S.C.A',
+          merchant: 'HomeVision',
+          categoryUuid: 'cat-hobby',
+        ),
+      );
+
+      expect(
+        (await rules.findByCounterparty('picnic gmbh')).single.categoryUuid,
+        'cat-groceries',
+      );
+      expect(
+        (await rules.findByCounterparty('homevision')).single.categoryUuid,
+        'cat-hobby',
+      );
+    });
+
+    test('a row without a merchant still learns its counterparty', () async {
+      await service.learnFrom(
+        _booking(counterparty: 'PayPal Europe S.a.r.l. et Cie S.C.A'),
+      );
+
+      expect(
+        await rules.findByCounterparty('paypal europe s.a.r.l. et cie s.c.a'),
+        hasLength(1),
+      );
+    });
   });
 }

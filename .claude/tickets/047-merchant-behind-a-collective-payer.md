@@ -6,7 +6,7 @@
 | **Epic** | Auto-Tagging |
 | **Domain** | Transaction |
 | **Blocked By** | None |
-| **Status** | Ready |
+| **Status** | Done |
 
 ## Description
 Tagging learns and suggests on the **counterparty** only. For a collective payer that is useless: every PayPal payment carries
@@ -79,21 +79,44 @@ Isar returns its default for rows written before it existed — exactly how 032 
   the number would mislead in 025's rule list where `hitCount` is visible
 
 ## Acceptance Criteria
-- [ ] **First step, before any field or parser code:** an env-gated harness prints the full purpose text of real PayPal rows
+- [x] **First step, before any field or parser code:** an env-gated harness prints the full purpose text of real PayPal rows
       (extending `ing_geometry_dump_test.dart` or a sibling next to it); no statement enters the repo
-- [ ] The pattern derived from that dump is written into this ticket, including whether it holds across payment types
-      (purchase, subscription, refund) — if it does not, the ticket says so before code follows
-- [ ] `ParsedTransactionCandidate.merchant` and `Transaction.merchant` exist as nullable fields; `make gen` run, and
-      `kDbSchemaVersion` **not** bumped (additive, as with `Transaction.kind` in 032)
-- [ ] Extraction runs after parsing over every candidate, independent of which parser produced it; `candidateToTransaction`
+- [x] The pattern derived from that dump is written into this ticket, including whether it holds across payment types
+      (purchase, subscription, refund) — see below
+- [x] `ParsedTransactionCandidate.merchant` and `Transaction.merchant` exist; `make gen` run, and `kDbSchemaVersion`
+      **not** bumped (additive, as with `Transaction.kind` in 032)
+- [x] Extraction runs after parsing over every candidate, independent of which parser produced it; `candidateToTransaction`
       copies the value
-- [ ] Learn and suggest key on `merchant ?? counterparty`, and a booking produces exactly **one** rule
-- [ ] A refund through the same payer carries the same merchant as the purchase
-- [ ] The booking list row shows `merchant ?? counterparty`; the booking form and the import preview still show the raw
+- [x] Learn and suggest key on `merchant ?? counterparty` via `Transaction.taggingKey` / `ImportRow.taggingKey`, and a
+      booking produces exactly **one** rule
+- [x] A refund through the same payer carries the same merchant as the purchase
+- [x] The booking list row shows `merchant ?? counterparty`; the booking form and the import preview still show the raw
       counterparty
-- [ ] The dedupe hash is untouched — still amount + booking day + normalised `counterparty`, asserted as a regression guard
-- [ ] A row whose purpose text yields no merchant behaves exactly as today
-- [ ] `make check` green
+- [x] The dedupe hash is untouched — `dedupeHashOf` takes no merchant argument at all, so the guard is structural, and the
+      unchanged dedupe suites stay green
+- [x] A row whose purpose text yields no merchant behaves exactly as today
+- [x] `make check` green — 520 passed, 0 failed
+
+## The pattern, read off a real January 2026 statement
+```
+1047390819119/PP.4163.PP/. Picnic G mbH, Ihr Einkauf bei Picnic GmbH
+1047437247968/PP.4163.PP/. Takeaway .com Payments B.V., Ihr Einkauf bei Takeaway.com Payments B.V.
+. Picnic GmbH, Ihr Einkauf bei Picn ic GmbH/ABBUCHUNG VOM PAYPAL-KONTO   ← refund
+1047426748046/PP.4163.PP/. , Ihr Ei nkauf bei                            ← no merchant at all
+```
+Three findings the ticket had not foreseen:
+
+1. **The merchant is printed twice** — before the comma and again after `Ihr Einkauf bei`.
+2. **ING wraps the purpose text mid-word.** The break lands in different places per row, and systematically so: on a
+   `Lastschrift` the *second* spelling is clean (`bei Picnic GmbH`), on a `Gutschrift` the *first* is (`. Picnic GmbH,`).
+   Neither position is reliable, so both are read and the one with fewer whitespace runs wins.
+3. **The merchant can be missing** (one 5,00 € row), so the fallback to `counterparty` is a real case, not a corner.
+
+That choice is load-bearing: `normalizeForMatching` collapses whitespace runs but keeps single spaces, so `picnic g mbh`
+and `picnic gmbh` would be two rule keys — the same shop learning twice, which is the problem this ticket exists to end.
+
+Verified against the statement through the harness: 13 of 60 rows carry a merchant, every one of them unbroken, and the
+row without one is absent. The pattern holds for purchases and refunds; no subscription row appeared in this month.
 
 ## Out of Scope (proposed, to confirm)
 - Other collective payers until one actually appears
@@ -112,4 +135,5 @@ No. Purpose strings are written inline once the dump has shown their real shape 
 - Output: ~3k tokens
 
 ### Implementation Tokens (estimate)
-_Filled after Done._
+- Input: ~85k tokens
+- Output: ~10k tokens

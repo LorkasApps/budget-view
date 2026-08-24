@@ -38,6 +38,13 @@ class Transaction implements SyncableEntity {
 
   String counterparty = '';
 
+  /// Who the money really went to when [counterparty] is a collective payer such
+  /// as PayPal, read out of the purpose text on import (ticket 047). Empty for
+  /// everything else. Deliberately beside [counterparty] rather than replacing
+  /// it: that field is the booking's identity and feeds [dedupeHash], which must
+  /// not depend on a parser heuristic.
+  String merchant = '';
+
   String note = '';
 
   /// SHA-256 of amount + booking day + normalised counterparty. Maintained by
@@ -65,6 +72,12 @@ class Transaction implements SyncableEntity {
   @ignore
   String get entityType => 'transaction';
 
+  /// What tagging learns and suggests on: the merchant when one was read, the
+  /// counterparty otherwise. One definition, so all three learn call sites and
+  /// both suggest paths key on the same string (ticket 047).
+  @ignore
+  String get taggingKey => merchant.isEmpty ? counterparty : merchant;
+
   @override
   Map<String, dynamic> toSyncPayload() => {
         'uuid': uuid,
@@ -74,6 +87,7 @@ class Transaction implements SyncableEntity {
         'bookingDate': bookingDate.toIso8601String(),
         'description': description,
         'counterparty': counterparty,
+        'merchant': merchant,
         'note': note,
         'dedupeHash': dedupeHash,
         'categoryAutoSuggested': categoryAutoSuggested,

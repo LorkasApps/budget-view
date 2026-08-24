@@ -24,7 +24,9 @@ class TaggingLearnService {
     if (categoryUuid == null) return;
     if (transaction.categoryAutoSuggested) return;
 
-    final matchValue = normalizeForMatching(transaction.counterparty);
+    // The merchant when the purpose text named one, the counterparty otherwise:
+    // one PayPal rule for every shop would suggest a lottery (ticket 047).
+    final matchValue = normalizeForMatching(transaction.taggingKey);
     if (matchValue.isEmpty) return;
 
     await _rules.upsert(matchValue, categoryUuid);

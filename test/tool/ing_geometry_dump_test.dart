@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui' show Rect;
 
+import 'package:budget_view/features/transaction/import/domain/merchant_extraction.dart';
 import 'package:budget_view/features/transaction/import/pdf/ing_giro_parser.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:syncfusion_flutter_pdf/pdf.dart';
@@ -16,6 +17,7 @@ import 'package:syncfusion_flutter_pdf/pdf.dart';
 ///     ING_PDF=/path/auszug.pdf flutter test test/tool/ing_geometry_dump_test.dart
 void main() {
   _reconciliationTest();
+  _merchantTest();
 
   test('dump ING statement geometry', () async {
     final source = Platform.environment['ING_PDF'];
@@ -101,6 +103,34 @@ void _reconciliationTest() {
     stdout.writeln('=== sum: $sum cents');
     stdout.writeln('=== closing balance: ${result.statementBalanceCents}');
     stdout.writeln('=== warnings: ${result.warnings.length}');
+  });
+}
+
+/// Prints the purpose text of every row a collective payer booked, next to the
+/// merchant read out of it. The pattern behind `extractMerchant` was derived from
+/// exactly this output (ticket 047): the statement wraps a purpose text mid-word,
+/// so the merchant arrives in two spellings and only one of them is unbroken.
+void _merchantTest() {
+  test('dump the merchant behind every collective payer row', () async {
+    final source = Platform.environment['ING_PDF'];
+    if (source == null || source.isEmpty) {
+      markTestSkipped('set ING_PDF=/path/to/statement.pdf to dump merchants');
+      return;
+    }
+
+    final result = await const IngGiroParser()
+        .parse(await File(source).readAsBytes());
+    var found = 0;
+    for (final candidate in result.transactions) {
+      final merchant = extractMerchant(candidate.description);
+      if (merchant == null) continue;
+      found++;
+      stdout.writeln('  ${candidate.counterparty}');
+      stdout.writeln('    purpose : ${candidate.description}');
+      stdout.writeln('    merchant: $merchant');
+    }
+    stdout.writeln('=== rows with a merchant: $found');
+    stdout.writeln('=== rows total: ${result.transactions.length}');
   });
 }
 

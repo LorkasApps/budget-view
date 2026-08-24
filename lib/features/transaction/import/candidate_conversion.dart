@@ -15,5 +15,6 @@ Transaction candidateToTransaction(
     ..amountCents = candidate.amountCents
     ..bookingDate = candidate.bookingDate
     ..description = candidate.description
-    ..counterparty = candidate.counterparty ?? '';
+    ..counterparty = candidate.counterparty ?? ''
+    ..merchant = candidate.merchant ?? '';
 }

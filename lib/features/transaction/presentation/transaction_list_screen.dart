@@ -233,11 +233,15 @@ class _TransactionTile extends ConsumerWidget {
                 categoryUuid: transaction.categoryUuid,
                 onTap: () => _reassignCategory(context, ref),
               ),
-              if (transaction.counterparty.isNotEmpty) ...[
+              // The merchant when one was read, because the row answers "who did
+              // I pay" and `PayPal Europe S.a.r.l.` is the useless answer. The
+              // form keeps showing the real counterparty: that is the booking's
+              // identity and the dedupe key (ticket 047).
+              if (transaction.taggingKey.isNotEmpty) ...[
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    transaction.counterparty,
+                    transaction.taggingKey,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.bodySmall,
                   ),
