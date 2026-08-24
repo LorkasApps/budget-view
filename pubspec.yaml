@@ -76,6 +76,9 @@ dependencies:
   # Donut chart for the monthly category report.
   fl_chart: ^1.2.0
 
+  # Device-local UI preferences (theme mode); nothing data-model related.
+  shared_preferences: ^2.5.5
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

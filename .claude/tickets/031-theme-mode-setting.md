@@ -6,7 +6,7 @@
 | **Epic** | Setup |
 | **Domain** | Infra |
 | **Blocked By** | None (024 built the Settings surface) |
-| **Status** | Ready |
+| **Status** | In Progress |
 
 ## Description
 `BudgetViewApp` hands `MaterialApp` a single light theme built from the teal seed, so the app stays bright whatever the
@@ -24,18 +24,26 @@ That maps onto `ThemeMode.dark` / `.light` / `.system`, which `MaterialApp.theme
 the dark `ColorScheme` from the same seed, a place to keep the choice, and the row on the Settings screen.
 
 ## Acceptance Criteria
-- [ ] Settings screen carries a theme-mode row with exactly three options: `Dunkel`, `Hell`, `Systemvorgabe`
+- [x] Settings screen carries a theme-mode row with exactly three options: `Dunkel`, `Hell`, `Systemvorgabe`
 - [ ] `Systemvorgabe` is the default on a fresh install, and switching the OS between light and dark flips the app while
       it runs
-- [ ] `MaterialApp` gets a `darkTheme` from the **same** teal seed (`ColorScheme.fromSeed(seedColor: Colors.teal,
+- [x] `MaterialApp` gets a `darkTheme` from the **same** teal seed (`ColorScheme.fromSeed(seedColor: Colors.teal,
       brightness: Brightness.dark)`) — no second palette, same rule as ticket 027
 - [ ] The choice survives an app restart
-- [ ] Choosing an option applies it immediately, without reopening the screen
-- [ ] Nothing else about the Settings screen changes
-- [ ] The preference is read once at startup and written on change through `shared_preferences`; nothing about `AppMeta`,
+- [x] Choosing an option applies it immediately, without reopening the screen
+- [x] Nothing else about the Settings screen changes
+- [x] The preference is read once at startup and written on change through `shared_preferences`; nothing about `AppMeta`,
       `kDbSchemaVersion` or any Isar collection is touched
-- [ ] The widget test injects a fake preference store rather than the real plugin, which has no test-VM binding
-- [ ] `make check` green
+- [x] The widget test injects a fake preference store rather than the real plugin, which has no test-VM binding
+- [x] `make check` green
+
+## Open — device pass
+`make check` is green (471 passed, 0 failed). Two ACs need the phone and are unchecked until then:
+- default `Systemvorgabe`, then flipping the OS theme while the app runs
+- the choice surviving a real app restart
+
+The widget test covers what it can reach: the default with an empty store, immediate application on pick, and a
+pre-filled store starting in `Hell`. Doc update and the token blocks follow once the device pass is in.
 
 ## Resolved during refinement
 - **Storage** → `shared_preferences`, loaded in the existing async bootstrap in `main.dart` and handed in through a
