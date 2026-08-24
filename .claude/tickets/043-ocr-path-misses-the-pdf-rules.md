@@ -7,7 +7,7 @@
 | **Domain** | Drilldown |
 | **Blocked By** | None |
 | **Severity** | Medium |
-| **Status** | Draft |
+| **Status** | Ready |
 
 ## Description
 The same receipt can arrive as a PDF or as a photo — a Picnic confirmation is a mail that can be printed *or*
@@ -37,25 +37,49 @@ Two of the gaps have nothing to do with PDFs and are inconsistencies introduced 
 Since ticket 033 (2026-08-21) for the divergence; the struck-through weakness itself has existed since 018 and was simply
 never noticed, because no receipt with a promotional row had been scanned.
 
-## Open questions for refinement
-- **How much of the PDF parser should the OCR parser borrow?** The checksum comparison, the credit subtraction and the
-  plausibility bound are layout-independent and could move into shared code. The bottom-most-price rule needs geometry the
-  OCR rows have but the joined row string throws away
-- Should the two parsers converge on one implementation over a shared "words with boxes" abstraction, given `OcrLine` and
-  `ReceiptWord` both carry text plus a rectangle? That is the bigger, cleaner answer and a much larger change
-- Which vocabulary is genuinely shared, and which stays per source?
-- 036 will walk both paths on a device — does this ticket wait for those findings, or land before so 036 measures the fixed
-  state?
+## Resolved during refinement
+- **Extent** → borrow, do not converge. The three layout-independent rules (printed-total checksum, credit subtraction,
+  plausibility bound) move into shared code together with the credit vocabulary; the two parsers stay separate. The
+  bottom-most-price rule is fixed **inside** the OCR parser by deciding the price from the word boxes before the row is
+  joined into a string. Rejected converging both onto one "words with boxes" implementation: every concrete defect here sits
+  in the layout-independent half or in a spot the OCR parser can repair locally, so convergence would rebuild two working
+  paths to fix bugs that go away without it — and its payoff only starts at a third source, while the one rule that genuinely
+  needs geometry stays per source anyway, because a thermal receipt and a PDF text layer hand over different rectangles. If
+  convergence is wanted later it becomes its own refactor ticket, after this fix
+- **Vocabulary** → shared only for "money coming back": `pfand`, `leergut`, `gutschrift`, `eingereichtes pfand`. Those rows
+  are **not** skipped but subtracted as `creditCents` (`decisions.md`, 2026-08-21), which is what stops the false mismatch
+  warning. Payment and change words (`rückgeld`, `zurück`, `bargeld`, `ec`, `karte`, `summe`) stay per source: they describe
+  how it was paid, not what was bought. `tüten` deliberately does **not** join the skip list — a bought bag is a real
+  position and only looked like noise because it stood inside a deposit block; `flaschen` counts only in a deposit context.
+  Start with this small vocabulary and extend it against real receipts, never speculatively
+- **Order against 036** → this lands first, so the device pass measures the fixed state. 036 stays parked for now (user
+  decision, 2026-08-24)
 
 ## Acceptance Criteria
-_Not refined yet — the questions above come first._
+- [ ] The printed-total checksum, the credit subtraction and the plausibility bound live in shared code and are used by both
+      the OCR and the PDF parser
+- [ ] OCR: a promotional row printing the original price above the real one yields the **lower** of the two right-aligned
+      money tokens, decided from the word boxes before the row is joined
+- [ ] OCR: a returned deposit is subtracted as a credit, and a receipt carrying one raises no mismatch warning
+- [ ] OCR: a row costing more than the printed total is dropped
+- [ ] OCR: `Tüten` stays a position; a `Pfand` breakdown does not become three positions
+- [ ] `pdf_receipt_parser_test.dart` passes unchanged — moving code into shared rules must not shift PDF behaviour
+- [ ] For the synthetic promo and deposit cases, both parsers produce the same positions and the same credit total
+- [ ] `make check` green
 
 ## Affected Tests
 - `heuristic_receipt_line_item_parser_test.dart` gains the borrowed rules
 - `pdf_receipt_parser_test.dart` must stay green: whatever moves into shared code must not change the PDF behaviour
 
 ## Fixtures Needed
-Ask during refinement.
+No. Synthetic OCR lines with rectangles, the way `heuristic_receipt_line_item_parser_test.dart` already builds them: a promo
+row with two right-aligned amounts stacked, a deposit row, and a row above the printed total. Each shared rule gets one case
+from both parser suites, so the PDF side is provably unchanged. Real receipts stay out of git and are walked on a device
+through 036, which then measures the fixed state.
 
-## Token Usage
+### Refinement Tokens (estimate)
+- Input: ~13k tokens
+- Output: ~2k tokens
+
+### Implementation Tokens (estimate)
 _Filled after Done._

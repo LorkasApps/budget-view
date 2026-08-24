@@ -5,8 +5,8 @@
 | **Type** | Feature |
 | **Epic** | Drilldown |
 | **Domain** | Drilldown |
-| **Blocked By** | None (033 shipped the PDF source and the text-layer path) |
-| **Status** | Draft |
+| **Blocked By** | 043 (the OCR parser must carry the borrowed rules first) |
+| **Status** | Ready |
 
 ## Description
 Split out of 033. A PDF that carries a text layer is read directly — no OCR involved — and that path is done. A **scanned**
@@ -23,24 +23,49 @@ tale — ML Kit behaved differently in the release build than in debug, which co
 that could not read a receipt at all. Verifying this needs a release APK **and** a scanned PDF, neither of which was
 available when 033 closed.
 
-## Open questions for refinement
-- **Which package?** `pdfx`, `pdf_render`, or something else. Selection criteria worth applying: no Kotlin-Gradle-Plugin
-  warning (the one 030 had to chase), a maintained release within the last months, and APK size — the universal build is
-  already at 98,7 MB
-- **What does it cost per page?** Rendering plus OCR plus deskew, on a phone, for a multi-page document. Is there a page
-  limit, or a progress indication so the flow does not look frozen?
-- **At what resolution?** Too low loses small print, too high wastes seconds. The photo path downscales to 2000 px longest
-  edge, which is a starting point rather than an answer
-- **Does the checksum still work?** OCR of a rendered page produces the OCR parser's output, which — per ticket 043 — lacks
-  the credit subtraction and the plausibility bound the PDF parser has. Whichever of 043 and this ticket lands second
-  inherits the other's shape
-- **Where does the branch live?** `SyncfusionReceiptPdfReader` returns null today; either it renders and recognises itself
-  (then the reader is no longer a pure text-layer reader), or the controller routes to the OCR path with rendered bytes
-  (then `_read()` grows a third case)
-- Does a hybrid document exist in practice — a text layer on page one, a scan on page two — and what should happen then?
+## Resolved during refinement
+- **Package** → `pdfx` 2.11.0 (released 2026-08-20). Decisive: on Android it renders through the OS's own
+  `android.graphics.pdf.PdfRenderer`, so no pdfium enters the APK — the size criterion is met at a build that already sits
+  at 98,7 MB. `pdfrx` 2.4.7 was rejected for bundling pdfium (`pdfium_flutter`, `pdfrx_engine`), `pdf_render` for being two
+  years stale (1.4.12, 2024-08-26). Accepted cost: `pdfx` pulls `photo_view`, `web` and `flutter_web_plugins` for a viewer
+  we never use. Writing ~30 lines of Kotlin against the same OS API was the honest alternative and was dropped so we do not
+  own native code on a path where R8 already bit once (034)
+- **Order** → blocked by 043. A rendered page goes through the OCR parser, so landing first would ship a path that warns
+  falsely on every deposit return and keeps rows costing more than the receipt. As a bonus the checksum AC here reduces to
+  "behaves like the photo path"
+- **Resolution** → 2000 px longest edge, the same constant as the photo path, so everything 035 tuned against real receipts
+  applies unchanged. That is roughly 170 dpi on A4, which may be tight for small print; the number stays a single constant
+  and only moves to 3000 px on a device finding, not on a guess
+- **Cost and progress** → no hard page limit. Per-page progress in the existing busy state (`Seite 2 von 4 wird gelesen…`),
+  because several seconds of silence reads as a frozen app, plus a confirmation above 10 pages so an accidentally picked
+  200-page document cannot block the app for minutes. No cancel button — that would be another state in the machine, and
+  the existing back path is already a device check in 039
+- **Where the branch lives** → the controller routes; `SyncfusionReceiptPdfReader` stays a pure text-layer reader. Giving it
+  rendering and recognition too would pull ML Kit into a class whose tests need none, and the controller already owns the
+  decision which pipeline reads a document (`decisions.md`, 2026-08-17: "der Controller *ist* das Artefakt von 016"). The
+  renderer sits behind a `ReceiptPdfRenderer` interface, mirroring `ReceiptPdfReader`, so flow tests keep running without a PDF
+- **Hybrid documents** → decided per **document**, as today. No evidence hybrids occur here, and per-page routing would
+  double the controller's branching for a hypothetical case. The gap is made visible instead: if the document has more pages
+  than produced text, the flow warns which pages carried none — same bar as the statement import, never silently half-read
 
 ## Acceptance Criteria
-_Not refined yet — the questions above come first._
+- [ ] `pdfx` added; the Android path renders through the OS `PdfRenderer` and the release APK grows by no more than a
+      megabyte (measured before and after, `make release-check`)
+- [ ] `ReceiptPdfRenderer` interface with the `pdfx` implementation behind it; every flow test still runs without a real PDF
+- [ ] A PDF **with** a text layer behaves exactly as today — no rendering, no OCR involved
+- [ ] A PDF **without** a text layer renders each page at 2000 px longest edge and runs the existing OCR pipeline, deskew
+      included, instead of failing with `Dieses PDF enthält keinen Text.`
+- [ ] The busy state names the page being read (`Seite 2 von 4 wird gelesen…`)
+- [ ] A document with more than 10 pages asks for confirmation before it is read
+- [ ] A document whose pages partly carry text keeps the text-layer path and warns which pages carried none
+- [ ] Checksum and credits behave exactly like the photo path — inherited from 043, not reimplemented here
+- [ ] `make check` green
+
+## Device checks (release APK — the lesson of 034)
+- [ ] A real scanned PDF is read end to end on a **release** build, not on `make run`
+- [ ] A multi-page scan: every page contributes positions, and the progress text advances
+- [ ] The confirmation above 10 pages appears and both answers behave
+- [ ] Note the wall-clock time per page and the APK size delta in the ticket — both are the numbers this decision rests on
 
 ## Out of Scope (proposed, to confirm)
 - Improving OCR accuracy itself; the rendered page is treated like a photo
@@ -54,5 +79,9 @@ _Not refined yet — the questions above come first._
 ## Fixtures Needed
 No committed documents. A scanned PDF is handed over out of band, like the receipts before it.
 
-## Token Usage
+### Refinement Tokens (estimate)
+- Input: ~19k tokens
+- Output: ~3k tokens
+
+### Implementation Tokens (estimate)
 _Filled after Done._

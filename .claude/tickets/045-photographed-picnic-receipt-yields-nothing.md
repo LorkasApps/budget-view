@@ -5,9 +5,9 @@
 | **Type** | Bug |
 | **Epic** | Drilldown |
 | **Domain** | Drilldown |
-| **Blocked By** | None |
+| **Blocked By** | 043 (it owns the shared vocabulary this ticket changes the matching of) |
 | **Severity** | High |
-| **Status** | Draft |
+| **Status** | Ready |
 
 ## Description
 The same Picnic receipt that the PDF path reads to the cent produces almost nothing when photographed or screenshotted. The
@@ -61,28 +61,55 @@ Use the PDF of the same receipt, which works.
 The drop-rule since ticket 035 (2026-08-21). Whether the layout ever worked before that is unknown — no Picnic receipt had
 been photographed until now, and 035's own findings came from a different shop's receipt.
 
-## Open questions for refinement
-- **Prefix, substring or word match** for the skip and total vocabulary? Substring catches `Endsumme` and risks false hits;
-  matching whole words inside the row is the middle ground and needs a rule for compounds
-- **How do we see what ML Kit read?** There is no harness for it: ML Kit has no test-VM binding, so the only place the raw
-  text can surface is the app itself. Options: bring back unrecognised rows behind a collapsed line, or a debug-only dump
-- **Reassemble prices across lines, as the PDF parser does?** It joins a band of fragments and reads the last two digits as
-  cents. `OcrLine` carries a bounding box, so the same idea is possible — and it is the same convergence question 043 asks
-- Or is the row tolerance the real culprit, and raised cents simply need a wider one? That would be a smaller change with a
-  larger blast radius: every layout regroups
-- Should a row without an amount be kept as non-savable after all, instead of dropped? It would restore the diagnostic at the
-  cost of the noise 035 removed
+## Resolved during refinement
+- **The fix is reassembly, not a wider tolerance** → the price column gets its own, tighter join rule: fragments that overlap
+  in x and sit close vertically are pulled together and the last two digits read as cents, exactly what the PDF parser does.
+  Raised cents are a typographic fact, so the repair belongs where the geometry is. Widening the row tolerance would regroup
+  **every** layout — the one thing 035 just tuned against real receipts — to fix a case that is locally solvable. Matches the
+  cut made in 043: layout-independent rules are shared, geometric ones stay per source
+- **Vocabulary matching** → a keyword hits when a token in the row **starts or ends with it** (case-insensitive). Prefix
+  misses `Endsumme`; a whole-word rule misses it too, because `summe` is the second half of a compound, not a word of its own;
+  a free substring would hit inside unrelated words. Starts-or-ends catches exactly the cases the evidence names —
+  `Endsumme`, `Rechnungsbetrag`, `Kartenzahlung` as suffixes, `Summe` and `Betrag` as whole words. Accepted edge: a bought
+  `Pfandflasche` starts with `pfand` and would read as a credit; to be corrected against real receipts, not pre-emptively
+- **Diagnostic** → discarded rows return to the review screen behind a **collapsed** `N nicht erkannte Zeilen` line showing
+  the raw OCR text. They do **not** become candidates again, so they stay out of the positions. A debug-only dump was
+  rejected: this bug shows up on a release APK, where `kDebugMode` output does not exist (the lesson of 034) — a diagnostic
+  missing from the broken build is no diagnostic. Collapsed by default keeps the noise 035 removed out of sight until asked
+  for; that was option two in 035's refinement, declined then for lack of a reason, and the reason now exists
+- **Order** → after 043, even though this is the more severe ticket. 043 owns the shared vocabulary whose matching rule this
+  ticket changes, so landing first would mean doing that work twice; and the fix here is incomplete without 043 anyway,
+  because a recognised `Endsumme` is what lets the checksum and the plausibility bound apply to this receipt at all
 
 ## Acceptance Criteria
-_Not refined yet — the hypothesis needs confirming first._
+- [ ] A synthetic `OcrResult` with `3` and `79` on separate lines in the price column yields **one** position of 379 cents
+- [ ] The row tolerance for description rows is unchanged — no other layout regroups
+- [ ] `Endsumme` is recognised as the receipt total, not as a position
+- [ ] `Eingereichtes Pfand` is treated as a credit (the 043 rule) and is not a position
+- [ ] With the total recognised, the checksum and the plausibility bound from 043 apply on this receipt
+- [ ] The review screen shows a collapsed `N nicht erkannte Zeilen` line with the raw OCR text of every discarded row;
+      expanding it changes nothing about the candidate list, and none of those rows can be saved
+- [ ] The diagnostic line is collapsed on arrival and absent when nothing was discarded
+- [ ] `make check` green
+
+## Device check (belongs to 036, on a release APK)
+- [ ] The photographed Picnic receipt yields roughly what the PDF path yields from the same document — around 30 positions
+      instead of four summary rows
 
 ## Affected Tests
 - `heuristic_receipt_line_item_parser_test.dart` — a fixture with the integer and the cents on separate lines is the
-  regression test this ticket needs, and it can be written before the fix
+  regression test this ticket needs, and it can be written before the fix. Plus the vocabulary cases: `Endsumme` as total,
+  `Eingereichtes Pfand` as credit
+- The review-screen widget test gains the collapsed diagnostic: present with discarded rows, absent without, and expanding it
+  leaves the candidate list untouched
 - Device verification belongs in 036, on a release APK
 
 ## Fixtures Needed
 No. Synthetic `OcrResult` fixtures with split price lines, built inline as the suite already does.
 
-## Token Usage
+### Refinement Tokens (estimate)
+- Input: ~16k tokens
+- Output: ~2.5k tokens
+
+### Implementation Tokens (estimate)
 _Filled after Done._
