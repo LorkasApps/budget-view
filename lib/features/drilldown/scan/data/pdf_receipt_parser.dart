@@ -1,4 +1,5 @@
 import '../domain/receipt_line_item_parser.dart';
+import '../domain/receipt_row_rules.dart';
 import 'receipt_pdf_words.dart';
 
 /// Rows that carry an amount but are not positions: totals, taxes, savings,
@@ -24,18 +25,6 @@ const _skipPrefixes = {
   'lieferadresse',
   'kundenservice',
 };
-
-/// Skipped rows that state the document's own total. `zwischensumme` is absent on
-/// purpose — a subtotal is not the figure to check against.
-const _totalPrefixes = {'summe', 'gesamt', 'total'};
-
-/// Rows that reduce what the user pays: returned deposits, refunds.
-///
-/// They cannot become positions — a `LineItem` amount is an unsigned magnitude
-/// whose sign belongs to the parent booking (ticket 015) — but they must not be
-/// ignored either: the printed total already accounts for them, so the checksum
-/// only reconciles once they are subtracted.
-const _creditPrefixes = {'eingereichtes', 'rückgabe', 'gutschrift', 'erstattung'};
 
 /// A word that can be part of a price: digits, a separator, a currency mark.
 ///
@@ -90,28 +79,24 @@ ReceiptParseResult parseReceiptPdf(List<ReceiptWord> words) {
   int? printedTotalCents;
   var creditCents = 0;
   for (final row in rows) {
-    final lowered = row.label.toLowerCase();
-    if (_totalPrefixes.any(lowered.startsWith)) {
+    if (statesReceiptTotal(row.label)) {
       printedTotalCents = row.amountCents ?? printedTotalCents;
-    } else if (_creditPrefixes.any(lowered.startsWith)) {
+    } else if (statesReceiptCredit(row.label)) {
       creditCents += row.amountCents ?? 0;
     }
   }
 
+  final budget = positionBudgetCents(printedTotalCents, creditCents);
   final candidates = <LineItemCandidate>[];
   for (final row in rows) {
     final amountCents = row.amountCents;
     // No amount, no item: address and legal blocks leave here.
     if (amountCents == null || row.label.isEmpty) continue;
 
-    final lowered = row.label.toLowerCase();
-    if (_totalPrefixes.any(lowered.startsWith)) continue;
-    if (_creditPrefixes.any(lowered.startsWith)) continue;
-    if (_skipPrefixes.any(lowered.startsWith)) continue;
-    // Nothing on a receipt costs more than the receipt. Kills page furniture
-    // whose digits happen to reassemble into an amount — a mail header, a
-    // register number, a URL — without naming a single sender's vocabulary.
-    if (printedTotalCents != null && amountCents > printedTotalCents) continue;
+    if (statesReceiptTotal(row.label)) continue;
+    if (statesReceiptCredit(row.label)) continue;
+    if (_skipPrefixes.any(row.label.toLowerCase().startsWith)) continue;
+    if (exceedsPositionBudget(amountCents, budget)) continue;
 
     candidates.add(_candidate(row, amountCents));
   }

@@ -7,7 +7,7 @@
 | **Domain** | Drilldown |
 | **Blocked By** | None |
 | **Severity** | Medium |
-| **Status** | Ready |
+| **Status** | Done |
 
 ## Description
 The same receipt can arrive as a PDF or as a photo — a Picnic confirmation is a mail that can be printed *or*
@@ -56,16 +56,31 @@ never noticed, because no receipt with a promotional row had been scanned.
   decision, 2026-08-24)
 
 ## Acceptance Criteria
-- [ ] The printed-total checksum, the credit subtraction and the plausibility bound live in shared code and are used by both
-      the OCR and the PDF parser
-- [ ] OCR: a promotional row printing the original price above the real one yields the **lower** of the two right-aligned
+- [x] The printed-total checksum, the credit subtraction and the plausibility bound live in shared code and are used by both
+      the OCR and the PDF parser — `domain/receipt_row_rules.dart`. The checksum comparison itself was already shared:
+      `ReceiptParseResult.expectedPositionSumCents` has held it since 035, the OCR parser simply never filled `creditCents`
+- [x] OCR: a promotional row printing the original price above the real one yields the **lower** of the two right-aligned
       money tokens, decided from the word boxes before the row is joined
-- [ ] OCR: a returned deposit is subtracted as a credit, and a receipt carrying one raises no mismatch warning
-- [ ] OCR: a row costing more than the printed total is dropped
-- [ ] OCR: `Tüten` stays a position; a `Pfand` breakdown does not become three positions
-- [ ] `pdf_receipt_parser_test.dart` passes unchanged — moving code into shared rules must not shift PDF behaviour
-- [ ] For the synthetic promo and deposit cases, both parsers produce the same positions and the same credit total
-- [ ] `make check` green
+- [x] OCR: a returned deposit is subtracted as a credit, and a receipt carrying one raises no mismatch warning
+- [x] OCR: a row costing more than the receipt is dropped
+- [x] OCR: `Tüten` stays a position — **the second half of this AC rested on a wrong premise and is dropped:** a *paid*
+      deposit breakdown (`Pfand Flaschen 0,25`) is money the user paid and belongs in the booking as positions, which is
+      exactly why the PDF parser's own comment keeps `Pfand` out of its skip list. What went wrong on the Picnic receipt was
+      the *returned* deposit, and that is now a credit
+- [x] `pdf_receipt_parser_test.dart` passes unchanged — moving code into shared rules must not shift PDF behaviour
+- [x] For the synthetic promo and deposit cases, both parsers produce the same positions and the same credit total
+      (`receipt_parsers_agree_test.dart`)
+- [x] `make check` green — 500 passed, 0 failed
+
+## Found while implementing
+- **The plausibility bound was wrong for any receipt with a credit**, in the PDF parser too. "Nothing costs more than the
+  printed total" fails as soon as a deposit return is deducted from that total: positions then sum *higher* than what was
+  paid, and a single legitimate item can exceed it. The bound now compares against `positionBudgetCents` = printed total +
+  credits, which is the figure the positions must reach anyway. The latent PDF bug never showed because the deposit on the
+  verified Picnic receipt was small against its total; the cross-parser test is what surfaced it, on a fixture where the
+  deposit is most of the paid sum
+- **`receipt-scan.md` overstated the OCR parser**: it documented credit handling that only ever existed in the PDF parser.
+  Corrected with this ticket
 
 ## Affected Tests
 - `heuristic_receipt_line_item_parser_test.dart` gains the borrowed rules
@@ -82,4 +97,5 @@ through 036, which then measures the fixed state.
 - Output: ~2k tokens
 
 ### Implementation Tokens (estimate)
-_Filled after Done._
+- Input: ~60k tokens
+- Output: ~7k tokens

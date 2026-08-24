@@ -163,4 +163,90 @@ void main() {
 
     expect(result.printedTotalCents, 1250);
   });
+
+  group('rules borrowed from the PDF parser (ticket 043)', () {
+    test('a promotional row takes the lower of two stacked prices', () {
+      // Both prices are right-aligned, so only their vertical order tells the
+      // struck-through original from the price that replaced it.
+      final description = _line('Bio Milch', top: 10, left: 0);
+      final struckThrough = _line('4,29', top: 8, left: 200);
+      final realPrice = _line('3,79', top: 14, left: 200);
+
+      final result = _parser.parse(
+        _blocks([
+          [description],
+          [struckThrough],
+          [realPrice],
+        ]),
+      );
+
+      final candidate = result.candidates.single;
+      expect(candidate.amountCents, 379);
+      expect(candidate.description, 'Bio Milch');
+    });
+
+    test('a returned deposit becomes a credit, not a position', () {
+      final lines = [
+        _line('Milch 1,19', top: 0),
+        _line('Eingereichtes Pfand 2,50', top: 100),
+        _line('Summe 10,00', top: 200),
+      ];
+
+      final result = _parser.parse(_blocks([lines]));
+
+      expect(result.candidates.single.description, 'Milch');
+      expect(result.creditCents, 250);
+      expect(result.printedTotalCents, 1000);
+      // The positions only reconcile once the credit is added back.
+      expect(result.expectedPositionSumCents, 1250);
+    });
+
+    test('a returned deposit lifts the bound above the printed total', () {
+      // The deposit is already deducted from what was paid, so the positions sum
+      // higher than the printed total — bounding against the total alone would
+      // drop this item.
+      final lines = [
+        _line('Kiste Wasser 5,00', top: 0),
+        _line('Eingereichtes Pfand 3,30', top: 100),
+        _line('Summe 1,70', top: 200),
+      ];
+
+      final result = _parser.parse(_blocks([lines]));
+
+      expect(result.candidates.single.amountCents, 500);
+      expect(result.expectedPositionSumCents, 500);
+    });
+
+    test('nothing may cost more than the printed total', () {
+      final lines = [
+        _line('Milch 1,19', top: 0),
+        // Page furniture whose digits happen to read as an amount.
+        _line('Kundennr 4711 99,99', top: 50),
+        _line('Summe 1,19', top: 100),
+      ];
+
+      final result = _parser.parse(_blocks([lines]));
+
+      expect(result.candidates.single.amountCents, 119);
+    });
+
+    test('the bound only applies once a total was printed', () {
+      final lines = [
+        _line('Milch 1,19', top: 0),
+        _line('Teure Ware 99,99', top: 100),
+      ];
+
+      final result = _parser.parse(_blocks([lines]));
+
+      expect(result.candidates.map((c) => c.amountCents), [119, 9999]);
+    });
+
+    test('a credit row without a total still counts as a credit', () {
+      final result = _parser.parse(_row('Gutschrift 3,00'));
+
+      expect(result.candidates, isEmpty);
+      expect(result.creditCents, 300);
+      expect(result.expectedPositionSumCents, isNull);
+    });
+  });
 }

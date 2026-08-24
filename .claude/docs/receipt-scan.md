@@ -129,17 +129,20 @@ totals, taxes, payment lines, and metadata.
 
 **Printed total detection.** A row matching `summe`, `gesamt`, or `total` prefix,
 with a readable money token, records that token as the receipt's printed total
-(rightmost match wins if multiple). `zwischensumme` is deliberately excluded.
-Rows without a money token are dropped entirely instead of becoming candidates.
+(the last such row wins). `zwischensumme` is deliberately excluded. Rows without a
+money token are dropped entirely instead of becoming candidates.
 
-**Credits.** Rows starting with `eingereichtes`, `rückgabe`, `gutschrift`, or `erstattung`
-are summed into `ReceiptParseResult.creditCents` instead of becoming line-item candidates.
-The review screen compares `lineItemsSumCents + creditCents` against `printedTotalCents`.
+**Price choice inside a row (043).** A row can hold several money tokens on different
+baselines: a promotional row prints the struck-through original above the price that
+replaced it, both right-aligned. The **bottom-most line** carrying a money token
+decides, and within that line the rightmost token wins — picking by x alone was a coin
+flip, because `List.sort` is not stable. A line that is nothing but a price adds no
+description text and survives in `rawOcrText` only.
 
 **Money tokens.** The parser searches for price patterns: one to three digits per
 group, groups separated by `,`, `.`, or space (e.g., `1,23`, `1.23`, `1.234,56`,
 `1 234,56`), always ending in `,DD` (two decimal places). Optional `€` or `EUR` on
-either side. The rightmost match in a row is the price.
+either side.
 
 **Quantity and unit price.** If a row starts with a count pattern (`2x`, `3 Stk`,
 `3 Stk.`) or measure pattern (`1,5 kg`, `0.5 l`), it is parsed: count units (`x`,
@@ -152,6 +155,24 @@ warning instead of being invented.
 **Parse states.** A row can land in `ok` (description and amount both read cleanly)
 or `ambiguous` (amount but no description). `includeInSave` defaults to true for
 `ok` rows, false for `ambiguous`. Rows without a money token are dropped.
+
+## Shared row rules (`domain/receipt_row_rules.dart`, ticket 043)
+
+Layout-independent rules both parsers use. Skip vocabulary stays per parser, because
+payment lines and page furniture are worded per source; geometric rules stay per
+parser too, because a thermal print and a text layer give different rectangles.
+
+| Item | Details |
+|---|---|
+| `receiptTotalPrefixes` | `summe`, `gesamt`, `total` — `zwischensumme` excluded by `startsWith` |
+| `receiptCreditPrefixes` | `eingereichtes`, `rückgabe`, `gutschrift`, `erstattung` — summed into `creditCents`, never candidates |
+| `positionBudgetCents` | printed total **+** credits: what the positions must add up to. Not the printed total, from which a returned deposit is already deducted |
+| `exceedsPositionBudget` | nothing costs more than the whole receipt — bounds page furniture whose digits reassemble into an amount, without sender vocabulary |
+
+Before 043 credits and the bound existed in the PDF parser only, so a photographed
+receipt with a deposit return warned falsely and kept furniture rows. The bound also
+compared against the printed total alone, which drops legitimate items once a deposit
+return is large — a latent PDF bug that the cross-parser test surfaced.
 
 ## Parser — `parseReceiptPdf` (PDF Text Layer)
 
@@ -175,17 +196,17 @@ original, keeps real price).
 **Row gluing.** Words whose gap is under 1/8 of the tolerance are joined (`Röstkaf` + `fee`
 → `Röstkaffee`).
 
-**Printed total and credits.** Rows starting with total prefixes (`summe`, `gesamt`, `total`)
-set `printedTotalCents`; rows starting with credit prefixes (`eingereichtes`, `rückgabe`,
-`gutschrift`, `erstattung`) add to `creditCents`. Rows matching skip vocabulary are dropped
-(same list as OCR: `zwischensumme`, `mwst`, etc.). Rows without an amount are dropped.
+**Printed total and credits.** Both come from the shared row rules above. Its own skip
+list stays local (`du sparst`, `tüten`, `flaschen`, `lieferadresse`, `kundenservice`,
+plus totals and taxes) — a Picnic deposit breakdown is page furniture in a PDF invoice
+while the same words can be bought goods elsewhere. Rows without an amount are dropped.
 
 **Quantity and unit price.** A leftmost column number is the quantity (one fragment in its own
 column at left edge). `unitPriceCents` derived only if `amountCents / quantity` lands within
 a cent.
 
-**Plausibility.** **No position may cost more than the printed total** — bounds page furniture
-without sender vocabulary.
+**Plausibility.** No position may cost more than the whole receipt — see
+`exceedsPositionBudget` in the shared rules above.
 
 ## Known sender layouts
 

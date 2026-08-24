@@ -1,6 +1,7 @@
 import '../../../../core/money/money.dart';
 import '../domain/ocr_service.dart';
 import '../domain/receipt_line_item_parser.dart';
+import '../domain/receipt_row_rules.dart';
 
 /// Rows whose first word marks them as anything but a position: totals, taxes,
 /// payment lines, receipt metadata. Matched on the normalized row start.
@@ -47,9 +48,9 @@ final _quantityPrefix = RegExp(
 
 const _countUnits = {'x', 'stk', 'stk.', 'stück'};
 
-/// Skipped rows that state the receipt's own total. `zwischensumme` is not in
-/// here on purpose: a subtotal is not the figure to check against.
-const _totalPrefixes = {'summe', 'gesamt', 'total'};
+/// A row after grouping: its full text for the vocabulary checks, the description
+/// left once the price is taken out, and the price itself.
+typedef _Row = ({String text, String label, int? amountCents});
 
 /// Turns OCR text into candidate positions.
 ///
@@ -62,43 +63,49 @@ class HeuristicReceiptLineItemParser implements ReceiptLineItemParser {
 
   @override
   ReceiptParseResult parse(OcrResult result) {
-    final candidates = <LineItemCandidate>[];
+    final rows = _rows(result);
+
+    // Two passes, like the PDF parser: the printed total bounds what a plausible
+    // position can cost, and it is only known once every row has been seen.
     int? printedTotalCents;
-
-    for (final row in _rows(result)) {
-      final text = row.trim();
-      if (text.isEmpty) continue;
-
-      if (_isSkippable(text)) {
+    var creditCents = 0;
+    for (final row in rows) {
+      if (statesReceiptTotal(row.text)) {
         // The last total wins: a receipt that prints one twice ends with the
         // figure that counts.
-        printedTotalCents = _totalOf(text) ?? printedTotalCents;
-        continue;
+        printedTotalCents = row.amountCents ?? printedTotalCents;
+      } else if (statesReceiptCredit(row.text)) {
+        creditCents += row.amountCents ?? 0;
       }
+    }
 
-      final candidate = _candidate(text);
+    final budget = positionBudgetCents(printedTotalCents, creditCents);
+    final candidates = <LineItemCandidate>[];
+    for (final row in rows) {
+      final amountCents = row.amountCents;
       // A row without an amount cannot be an item — address and header blocks
       // leave by this door rather than by keyword.
-      if (candidate != null) candidates.add(candidate);
+      if (amountCents == null) continue;
+      if (statesReceiptTotal(row.text)) continue;
+      if (statesReceiptCredit(row.text)) continue;
+      if (_isSkippable(row.text)) continue;
+      if (exceedsPositionBudget(amountCents, budget)) continue;
+
+      candidates.add(_candidate(row, amountCents));
     }
 
     return ReceiptParseResult(
       candidates: candidates,
       printedTotalCents: printedTotalCents,
+      creditCents: creditCents,
     );
-  }
-
-  int? _totalOf(String text) {
-    final normalized = text.toLowerCase().trimLeft();
-    if (!_totalPrefixes.any(normalized.startsWith)) return null;
-    return _amountOf(text);
   }
 
   /// Groups every line of every block into visual rows, top to bottom, and
   /// joins each row left to right. Blocks are ignored on purpose: ML Kit often
   /// splits a receipt's description column and price column into separate
   /// blocks, which is exactly the pairing we are after.
-  List<String> _rows(OcrResult result) {
+  List<_Row> _rows(OcrResult result) {
     final lines = [
       for (final block in result.blocks) ...block.lines,
     ]..sort(
@@ -117,12 +124,71 @@ class HeuristicReceiptLineItemParser implements ReceiptLineItemParser {
 
     return [
       for (final row in rows)
-        (row..sort((a, b) => a.boundingBox.left.compareTo(b.boundingBox.left)))
-            .map((line) => line.text.trim())
-            .where((text) => text.isNotEmpty)
-            .join(' '),
+        if (_rowOf(row) case final parsed when parsed.text.isNotEmpty) parsed,
     ];
   }
+
+  /// Splits a grouped row into its text, its description and its price.
+  ///
+  /// The price comes from the **bottom-most** line that carries a money token: a
+  /// promotional row prints the struck-through original above the price that
+  /// replaced it, both right-aligned, so picking by x would be a coin flip — and
+  /// `List.sort` is not stable, which is what made the winner arbitrary. Same rule
+  /// as the PDF parser's bottom-most band. Within one line the rightmost token
+  /// still wins, because that is where a receipt puts the price.
+  _Row _rowOf(List<OcrLine> lines) {
+    OcrLine? priceLine;
+    for (final line in lines) {
+      if (_amountToken.firstMatch(line.text) == null) continue;
+      final lower = line.boundingBox.center.dy;
+      if (priceLine == null || lower > priceLine.boundingBox.center.dy) {
+        priceLine = line;
+      }
+    }
+
+    final match = priceLine == null
+        ? null
+        : _amountToken.allMatches(priceLine.text).lastOrNull;
+    final cents = match == null
+        ? null
+        : _toCents(match.group(1)!, match.group(2)!);
+
+    final pieces = [
+      for (final line in lines)
+        (
+          left: line.boundingBox.left,
+          // On the price line, only what stands before the price is description —
+          // the same cut the single-line case has always made. A line that is
+          // nothing but a price is no description either: that is the struck-through
+          // original, which stays visible in `rawOcrText` and nowhere else.
+          text: line == priceLine
+              ? line.text.substring(0, match!.start)
+              : _isOnlyPrice(line.text)
+                  ? ''
+                  : line.text,
+        ),
+    ]..sort((a, b) => a.left.compareTo(b.left));
+
+    final ordered = [...lines]
+      ..sort((a, b) => a.boundingBox.left.compareTo(b.boundingBox.left));
+
+    return (
+      text: _join(ordered.map((line) => line.text)),
+      label: _join(pieces.map((piece) => piece.text)),
+      amountCents: cents == 0 ? null : cents,
+    );
+  }
+
+  bool _isOnlyPrice(String text) {
+    final trimmed = text.trim();
+    final match = _amountToken.firstMatch(trimmed);
+    return match != null && match.start == 0 && match.end == trimmed.length;
+  }
+
+  String _join(Iterable<String> parts) => parts
+      .map((part) => part.trim())
+      .where((part) => part.isNotEmpty)
+      .join(' ');
 
   bool _belongsToRow(List<OcrLine> row, OcrLine line) {
     final centers = row.map((entry) => entry.boundingBox.center.dy);
@@ -139,16 +205,8 @@ class HeuristicReceiptLineItemParser implements ReceiptLineItemParser {
     return _skipPrefixes.any(normalized.startsWith);
   }
 
-  /// Null when the row carries no readable amount, which disqualifies it as an
-  /// item.
-  LineItemCandidate? _candidate(String text) {
-    final match = _amountToken.allMatches(text).lastOrNull;
-    if (match == null) return null;
-
-    final amountCents = _toCents(match.group(1)!, match.group(2)!);
-    if (amountCents == null || amountCents == 0) return null;
-
-    var description = text.substring(0, match.start).trim();
+  LineItemCandidate _candidate(_Row row, int amountCents) {
+    var description = row.label;
     double? quantity;
     final prefix = _quantityPrefix.firstMatch(description);
     if (prefix != null) {
@@ -166,7 +224,7 @@ class HeuristicReceiptLineItemParser implements ReceiptLineItemParser {
       return LineItemCandidate(
         amountCents: amountCents,
         quantity: quantity,
-        rawOcrText: text,
+        rawOcrText: row.text,
         parseState: LineItemParseState.ambiguous,
       );
     }
@@ -176,7 +234,7 @@ class HeuristicReceiptLineItemParser implements ReceiptLineItemParser {
       amountCents: amountCents,
       quantity: quantity,
       unitPriceCents: _unitPrice(amountCents, quantity),
-      rawOcrText: text,
+      rawOcrText: row.text,
     );
   }
 
@@ -188,13 +246,6 @@ class HeuristicReceiptLineItemParser implements ReceiptLineItemParser {
     if (derived <= 0) return null;
     if (((derived * quantity).round() - amountCents).abs() > 1) return null;
     return derived;
-  }
-
-  /// Rightmost money token of a row, in cents.
-  int? _amountOf(String text) {
-    final match = _amountToken.allMatches(text).lastOrNull;
-    if (match == null) return null;
-    return _toCents(match.group(1)!, match.group(2)!);
   }
 
   int? _toCents(String whole, String fraction) =>

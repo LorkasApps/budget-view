@@ -44,7 +44,7 @@
 | 040-trade-republic-import.md | Feature | Import | Transaction | Done | 032 | Trade Republic cash/Tagesgeld parser; securities lines are plain expenses/income, no holdings model |
 | 041-transfer-still-shows-category-required.md | Bug | None | Transaction | Ready | None | Category field keeps its red required marker on a transfer although saving works |
 | 042-transfer-counter-leg-on-target-account.md | Feature | None | Transaction | Ready | 032 | Name the target account of a transfer and book the counter-leg there; collides with dedupe on later import |
-| 043-ocr-path-misses-the-pdf-rules.md | Bug | Drilldown | Drilldown | Ready | None | A screenshot of a receipt is read by weaker rules than its PDF: struck-through price, credits, plausibility bound |
+| 043-ocr-path-misses-the-pdf-rules.md | Bug | Drilldown | Drilldown | Done | None | A screenshot of a receipt is read by weaker rules than its PDF: struck-through price, credits, plausibility bound |
 | 044-render-scanned-pdf-receipts.md | Feature | Drilldown | Drilldown | Ready | 043 | Render a scanned PDF's pages through the OCR path; split out of 033 with the native-dependency risk |
 | 045-photographed-picnic-receipt-yields-nothing.md | Bug | Drilldown | Drilldown | Ready | 043 | Raised cents split the price across OCR lines; since 035 those rows are dropped, so a photo yields almost nothing |
 | 046-backup-local-and-google-drive.md | Feature | None | Infra | Draft | None | Backup to a local file and to Google Drive; first network access, and an unencrypted DB leaving the sandbox |
