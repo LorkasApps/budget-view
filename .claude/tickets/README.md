@@ -59,3 +59,4 @@
 | 055-picnic-photo-still-reads-wrong.md | Bug | Drilldown | Drilldown | Draft | None | After 043/045 a real photo still reads wrong; ML Kit has no test-VM binding, so the fix needs an OcrResult dump from the app |
 | 056-category-suggestion-per-line-item.md | Feature | Auto-Tagging | Tagging | Draft | None | Suggest a category per scanned position, keyed on the article description; needs matchField in the lookup, value hinges on 055 |
 | 057-picnic-receipt-sections-per-reorder.md | Feature | Drilldown | Drilldown | Draft | None | `Hinzugefügt am <dd MMMM>` splits a Picnic receipt into per-charge sections; one PDF then describes several bookings |
+| 058-tr-import-row-without-a-readable-date.md | Bug | Import | Transaction | Draft | None | One unreadable date drops a row, the reconciliation then refuses the whole statement; likely a glued `01 Juli` token |
