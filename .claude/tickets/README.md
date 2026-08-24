@@ -51,3 +51,4 @@
 | 047-merchant-behind-a-collective-payer.md | Feature | Auto-Tagging | Transaction | Done | None | PayPal hides the real merchant in the purpose text; needs a `merchant` field, pattern to be read off real lines first |
 | 048-import-meets-a-booked-counter-leg.md | Feature | Import | Transaction | Draft | 042 | Split from 042: an import meets the mirror booking; dedupe cannot catch it, and only ING Giro ↔ TR Cash can collide |
 | 049-transfers-in-the-uncategorized-filter.md | Bug | None | Transaction | Draft | None | `Nur ohne Kategorie` lists every transfer forever; since 032 they need no category, so the filter never empties |
+| 050-more-collective-payers-adyen-nexi.md | Feature | Auto-Tagging | Transaction | Draft | None | Adyen and Nexi hide the shop too, but in the card-terminal shape; Nexi still unseen, so dump before pattern |
