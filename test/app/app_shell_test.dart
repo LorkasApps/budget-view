@@ -68,6 +68,38 @@ void main() {
     );
   });
 
+  testWidgets('back at a secondary tab returns to Konten', (tester) async {
+    await pumpShell(tester);
+
+    await tester.tap(find.byIcon(Icons.more_horiz_outlined));
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    // True: our PopScope handled the pop instead of letting it bubble out.
+    expect(await tester.binding.handlePopRoute(), isTrue);
+    for (var i = 0; i < 6; i++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+
+    expect(
+      tester.widget<NavigationBar>(find.byType(NavigationBar)).selectedIndex,
+      0,
+    );
+  });
+
+  testWidgets('back at Konten is left to the platform', (tester) async {
+    await pumpShell(tester);
+
+    // False: nothing here handled it, so the route may pop and the app leaves.
+    // Whether the process exits is not something a widget test asserts.
+    expect(await tester.binding.handlePopRoute(), isFalse);
+    expect(
+      tester.widget<PopScope<void>>(find.byType(PopScope<void>)).canPop,
+      isTrue,
+    );
+  });
+
   testWidgets('all tabs stay mounted, so their state survives a switch', (
     tester,
   ) async {

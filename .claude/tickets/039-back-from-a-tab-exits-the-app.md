@@ -7,7 +7,7 @@
 | **Domain** | Infra |
 | **Blocked By** | None |
 | **Severity** | Medium |
-| **Status** | Ready |
+| **Status** | In Progress |
 
 ## Description
 `AppShell` switches three tabs over an `IndexedStack`. The stack has no navigation history of its own, so the system back
@@ -53,14 +53,24 @@ Since the shell landed (ticket 020, extended by 029). No device pass had happene
   root will not animate even with the flag on
 
 ## Acceptance Criteria
-- [ ] Back at the root of `Report` or `Mehr` selects `Konten` instead of closing the app
-- [ ] Back at the root of `Konten` closes the app, with no dialog and no double-tap
-- [ ] Pushed routes keep popping as before — nothing about `Einstellungen` → list → back changes
-- [ ] The `IndexedStack` still keeps each tab's scroll position and filters across switches (the reason it exists)
-- [ ] `android:enableOnBackInvokedCallback="true"` in the manifest
-- [ ] Widget test at shell level: select a tab, invoke the pop, assert the selected index changed to `Konten`; a second pop
+- [x] Back at the root of `Report` or `Mehr` selects `Konten` instead of closing the app
+- [x] Back at the root of `Konten` closes the app, with no dialog and no double-tap
+- [x] Pushed routes keep popping as before — nothing about `Einstellungen` → list → back changes
+- [x] The `IndexedStack` still keeps each tab's scroll position and filters across switches (the reason it exists)
+- [x] `android:enableOnBackInvokedCallback="true"` in the manifest
+- [x] Widget test at shell level: select a tab, invoke the pop, assert the selected index changed to `Konten`; a second pop
       from `Konten` reports that the route may pop. Whether the process exits is the platform's business, not an assertion
-- [ ] `make check` green
+- [x] `make check` green
+
+## How it was built
+- `PopScope<void>` around the shell's `Scaffold`: `canPop: _index == 0`, and the `onPopInvokedWithResult` callback selects
+  `Konten` whenever the pop did not happen. The `IndexedStack` is untouched, so tab state still survives a switch
+- Pushed routes, sheets and dialogs are separate routes on top of the shell's, so the shell's `PopScope` is never consulted
+  for them — that is why nothing about `Einstellungen` → list → back changes
+- The explicit `<void>` matters for the test: with an inferred type parameter, `find.byType(PopScope)` matched nothing
+- `enableOnBackInvokedCallback="true"` on `<application>` in `android/app/src/main/AndroidManifest.xml`
+- Two new cases in `test/app/app_shell_test.dart` around `tester.binding.handlePopRoute()`: `true` at a secondary tab (we
+  handled it, index back to 0), `false` at `Konten` (the route may pop, the rest is the platform's)
 
 ## Device checks (predictive back touches every route)
 - [ ] Tab root: gesture returns to `Konten`, and no half-finished preview animation is left on screen

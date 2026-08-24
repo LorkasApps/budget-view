@@ -17,35 +17,45 @@ class _AppShellState extends State<AppShell> {
   int _index = 0;
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    body: IndexedStack(
-      index: _index,
-      children: const [
-        AccountListScreen(),
-        MonthlyCategoryReportScreen(),
-        MenuScreen(),
-      ],
-    ),
-    bottomNavigationBar: NavigationBar(
-      selectedIndex: _index,
-      onDestinationSelected: (index) => setState(() => _index = index),
-      destinations: const [
-        NavigationDestination(
-          icon: Icon(Icons.account_balance_wallet_outlined),
-          selectedIcon: Icon(Icons.account_balance_wallet),
-          label: 'Konten',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.donut_small_outlined),
-          selectedIcon: Icon(Icons.donut_small),
-          label: 'Report',
-        ),
-        NavigationDestination(
-          icon: Icon(Icons.more_horiz_outlined),
-          selectedIcon: Icon(Icons.more_horiz),
-          label: 'Mehr',
-        ),
-      ],
+  Widget build(BuildContext context) => PopScope<void>(
+    // Android's rule for bottom navigation: back from a secondary destination
+    // returns to the start one, and only back from there leaves the app. The
+    // IndexedStack carries no history of its own, so without this every tab is
+    // an exit door. Pushed routes are unaffected — they are on top of this one.
+    canPop: _index == 0,
+    onPopInvokedWithResult: (didPop, _) {
+      if (!didPop) setState(() => _index = 0);
+    },
+    child: Scaffold(
+      body: IndexedStack(
+        index: _index,
+        children: const [
+          AccountListScreen(),
+          MonthlyCategoryReportScreen(),
+          MenuScreen(),
+        ],
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _index,
+        onDestinationSelected: (index) => setState(() => _index = index),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.account_balance_wallet_outlined),
+            selectedIcon: Icon(Icons.account_balance_wallet),
+            label: 'Konten',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.donut_small_outlined),
+            selectedIcon: Icon(Icons.donut_small),
+            label: 'Report',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.more_horiz_outlined),
+            selectedIcon: Icon(Icons.more_horiz),
+            label: 'Mehr',
+          ),
+        ],
+      ),
     ),
   );
 }
