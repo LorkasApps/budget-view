@@ -7,7 +7,7 @@
 | **Domain** | Transaction |
 | **Blocked By** | None |
 | **Severity** | Low |
-| **Status** | Draft |
+| **Status** | Ready |
 
 ## Description
 Ticket 032 dropped the category requirement for a transfer, and saving one without a category works. But the booking form
@@ -35,21 +35,47 @@ Ignore the marker; saving works.
 Since ticket 032 (2026-08-21). The conditional rule landed in `TransactionValidation.category` and in `_save`, but not in
 the field's own decoration.
 
-## Open questions for refinement
-- Does the marker just disappear for a transfer, or does the label change to say the category is optional?
-- The same field also carries the suggestion marker and its count (014). Do those still make sense on a transfer, given the
-  learn hook now skips transfers entirely — arguably a transfer should not display a suggestion at all
-- Does the import preview's category row need the same treatment, or does it never claim to be required?
+## Resolved during refinement
+- **Wording** → with `Umbuchung` on, the required marker and the red `Pflichtfeld` text go and the label becomes
+  `Kategorie (optional)`; with it off, the field is required as today. Follows the convention of the same form, where every
+  optional field spells it out (`Notiz (optional)`, `Zahlungsempfänger / Absender (optional)`) — dropping only the marker
+  would leave the category as the one field that says nothing either way. Accepted cost: this label changes while the form
+  is open, which no other label does
+
+- **Suggestion marker** → hidden while `Umbuchung` is on, count included. The learn hook skips transfers, so accepting such
+  a suggestion teaches nothing, and the category it offers is evaluated by no report. Rejected keeping it (a category *is*
+  legal on a transfer, so someone setting one by hand might want the hint) because a marker that neither learns nor counts
+  toward anything is the same kind of misleading hint this ticket removes
+
+- **Import preview** → the suggestion rule comes along, the required rule has nothing to fix. The preview never claims the
+  category is required (`decisions.md`, 2026-08-12: the requirement sits in the form, the PDF import allows uncategorised
+  rows), but a row can be marked `Umbuchung` there too (`pdf_import_screen.dart:701`), and then the marker promises the same
+  learning that does not happen. So: marker hidden on a row marked as a transfer, everything else in the preview untouched
 
 ## Acceptance Criteria
-_Not refined yet._
+- [ ] Booking form with `Umbuchung` **on**: no required marker, no red `Pflichtfeld` text, and the label reads
+      `Kategorie (optional)`
+- [ ] Booking form with `Umbuchung` **off**: label reads `Kategorie`, marker and validation exactly as today
+- [ ] Toggling `Umbuchung` back and forth flips the label both ways and never clears a category the user already picked
+- [ ] The suggestion marker and its count are hidden while `Umbuchung` is on, and return when it is switched off
+- [ ] Import preview: a row marked `Umbuchung` shows no suggestion marker and no count; its category chip stays usable, and
+      the row's category is not cleared by the marking
+- [ ] Import preview: nothing about the required behaviour changes — an uncategorised row stays importable
+- [ ] Saving a transfer without a category still succeeds; saving a **regular** booking without one is still refused
+- [ ] `make check` green
 
 ## Affected Tests
 - The transaction form tests around the required category; `manual_entry_category_required_test.dart` must keep asserting the
   requirement for a **regular** booking
+- New: the label and the hidden marker under `Umbuchung`, in the form and in the import preview
+- `import_preview_suggest_test.dart` — its suggestion assertions must keep holding for rows that are not transfers
 
 ## Fixtures Needed
 No.
 
-## Token Usage
+### Refinement Tokens (estimate)
+- Input: ~11k tokens
+- Output: ~1.5k tokens
+
+### Implementation Tokens (estimate)
 _Filled after Done._
