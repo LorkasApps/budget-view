@@ -59,6 +59,7 @@ Future<void> startReceiptScan(
         transaction: transaction,
         candidates: state.candidates,
         expectedSumCents: state.expectedSumCents,
+        unreadRows: state.unreadRows,
       );
       if (reviewed == null) {
         controller.cancel();

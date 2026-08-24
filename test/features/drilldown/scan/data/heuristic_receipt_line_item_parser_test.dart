@@ -241,6 +241,57 @@ void main() {
       expect(result.candidates.map((c) => c.amountCents), [119, 9999]);
     });
 
+    test('raised cents are reassembled into one price (ticket 045)', () {
+      // Picnic prints the cents raised: `3` and `79` sit on their own baselines in
+      // the price column, so neither half is a money token on its own.
+      final result = _parser.parse(
+        _blocks([
+          [_line('H-Milch 1,5%', top: 100, left: 0)],
+          [_line('3', top: 100, left: 300)],
+          [_line('79', top: 96, left: 316)],
+          [_line('Endsumme 3,79', top: 200, left: 0)],
+        ]),
+      );
+
+      final candidate = result.candidates.single;
+      expect(candidate.amountCents, 379);
+      expect(candidate.description, 'H-Milch 1,5%');
+    });
+
+    test('Endsumme is read as the total, not as a position', () {
+      // German puts the keyword at the end of a compound, which a prefix rule
+      // misses — and without a total there is no checksum and no bound.
+      final result = _parser.parse(_row('Endsumme 12,34'));
+
+      expect(result.candidates, isEmpty);
+      expect(result.printedTotalCents, 1234);
+    });
+
+    test('Zwischensumme still is not the total', () {
+      final result = _parser.parse(_row('Zwischensumme 5,00'));
+
+      expect(result.candidates, isEmpty);
+      expect(result.printedTotalCents, isNull);
+    });
+
+    test('a row without a usable amount is kept as a diagnostic', () {
+      final result = _parser.parse(
+        _blocks([
+          [_line('Milch 1,19', top: 0)],
+          [_line('Bernard-Eyberg-Straße 80a', top: 100)],
+        ]),
+      );
+
+      expect(result.candidates.single.description, 'Milch');
+      expect(result.unreadRows, ['Bernard-Eyberg-Straße 80a']);
+    });
+
+    test('a receipt that reads cleanly reports no unread rows', () {
+      final result = _parser.parse(_row('Milch 1,19'));
+
+      expect(result.unreadRows, isEmpty);
+    });
+
     test('a credit row without a total still counts as a credit', () {
       final result = _parser.parse(_row('Gutschrift 3,00'));
 

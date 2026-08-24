@@ -88,10 +88,15 @@ ReceiptParseResult parseReceiptPdf(List<ReceiptWord> words) {
 
   final budget = positionBudgetCents(printedTotalCents, creditCents);
   final candidates = <LineItemCandidate>[];
+  final unreadRows = <String>[];
   for (final row in rows) {
     final amountCents = row.amountCents;
-    // No amount, no item: address and legal blocks leave here.
-    if (amountCents == null || row.label.isEmpty) continue;
+    // No amount, no item: address and legal blocks leave here — kept as a
+    // diagnostic, so a layout we cannot read does not look like an empty document.
+    if (amountCents == null || row.label.isEmpty) {
+      if (row.raw.isNotEmpty) unreadRows.add(row.raw);
+      continue;
+    }
 
     if (statesReceiptTotal(row.label)) continue;
     if (statesReceiptCredit(row.label)) continue;
@@ -105,6 +110,7 @@ ReceiptParseResult parseReceiptPdf(List<ReceiptWord> words) {
     candidates: candidates,
     printedTotalCents: printedTotalCents,
     creditCents: creditCents,
+    unreadRows: unreadRows,
   );
 }
 

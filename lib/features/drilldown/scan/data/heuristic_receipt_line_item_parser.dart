@@ -48,6 +48,16 @@ final _quantityPrefix = RegExp(
 
 const _countUnits = {'x', 'stk', 'stk.', 'stück'};
 
+/// A line that is nothing but digits and separators — half of a price whose cents
+/// are printed raised, so neither half is a money token on its own.
+final _priceFragment = RegExp(r'^[€]?[\d.,\s]+[€]?$');
+
+final _digits = RegExp(r'^\d+$');
+
+/// Fraction of the page width from which a fragment counts as the price column.
+/// Same rule as the PDF parser: receipts right-align prices.
+const double _priceColumnFraction = 0.6;
+
 /// A row after grouping: its full text for the vocabulary checks, the description
 /// left once the price is taken out, and the price itself.
 typedef _Row = ({String text, String label, int? amountCents});
@@ -81,11 +91,16 @@ class HeuristicReceiptLineItemParser implements ReceiptLineItemParser {
 
     final budget = positionBudgetCents(printedTotalCents, creditCents);
     final candidates = <LineItemCandidate>[];
+    final unreadRows = <String>[];
     for (final row in rows) {
       final amountCents = row.amountCents;
       // A row without an amount cannot be an item — address and header blocks
-      // leave by this door rather than by keyword.
-      if (amountCents == null) continue;
+      // leave by this door rather than by keyword. It is kept as a diagnostic:
+      // without it, a layout the parser cannot read looks like an empty receipt.
+      if (amountCents == null) {
+        unreadRows.add(row.text);
+        continue;
+      }
       if (statesReceiptTotal(row.text)) continue;
       if (statesReceiptCredit(row.text)) continue;
       if (_isSkippable(row.text)) continue;
@@ -98,6 +113,7 @@ class HeuristicReceiptLineItemParser implements ReceiptLineItemParser {
       candidates: candidates,
       printedTotalCents: printedTotalCents,
       creditCents: creditCents,
+      unreadRows: unreadRows,
     );
   }
 
@@ -122,10 +138,39 @@ class HeuristicReceiptLineItemParser implements ReceiptLineItemParser {
       }
     }
 
+    final priceColumnLeft = _priceColumnLeft(lines);
     return [
       for (final row in rows)
-        if (_rowOf(row) case final parsed when parsed.text.isNotEmpty) parsed,
+        if (_rowOf(row, priceColumnLeft) case final parsed
+            when parsed.text.isNotEmpty)
+          parsed,
     ];
+  }
+
+  /// Where the price column starts, taken from the leftmost line that is nothing
+  /// but a price fragment. Falls back to a fraction of the page when every price
+  /// shares its line with a description, which is the layout where the column is
+  /// not needed anyway.
+  double _priceColumnLeft(List<OcrLine> lines) {
+    if (lines.isEmpty) return 0;
+    var minLeft = lines.first.boundingBox.left;
+    var maxRight = lines.first.boundingBox.right;
+    for (final line in lines) {
+      if (line.boundingBox.left < minLeft) minLeft = line.boundingBox.left;
+      if (line.boundingBox.right > maxRight) maxRight = line.boundingBox.right;
+    }
+    final fallback = minLeft + (maxRight - minLeft) * _priceColumnFraction;
+
+    double? leftmostFragment;
+    for (final line in lines) {
+      if (line.boundingBox.left < fallback) continue;
+      if (!_priceFragment.hasMatch(line.text.trim())) continue;
+      if (leftmostFragment == null ||
+          line.boundingBox.left < leftmostFragment) {
+        leftmostFragment = line.boundingBox.left;
+      }
+    }
+    return leftmostFragment ?? fallback;
   }
 
   /// Splits a grouped row into its text, its description and its price.
@@ -136,7 +181,11 @@ class HeuristicReceiptLineItemParser implements ReceiptLineItemParser {
   /// `List.sort` is not stable, which is what made the winner arbitrary. Same rule
   /// as the PDF parser's bottom-most band. Within one line the rightmost token
   /// still wins, because that is where a receipt puts the price.
-  _Row _rowOf(List<OcrLine> lines) {
+  _Row _rowOf(List<OcrLine> lines, double priceColumnLeft) {
+    final ordered = [...lines]
+      ..sort((a, b) => a.boundingBox.left.compareTo(b.boundingBox.left));
+    final text = _join(ordered.map((line) => line.text));
+
     OcrLine? priceLine;
     for (final line in lines) {
       if (_amountToken.firstMatch(line.text) == null) continue;
@@ -146,37 +195,85 @@ class HeuristicReceiptLineItemParser implements ReceiptLineItemParser {
       }
     }
 
-    final match = priceLine == null
-        ? null
-        : _amountToken.allMatches(priceLine.text).lastOrNull;
-    final cents = match == null
-        ? null
-        : _toCents(match.group(1)!, match.group(2)!);
-
-    final pieces = [
-      for (final line in lines)
-        (
-          left: line.boundingBox.left,
-          // On the price line, only what stands before the price is description —
-          // the same cut the single-line case has always made. A line that is
-          // nothing but a price is no description either: that is the struck-through
-          // original, which stays visible in `rawOcrText` and nowhere else.
-          text: line == priceLine
-              ? line.text.substring(0, match!.start)
+    if (priceLine != null) {
+      final match = _amountToken.allMatches(priceLine.text).last;
+      final cents = _toCents(match.group(1)!, match.group(2)!);
+      return (
+        text: text,
+        // On the price line, only what stands before the price is description —
+        // the same cut the single-line case has always made. A line that is
+        // nothing but a price is no description either: that is the
+        // struck-through original, which stays visible in `rawOcrText` only.
+        label: _labelOf(
+          lines,
+          (line) => line == priceLine
+              ? line.text.substring(0, match.start)
               : _isOnlyPrice(line.text)
                   ? ''
                   : line.text,
         ),
-    ]..sort((a, b) => a.left.compareTo(b.left));
+        amountCents: cents == 0 ? null : cents,
+      );
+    }
 
-    final ordered = [...lines]
-      ..sort((a, b) => a.boundingBox.left.compareTo(b.boundingBox.left));
-
+    // Raised cents: `3` and `79` sit on different baselines in the price
+    // column, so neither half is a money token. The digits of the bottom-most
+    // band are read as one price, the last two as cents — the PDF parser's
+    // rule, and the reason a Picnic receipt used to yield nothing at all.
+    final band = _priceBand(lines, priceColumnLeft);
     return (
-      text: _join(ordered.map((line) => line.text)),
-      label: _join(pieces.map((piece) => piece.text)),
-      amountCents: cents == 0 ? null : cents,
+      text: text,
+      label: _labelOf(lines, (line) => band.contains(line) ? '' : line.text),
+      amountCents: band.isEmpty ? null : _bandToCents(band),
     );
+  }
+
+  String _labelOf(List<OcrLine> lines, String Function(OcrLine) textOf) {
+    final pieces = [
+      for (final line in lines)
+        (left: line.boundingBox.left, text: textOf(line)),
+    ]..sort((a, b) => a.left.compareTo(b.left));
+    return _join(pieces.map((piece) => piece.text));
+  }
+
+  /// The bottom-most band of price-column fragments in a row: a promotional row
+  /// stacks the struck-through original above the price that replaced it, and
+  /// each of them can itself be split into integer and raised cents.
+  List<OcrLine> _priceBand(List<OcrLine> lines, double priceColumnLeft) {
+    final fragments = [
+      for (final line in lines)
+        if (line.boundingBox.left >= priceColumnLeft &&
+            _priceFragment.hasMatch(line.text.trim()))
+          line,
+    ]..sort((a, b) => a.boundingBox.top.compareTo(b.boundingBox.top));
+    if (fragments.isEmpty) return const [];
+
+    final bands = <List<OcrLine>>[];
+    for (final fragment in fragments) {
+      final current = bands.isEmpty ? null : bands.last;
+      final apart = current == null
+          ? null
+          : fragment.boundingBox.top - current.first.boundingBox.top;
+      if (current != null && apart! <= fragment.boundingBox.height) {
+        current.add(fragment);
+      } else {
+        bands.add([fragment]);
+      }
+    }
+    return bands.last;
+  }
+
+  int? _bandToCents(List<OcrLine> band) {
+    final ordered = [...band]
+      ..sort((a, b) => a.boundingBox.left.compareTo(b.boundingBox.left));
+    final digits = ordered
+        .map((line) => line.text.replaceAll(RegExp(r'[^0-9]'), ''))
+        .where(_digits.hasMatch)
+        .join();
+    if (digits.length < 3) return null;
+
+    final cents = int.tryParse(digits);
+    return cents == null || cents == 0 ? null : cents;
   }
 
   bool _isOnlyPrice(String text) {

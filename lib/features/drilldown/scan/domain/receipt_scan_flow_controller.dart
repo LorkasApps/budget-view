@@ -35,6 +35,7 @@ class ReceiptScanFlowState {
     this.documentMatches = const [],
     this.candidates = const [],
     this.expectedSumCents,
+    this.unreadRows = const [],
     this.kind = ImportedSourceKind.photo,
     this.filename = '',
     this.holdsImage = false,
@@ -53,6 +54,10 @@ class ReceiptScanFlowState {
   /// What the kept positions have to add up to: the receipt's printed total plus
   /// the credit rows it already accounted for (tickets 035, 033).
   final int? expectedSumCents;
+
+  /// Rows read as text but unusable as positions, for the review screen's
+  /// collapsed diagnostic (ticket 045).
+  final List<String> unreadRows;
 
   /// What the completed pass will record — a capture or a picked document.
   final ImportedSourceKind kind;
@@ -88,6 +93,7 @@ class ReceiptScanFlowState {
     List<ImportedSource>? documentMatches,
     List<LineItemCandidate>? candidates,
     int? expectedSumCents,
+    List<String>? unreadRows,
     ImportedSourceKind? kind,
     String? filename,
     bool? holdsImage,
@@ -100,6 +106,7 @@ class ReceiptScanFlowState {
         documentMatches: documentMatches ?? this.documentMatches,
         candidates: candidates ?? this.candidates,
         expectedSumCents: expectedSumCents ?? this.expectedSumCents,
+        unreadRows: unreadRows ?? this.unreadRows,
         kind: kind ?? this.kind,
         filename: filename ?? this.filename,
         holdsImage: holdsImage ?? this.holdsImage,
@@ -245,6 +252,7 @@ class ReceiptScanFlowController extends AutoDisposeNotifier<ReceiptScanFlowState
       phase: ReceiptScanPhase.awaitingConfirm,
       candidates: parsed.candidates,
       expectedSumCents: parsed.expectedPositionSumCents,
+      unreadRows: parsed.unreadRows,
     );
   }
 
@@ -267,6 +275,7 @@ class ReceiptScanFlowController extends AutoDisposeNotifier<ReceiptScanFlowState
       phase: ReceiptScanPhase.awaitingConfirm,
       candidates: parsed.candidates,
       expectedSumCents: parsed.expectedPositionSumCents,
+      unreadRows: parsed.unreadRows,
     );
   }
 
@@ -328,6 +337,7 @@ class ReceiptScanFlowController extends AutoDisposeNotifier<ReceiptScanFlowState
         phase: ReceiptScanPhase.done,
         holdsImage: false,
         candidates: const [],
+        unreadRows: const [],
         documentMatches: const [],
         lineItemsPersisted: items.length,
         scansCompleted: state.scansCompleted + 1,
@@ -344,6 +354,7 @@ class ReceiptScanFlowController extends AutoDisposeNotifier<ReceiptScanFlowState
       phase: ReceiptScanPhase.cancelled,
       holdsImage: false,
       candidates: const [],
+      unreadRows: const [],
       documentMatches: const [],
     );
   }
@@ -354,6 +365,7 @@ class ReceiptScanFlowController extends AutoDisposeNotifier<ReceiptScanFlowState
       phase: ReceiptScanPhase.failed,
       holdsImage: false,
       candidates: const [],
+      unreadRows: const [],
       documentMatches: const [],
       errorMessage: switch (error) {
         LineItemInvalid() => error.message,

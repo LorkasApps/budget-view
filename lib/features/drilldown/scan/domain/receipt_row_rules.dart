@@ -8,10 +8,13 @@
 /// layer hand over different rectangles.
 library;
 
-/// Rows stating the document's own total. `zwischensumme` is deliberately
-/// absent — a subtotal is not the figure to check against, and `startsWith`
-/// keeps it out.
+/// Rows stating the document's own total.
 const receiptTotalPrefixes = {'summe', 'gesamt', 'total'};
+
+/// A subtotal is not the figure to check against, and it has to be named: the
+/// matching below looks at the end of a word too, so `zwischensumme` would
+/// otherwise pass as a total.
+const receiptSubtotalPrefixes = {'zwischensumme'};
 
 /// Rows that reduce what the user paid: returned deposits, refunds.
 ///
@@ -26,17 +29,22 @@ const receiptCreditPrefixes = {
   'erstattung',
 };
 
-bool statesReceiptTotal(String label) =>
-    _startsWithAny(label, receiptTotalPrefixes);
+bool statesReceiptTotal(String label) {
+  final words = _words(label);
+  if (words.any((word) => _matchesAny(word, receiptSubtotalPrefixes))) {
+    return false;
+  }
+  return words.any((word) => _matchesAny(word, receiptTotalPrefixes));
+}
 
 bool statesReceiptCredit(String label) =>
-    _startsWithAny(label, receiptCreditPrefixes);
+    _words(label).any((word) => _matchesAny(word, receiptCreditPrefixes));
 
 /// What the positions of a receipt have to add up to, or null when it printed no
 /// total.
 ///
-/// Not the printed total itself: a returned deposit is already deducted there, so
-/// the positions sum higher than what was paid.
+/// Not the printed total itself: a returned deposit is already deducted there,
+/// so the positions sum higher than what was paid.
 int? positionBudgetCents(int? printedTotalCents, int creditCents) =>
     printedTotalCents == null ? null : printedTotalCents + creditCents;
 
@@ -50,7 +58,19 @@ int? positionBudgetCents(int? printedTotalCents, int creditCents) =>
 bool exceedsPositionBudget(int amountCents, int? budgetCents) =>
     budgetCents != null && amountCents > budgetCents;
 
-bool _startsWithAny(String label, Set<String> prefixes) {
-  final normalized = label.toLowerCase().trimLeft();
-  return prefixes.any(normalized.startsWith);
-}
+List<String> _words(String label) => label
+    .toLowerCase()
+    .split(RegExp(r'\s+'))
+    .where((word) => word.isNotEmpty)
+    .toList();
+
+/// A keyword counts when a word **starts or ends** with it.
+///
+/// German puts the keyword at the end of a compound at least as often as at the
+/// start: `Endsumme`, `Rechnungsbetrag`, `Kartenzahlung`. A prefix rule was read
+/// off one shop's receipts and misses those; a free substring would hit inside
+/// unrelated words. Known edge accepted: a bought `Pfandflasche` starts with
+/// `pfand` and reads as a credit — to be corrected against real receipts.
+bool _matchesAny(String word, Set<String> keywords) => keywords.any(
+      (keyword) => word.startsWith(keyword) || word.endsWith(keyword),
+    );

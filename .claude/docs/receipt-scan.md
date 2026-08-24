@@ -139,6 +139,19 @@ decides, and within that line the rightmost token wins — picking by x alone wa
 flip, because `List.sort` is not stable. A line that is nothing but a price adds no
 description text and survives in `rawOcrText` only.
 
+**Raised cents (045).** When no line carries a whole money token, the price is
+reassembled: fragments in the price column are banded by baseline, the bottom-most
+band is read left to right and its last two digits are the cents. Picnic prints `3`
+and `79` on baselines 7 units apart, so neither half was a money token and the row was
+dropped — a photographed receipt yielded nothing at all. The price column is derived
+per document from the leftmost line that is *nothing but* a price fragment, falling
+back to 60 % of the page width; without it a `Kundennr 4711` row reassembles into an
+amount. The row tolerance itself is unchanged — widening it would regroup every layout.
+
+**Unread rows (045).** Rows with text but no usable amount go to
+`ReceiptParseResult.unreadRows` and reach the review screen through the flow state.
+Both parsers fill it.
+
 **Money tokens.** The parser searches for price patterns: one to three digits per
 group, groups separated by `,`, `.`, or space (e.g., `1,23`, `1.23`, `1.234,56`,
 `1 234,56`), always ending in `,DD` (two decimal places). Optional `€` or `EUR` on
@@ -164,7 +177,9 @@ parser too, because a thermal print and a text layer give different rectangles.
 
 | Item | Details |
 |---|---|
-| `receiptTotalPrefixes` | `summe`, `gesamt`, `total` — `zwischensumme` excluded by `startsWith` |
+| `receiptTotalPrefixes` | `summe`, `gesamt`, `total` |
+| `receiptSubtotalPrefixes` | `zwischensumme` — disqualifies a row as the total, and has to be named since matching looks at word **ends** too (045) |
+| Matching rule (045) | a keyword hits when a word starts **or ends** with it: `Endsumme` contains `summe` as a suffix, and a prefix rule read off one shop's receipts missed it. A free substring would hit inside unrelated words. Known edge: a bought `Pfandflasche` reads as a credit |
 | `receiptCreditPrefixes` | `eingereichtes`, `rückgabe`, `gutschrift`, `erstattung` — summed into `creditCents`, never candidates |
 | `positionBudgetCents` | printed total **+** credits: what the positions must add up to. Not the printed total, from which a returned deposit is already deducted |
 | `exceedsPositionBudget` | nothing costs more than the whole receipt — bounds page furniture whose digits reassemble into an amount, without sender vocabulary |
@@ -230,8 +245,17 @@ The gaps in the OCR column are ticket **043**.
 
 ## Review screen
 
-`pushScanReview(context, transaction:, candidates:)` presents the parser's output
-for editing and returns the reviewed list, or null if the user discards.
+`pushScanReview(context, transaction:, candidates:, expectedSumCents:, unreadRows:)`
+presents the parser's output for editing and returns the reviewed list, or null if the
+user discards.
+
+**Unread rows (045).** An `ExpansionTile` titled `N nicht erkannte Zeilen`, collapsed on
+arrival and absent when nothing was discarded, shows the raw text of every row the
+parser could not use. They are text, never candidates: nothing there can be selected or
+saved. Ticket 035 had removed this list as noise, which is still true on a receipt that
+read fine — but its absence made an unreadable layout look like an empty receipt, and a
+debug-only dump would be missing from exactly the release build where that happened
+(034).
 
 **Row states and rendering.**
 - `ok`: plain `ListTile` — description, category chip once set, amount, quantity line

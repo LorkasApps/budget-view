@@ -85,10 +85,19 @@ class ReceiptParseResult {
     required this.candidates,
     this.printedTotalCents,
     this.creditCents = 0,
+    this.unreadRows = const [],
   });
 
   final List<LineItemCandidate> candidates;
   final int? printedTotalCents;
+
+  /// Rows that carried text but no amount the parser could use, in reading order.
+  ///
+  /// Kept so the review screen can show them behind a collapsed line. Ticket 035
+  /// dropped such rows silently and thereby removed the only diagnostic there is:
+  /// the OCR plugin has no test-VM binding, so the app itself is the sole place
+  /// where raw recognised text can surface (ticket 045).
+  final List<String> unreadRows;
 
   /// Sum of rows that reduce what was paid — returned deposits, refunds. They
   /// cannot be positions, because a `LineItem` amount carries no sign, but the

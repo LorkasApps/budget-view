@@ -20,6 +20,7 @@ Future<List<LineItemCandidate>?> pushScanReview(
   required Transaction transaction,
   required List<LineItemCandidate> candidates,
   int? expectedSumCents,
+  List<String> unreadRows = const [],
 }) {
   return Navigator.of(context).push<List<LineItemCandidate>>(
     MaterialPageRoute(
@@ -27,6 +28,7 @@ Future<List<LineItemCandidate>?> pushScanReview(
         transaction: transaction,
         candidates: candidates,
         expectedSumCents: expectedSumCents,
+        unreadRows: unreadRows,
       ),
     ),
   );
@@ -38,10 +40,17 @@ class ScanReviewScreen extends ConsumerStatefulWidget {
     required this.transaction,
     required this.candidates,
     this.expectedSumCents,
+    this.unreadRows = const [],
   });
 
   final Transaction transaction;
   final List<LineItemCandidate> candidates;
+
+  /// Rows the parser read but could not use. Shown behind a collapsed line: the
+  /// OCR plugin has no test-VM binding, so this screen is the only place raw
+  /// recognised text can be inspected when a layout reads as an empty receipt
+  /// (ticket 045).
+  final List<String> unreadRows;
 
   /// What the kept positions have to add up to — the receipt's printed total plus
   /// any credit rows it already accounted for. Null when the document printed no
@@ -182,6 +191,8 @@ class _ScanReviewScreenState extends ConsumerState<ScanReviewScreen> {
               ),
             ),
           ),
+          if (widget.unreadRows.isNotEmpty)
+            _UnreadRows(rows: widget.unreadRows),
         ],
       ),
       bottomNavigationBar: SafeArea(
@@ -297,6 +308,38 @@ class _CandidateRow extends StatelessWidget {
         ),
         onTap: onTap,
       ),
+    );
+  }
+}
+
+/// The rows the parser could not turn into positions, raw and collapsed.
+///
+/// Collapsed because ticket 035 removed this list for being noise, and that is
+/// still true on a receipt that read fine. Restored because its absence made a
+/// layout the parser cannot read look like an empty receipt, with nothing to go
+/// on (ticket 045). Nothing here can be selected or saved — it is text, not a
+/// candidate.
+class _UnreadRows extends StatelessWidget {
+  const _UnreadRows({required this.rows});
+
+  final List<String> rows;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return ExpansionTile(
+      leading: const Icon(Icons.help_outline),
+      title: Text('${rows.length} nicht erkannte Zeilen'),
+      children: [
+        for (final row in rows)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: SelectableText(row, style: theme.textTheme.bodySmall),
+            ),
+          ),
+      ],
     );
   }
 }

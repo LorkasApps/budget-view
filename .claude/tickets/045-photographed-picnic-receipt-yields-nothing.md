@@ -7,7 +7,7 @@
 | **Domain** | Drilldown |
 | **Blocked By** | 043 (it owns the shared vocabulary this ticket changes the matching of) |
 | **Severity** | High |
-| **Status** | Ready |
+| **Status** | Done |
 
 ## Description
 The same Picnic receipt that the PDF path reads to the cent produces almost nothing when photographed or screenshotted. The
@@ -82,15 +82,26 @@ been photographed until now, and 035's own findings came from a different shop's
   because a recognised `Endsumme` is what lets the checksum and the plausibility bound apply to this receipt at all
 
 ## Acceptance Criteria
-- [ ] A synthetic `OcrResult` with `3` and `79` on separate lines in the price column yields **one** position of 379 cents
-- [ ] The row tolerance for description rows is unchanged — no other layout regroups
-- [ ] `Endsumme` is recognised as the receipt total, not as a position
-- [ ] `Eingereichtes Pfand` is treated as a credit (the 043 rule) and is not a position
-- [ ] With the total recognised, the checksum and the plausibility bound from 043 apply on this receipt
-- [ ] The review screen shows a collapsed `N nicht erkannte Zeilen` line with the raw OCR text of every discarded row;
+- [x] A synthetic `OcrResult` with `3` and `79` on separate lines in the price column yields **one** position of 379 cents
+- [x] The row tolerance for description rows is unchanged — no other layout regroups
+- [x] `Endsumme` is recognised as the receipt total, not as a position
+- [x] `Eingereichtes Pfand` is treated as a credit (the 043 rule) and is not a position
+- [x] With the total recognised, the checksum and the plausibility bound from 043 apply on this receipt
+- [x] The review screen shows a collapsed `N nicht erkannte Zeilen` line with the raw OCR text of every discarded row;
       expanding it changes nothing about the candidate list, and none of those rows can be saved
-- [ ] The diagnostic line is collapsed on arrival and absent when nothing was discarded
-- [ ] `make check` green
+- [x] The diagnostic line is collapsed on arrival and absent when nothing was discarded
+- [x] `make check` green — 508 passed, 0 failed
+
+## How it was built
+- The row is no longer flattened to a string before the price is chosen. `_rowOf` works on the grouped `OcrLine`s and takes
+  the price from the bottom-most line that carries one; when **no** line carries a whole money token, the digits of the
+  bottom-most band of price-column fragments are reassembled, last two as cents — the PDF parser's rule
+- The price column is derived per document from the leftmost line that is *nothing but* a price fragment, falling back to
+  60 % of the page width. Without that bound a `Kundennr 4711` row would reassemble into an amount
+- `Zwischensumme` had to be named explicitly: matching now looks at the end of a word too, so it would otherwise have
+  passed as the total and broken the check 035 built
+- `ReceiptParseResult.unreadRows` carries the discarded rows through the flow state into the review screen, where an
+  `ExpansionTile` shows them collapsed. Both parsers fill it, since "text we could not use" means the same on both paths
 
 ## Device check (belongs to 036, on a release APK)
 - [ ] The photographed Picnic receipt yields roughly what the PDF path yields from the same document — around 30 positions
@@ -112,4 +123,5 @@ No. Synthetic `OcrResult` fixtures with split price lines, built inline as the s
 - Output: ~2.5k tokens
 
 ### Implementation Tokens (estimate)
-_Filled after Done._
+- Input: ~70k tokens
+- Output: ~9k tokens

@@ -37,6 +37,7 @@ Future<void> _openReview(
   WidgetTester tester, {
   required List<LineItemCandidate> candidates,
   ValueChanged<List<LineItemCandidate>?>? onResult,
+  List<String> unreadRows = const [],
 }) async {
   await tester.pumpWidget(
     UncontrolledProviderScope(
@@ -50,6 +51,7 @@ Future<void> _openReview(
                   context,
                   transaction: expenseTransaction(),
                   candidates: candidates,
+                  unreadRows: unreadRows,
                 );
                 onResult?.call(result);
               },
@@ -143,4 +145,43 @@ void main() {
       expect(result!.map((c) => c.description), ['Milch', 'Brot']);
     },
   );
+
+  group('unread rows (ticket 045)', () {
+    testWidgets('are named and collapsed on arrival', (tester) async {
+      await _openReview(
+        tester,
+        candidates: defaultCandidates(),
+        unreadRows: const ['Bernard-Eyberg-Straße 80a', 'Vielen Dank'],
+      );
+
+      expect(find.text('2 nicht erkannte Zeilen'), findsOneWidget);
+      // Collapsed, because on a receipt that read fine this list is the noise
+      // ticket 035 removed.
+      expect(find.text('Bernard-Eyberg-Straße 80a'), findsNothing);
+    });
+
+    testWidgets('expand to raw text and leave the candidates alone', (
+      tester,
+    ) async {
+      await _openReview(
+        tester,
+        candidates: defaultCandidates(),
+        unreadRows: const ['Bernard-Eyberg-Straße 80a'],
+      );
+
+      await tester.tap(find.text('1 nicht erkannte Zeilen'));
+      await _settle(tester);
+
+      expect(find.text('Bernard-Eyberg-Straße 80a'), findsOneWidget);
+      // Text, not a candidate: no third checkbox appeared and the count stands.
+      expect(find.byType(Checkbox), findsNWidgets(2));
+      expect(find.text('2 übernehmen'), findsOneWidget);
+    });
+
+    testWidgets('are absent when everything was read', (tester) async {
+      await _openReview(tester, candidates: defaultCandidates());
+
+      expect(find.textContaining('nicht erkannte'), findsNothing);
+    });
+  });
 }
