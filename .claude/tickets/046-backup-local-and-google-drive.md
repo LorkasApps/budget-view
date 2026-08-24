@@ -8,6 +8,11 @@
 | **Blocked By** | None |
 | **Status** | Draft |
 
+## Priority note (2026-08-24)
+Deliberately skipped in the refinement pass of 2026-08-24 and left `Draft`. It becomes relevant once the receipt chain
+(`043` → `044` / `045`) works — but **before** the `036` device round: that pass creates and deletes real data on a real
+device, and it should not run while nothing can be restored.
+
 ## Description
 Everything this app knows lives in one Isar database inside the app sandbox. Uninstall the app, lose the phone, or wipe it,
 and the data is gone: statements would have to be re-imported, categories rebuilt, tagging rules relearned, and every

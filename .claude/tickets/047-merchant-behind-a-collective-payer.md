@@ -6,7 +6,7 @@
 | **Epic** | Auto-Tagging |
 | **Domain** | Transaction |
 | **Blocked By** | None |
-| **Status** | Draft |
+| **Status** | Ready |
 
 ## Description
 Tagging learns and suggests on the **counterparty** only. For a collective payer that is useless: every PayPal payment carries
@@ -16,13 +16,14 @@ food, games, miniatures and groceries alike, and whichever category was assigned
 The user reports PayPal as frequent and spanning essentially every category. No other collective payer has shown up yet —
 Klarna, credit-card settlements and collective direct debits have the same shape and can be added later if they appear.
 
-## Prerequisite before any work starts
+## First step inside the ticket (was: prerequisite before any work)
 **The extraction pattern must be read off real statement lines, not guessed.** `ing_geometry_dump_test.dart` already dumps a
 real statement env-gated; extend it (or add a sibling) to print the full purpose text of PayPal rows, then derive the rule from
 what is actually printed. Ticket 033 showed what this is worth: five assumptions about a receipt layout fell the moment a real
 document was measured, and the parser only works because it was built against the real thing.
 
-Until that dump exists, this ticket stays Draft.
+Refined on 2026-08-24 with the pattern still open: the dump is the ticket's first step rather than its gate, since every other
+question could be settled without it (user decision).
 
 ## Why not the obvious answers
 
@@ -50,23 +51,49 @@ learn and suggest paths key on `merchant ?? counterparty`. That keeps three thin
 | `merchant` | who we believe it was — semantics, and the better tagging key |
 | `description` | the purpose text the merchant was read out of |
 
-Costs a `kDbSchemaVersion` bump, which is cheap before release (`TransactionKind` in ticket 032 proved that) and needs
-`make gen`.
+Needs `make gen`. **Corrected during refinement:** it costs no `kDbSchemaVersion` bump. A new field is purely additive and
+Isar returns its default for rows written before it existed — exactly how 032 introduced `Transaction.kind`
+(`infrastructure.md`, Schema versioning).
 
-## Open questions for refinement
-- What exactly does the pattern look like, per the prerequisite above? Is it stable across PayPal payment types (purchase,
-  subscription, refund)?
-- Does the merchant show in the UI, and where — the booking list row currently shows the counterparty
-- What happens on a **refund** through the same payer: same merchant, opposite sign?
-- Should the extraction be part of `IngGiroParser` or a step after parsing, so a second bank inherits it? The purpose text is
-  bank-independent in shape, the column it comes from is not
-- Do rules learned on `PayPal Europe` before this lands need cleaning up? Ticket 025's rule list can delete them by hand, and
-  the stale marker will not flag them because their categories are perfectly valid
-- If a merchant is recognised, does the row still learn a counterparty rule as well — two rules per booking — or only the
-  merchant one?
+## Resolved during refinement
+- **The pattern stays open on purpose** → it is answered inside the ticket, as its first step, not before it. The dump comes
+  first and the extraction rule is derived from what is printed (user decision, 2026-08-24)
+- **UI** → the booking list row shows `merchant ?? counterparty`, because the row answers "who did I pay" and `Zooplus` is the
+  right answer where `PayPal Europe S.a.r.l.` is the useless one. The booking **form** keeps showing the real counterparty: it
+  is the booking's identity and the dedupe key, and must not disappear behind an interpretation. The **import preview** keeps
+  it too — there you check what the bank wrote before it enters the app. List shows meaning, form and preview show fact
+- **Refunds** → the extraction is sign-blind. The merchant is read from the purpose text whichever way the money runs, so a
+  refund carries the same merchant and learns under the same key. Follows `decisions.md` (2026-08-10): free roots and the
+  amount's sign carry direction, precisely so a repayment needs no second category. If PayPal writes refunds differently and
+  no merchant is in the text, the row falls back to `counterparty` — a finding for the dump, not a design decision
+- **Where extraction sits** → after parsing, as a pure function over **every** candidate, not inside `IngGiroParser`. The
+  purpose text is bank-independent in shape, the column is not, so a second parser inherits it for free. Decisive detail:
+  the field goes on `ParsedTransactionCandidate`, not only on `Transaction` at conversion time — otherwise the import preview
+  never sees the merchant, and the preview is exactly where rows get categorised. `candidateToTransaction` then only copies
+- **Old rules** → no migration and no manual cleanup. The dev data gets wiped anyway (`decisions.md`, 2026-08-10: nuke in dev,
+  migrations from v1.0). Writing a one-shot cleanup that decides by heuristic which counterparty is "collective" would throw
+  away curated data on a guess, and would be dead code after its single run
+- **One rule per booking** → learn and suggest key on `merchant ?? counterparty`, so a recognised merchant learns only the
+  merchant rule. Learning both would rebuild the lottery this ticket removes: the `PayPal Europe` rule would keep growing its
+  `hitCount` across all merchants, would still be offered for every unrecognised row with an essentially random category, and
+  the number would mislead in 025's rule list where `hitCount` is visible
 
 ## Acceptance Criteria
-_Not refined yet — the prerequisite dump comes first._
+- [ ] **First step, before any field or parser code:** an env-gated harness prints the full purpose text of real PayPal rows
+      (extending `ing_geometry_dump_test.dart` or a sibling next to it); no statement enters the repo
+- [ ] The pattern derived from that dump is written into this ticket, including whether it holds across payment types
+      (purchase, subscription, refund) — if it does not, the ticket says so before code follows
+- [ ] `ParsedTransactionCandidate.merchant` and `Transaction.merchant` exist as nullable fields; `make gen` run, and
+      `kDbSchemaVersion` **not** bumped (additive, as with `Transaction.kind` in 032)
+- [ ] Extraction runs after parsing over every candidate, independent of which parser produced it; `candidateToTransaction`
+      copies the value
+- [ ] Learn and suggest key on `merchant ?? counterparty`, and a booking produces exactly **one** rule
+- [ ] A refund through the same payer carries the same merchant as the purchase
+- [ ] The booking list row shows `merchant ?? counterparty`; the booking form and the import preview still show the raw
+      counterparty
+- [ ] The dedupe hash is untouched — still amount + booking day + normalised `counterparty`, asserted as a regression guard
+- [ ] A row whose purpose text yields no merchant behaves exactly as today
+- [ ] `make check` green
 
 ## Out of Scope (proposed, to confirm)
 - Other collective payers until one actually appears
@@ -78,7 +105,11 @@ _Not refined yet — the prerequisite dump comes first._
 - The env-gated harness proves the pattern against a real statement; no statement enters the repo
 
 ## Fixtures Needed
-Ask during refinement. Purpose strings can be written inline once their real shape is known.
+No. Purpose strings are written inline once the dump has shown their real shape — the same call as every other parser ticket.
 
-## Token Usage
+### Refinement Tokens (estimate)
+- Input: ~17k tokens
+- Output: ~3k tokens
+
+### Implementation Tokens (estimate)
 _Filled after Done._
