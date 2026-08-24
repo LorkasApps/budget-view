@@ -1,22 +1,5 @@
-import 'package:flutter/foundation.dart';
-
 import 'parse_result.dart';
-
-/// A word from a PDF text layer together with its position on the page.
-@immutable
-class PositionedWord {
-  const PositionedWord({
-    required this.page,
-    required this.left,
-    required this.top,
-    required this.text,
-  });
-
-  final int page;
-  final double left;
-  final double top;
-  final String text;
-}
+import 'positioned_word.dart';
 
 /// Words on the same visual row differ in `top` by less than this. Statement
 /// rows sit ~12pt apart, so the margin is generous.
@@ -67,7 +50,7 @@ ParseResult parseIngStatement(List<PositionedWord> words) {
   _Columns? columns;
 
   for (final page in pages.keys.toList()..sort()) {
-    final bands = _bands(pages[page]!);
+    final bands = groupIntoBands(pages[page]!, tolerance: _bandTolerance);
     statementBalanceCents ??= _newBalance(bands);
 
     final pageColumns = _columns(bands);
@@ -143,29 +126,6 @@ class _Row {
       },
     );
   }
-}
-
-List<List<PositionedWord>> _bands(List<PositionedWord> words) {
-  final sorted = [...words]..sort((a, b) {
-    final byTop = a.top.compareTo(b.top);
-    return byTop != 0 ? byTop : a.left.compareTo(b.left);
-  });
-
-  final bands = <List<PositionedWord>>[];
-  for (final word in sorted) {
-    final isNewBand = bands.isEmpty ||
-        (word.top - bands.last.last.top).abs() > _bandTolerance;
-    if (isNewBand) {
-      bands.add([word]);
-    } else {
-      bands.last.add(word);
-    }
-  }
-
-  for (final band in bands) {
-    band.sort((a, b) => a.left.compareTo(b.left));
-  }
-  return bands;
 }
 
 /// Column positions from the header row `Buchung | Buchung / Verwendungszweck |

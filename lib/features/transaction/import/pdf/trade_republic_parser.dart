@@ -2,31 +2,35 @@ import 'dart:typed_data';
 
 import 'package:syncfusion_flutter_pdf/pdf.dart';
 
-import 'ing_giro_layout.dart';
 import 'parse_result.dart';
 import 'pdf_parser.dart';
 import 'positioned_word.dart';
+import 'trade_republic_layout.dart';
 
-/// Parser for ING Girokonto statements.
+/// Parser for the Trade Republic cash statement (Cashkonto).
 ///
 /// Only the PDF-to-words step lives here; the table logic is in
-/// [parseIngStatement] so it can be tested without a PDF.
-class IngGiroParser implements PdfParser {
-  const IngGiroParser();
+/// [parseTradeRepublicStatement] so it can be tested without a PDF.
+class TradeRepublicParser implements PdfParser {
+  const TradeRepublicParser();
 
   @override
-  String get id => 'ing-giro-v1';
+  String get id => 'trade-republic-cash-v1';
 
   @override
-  String get displayName => 'ING Girokonto';
+  String get displayName => 'Trade Republic Cashkonto';
 
   @override
   Future<double> canParse(Uint8List bytes) async {
     try {
       final text = _firstPageText(bytes);
-      final isIng = text.contains('ING-DiBa AG');
-      final isGiro = text.contains('Girokonto');
-      return isIng && isGiro ? 0.95 : 0.0;
+      final isTradeRepublic =
+          text.contains('TRADE REPUBLIC BANK GMBH') ||
+          text.contains('Trade Republic Bank GmbH');
+      // The securities and tax documents carry the same letterhead, so the cash
+      // table's own heading is what makes this ours.
+      final isCashStatement = text.contains('UMSATZÜBERSICHT');
+      return isTradeRepublic && isCashStatement ? 0.95 : 0.0;
     } catch (_) {
       return 0.0; // not a PDF, encrypted, or corrupt — simply not ours
     }
@@ -34,13 +38,14 @@ class IngGiroParser implements PdfParser {
 
   @override
   Future<ParseResult> parse(Uint8List bytes) async =>
-      parseIngStatement(_words(bytes));
+      parseTradeRepublicStatement(_words(bytes));
 
   String _firstPageText(Uint8List bytes) {
     final document = PdfDocument(inputBytes: bytes);
     try {
-      return PdfTextExtractor(document)
-          .extractText(startPageIndex: 0, endPageIndex: 0);
+      return PdfTextExtractor(
+        document,
+      ).extractText(startPageIndex: 0, endPageIndex: 0);
     } finally {
       document.dispose();
     }

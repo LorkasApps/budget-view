@@ -1,4 +1,5 @@
 import 'package:budget_view/features/transaction/import/pdf/ing_giro_layout.dart';
+import 'package:budget_view/features/transaction/import/pdf/positioned_word.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 /// Coordinates mirror a real ING statement as reported by the PDF text layer:

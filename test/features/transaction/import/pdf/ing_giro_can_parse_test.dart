@@ -23,12 +23,15 @@ void main() {
     expect(await parser.canParse(Uint8List(0)), 0.0);
   });
 
-  test('the shipped registry exposes exactly the ING parser', () {
+  test('the shipped registry exposes both parsers', () {
     final container = ProviderContainer();
     addTearDown(container.dispose);
 
     final registry = container.read(pdfParserRegistryProvider);
 
-    expect(registry.all.map((p) => p.id), ['ing-giro-v1']);
+    expect(registry.all.map((p) => p.id), [
+      'ing-giro-v1',
+      'trade-republic-cash-v1',
+    ]);
   });
 }

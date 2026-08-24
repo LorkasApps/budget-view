@@ -5,7 +5,9 @@ String formatDateDe(DateTime date) {
   return '$d.$m.${date.year}';
 }
 
-const _monthNamesDe = [
+/// Also the vocabulary for *reading* a spelled-out German date out of a bank
+/// statement, so both directions share one list.
+const monthNamesDe = [
   'Januar',
   'Februar',
   'März',
@@ -23,7 +25,7 @@ const _monthNamesDe = [
 /// `August 2026` — month names are spelled out here rather than taken from
 /// intl, which would need `initializeDateFormatting` for a non-`en` locale.
 String formatMonthYearDe(int year, int month) =>
-    '${_monthNamesDe[month - 1]} $year';
+    '${monthNamesDe[month - 1]} $year';
 
 /// Compact `dd.MM.` form for dense list rows.
 String formatDateCompactDe(DateTime date) {
