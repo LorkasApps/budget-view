@@ -54,3 +54,4 @@
 | 050-more-collective-payers-adyen-nexi.md | Feature | Auto-Tagging | Transaction | Draft | None | Adyen and Nexi hide the shop too, but in the card-terminal shape; Nexi still unseen, so dump before pattern |
 | 051-one-subcategory-level-only.md | Feature | Categories | Category | Draft | None | Cap the tree at roots plus one child level; parent picker shrinks to the roots, and depth-only helpers can go |
 | 052-net-result-per-month-and-year.md | Feature | Analytics | Analytics | Draft | None | Net result beside expenses-vs-income, plus a yearly big-scope view; computeSeries from 021 likely already has the data |
+| 053-search-and-category-filter-in-the-account-list.md | Feature | None | Transaction | Draft | None | Word search plus a category filter in the per-account list; overlaps 049, follows the 038 search semantics |
