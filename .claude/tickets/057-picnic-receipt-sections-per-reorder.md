@@ -6,7 +6,7 @@
 | **Epic** | Drilldown |
 | **Domain** | Drilldown |
 | **Blocked By** | None |
-| **Status** | Draft |
+| **Status** | Ready |
 
 ## Description
 A Picnic order can be added to after it was placed, and the receipt then carries a `Hinzugefügt am <dd MMMM>` heading above the
@@ -30,22 +30,24 @@ Section parsing is dropped. `Hinzugefügt am` stays interesting only as the visu
   that looks like money stays — the case ticket 055 shows with `Betrag` and `Gespart` from the summary block. On a fragment, a
   header or footer fragment has nothing bounding it at all
 
-## The open question
-Does the booking amount become the **bound**, the **expectation**, or both?
-
-- As a **bound** it is right: nothing on a receipt costs more than the booking it belongs to
-- As an **expectation** for the mismatch banner it is wrong: positions legitimately fall short while the user is still reviewing,
-  and 019's Restposten exists precisely because a partial itemisation is normal. A banner that fires until the last item is typed
-  would be noise, and the sum is already visible in `Σ … von …`
-
-## Open questions for refinement
-- The bound-versus-expectation split above
-- Does the bound use the booking's magnitude as-is, or leave headroom for a discount row printed above the item?
-- Does anything need to change at all, or is this only the bound? The fragment case may otherwise be covered already
-- Is `Weiteren Bon scannen` (016) the intended path for the second day of the same order — same document, next booking?
+## Resolved during refinement
+- **The booking amount becomes the bound, not the expectation.**
+  As a bound it is right: nothing on a receipt costs more than the booking it belongs to, and it replaces exactly what a fragment
+  loses with its printed total — in the case of 055 it would have thrown out `Betrag 67,07` even without an `Endsumme`.
+  As an expectation for the mismatch banner it would be wrong: positions legitimately fall short while the user is still
+  reviewing, and 019's Restposten exists because a partial itemisation is normal. A banner firing until the last row is typed is
+  noise, and the figure already stands in `Σ … von …` at the bottom
+- **No mismatch banner without a printed total** — today's behaviour (`expectedSumCents` null) is correct and stays
+- **`Weiteren Bon scannen` (016) is the path for the next day** of the same order: same document, next booking, one pass each
 
 ## Acceptance Criteria
-_Not refined yet — one question open._
+- [ ] A receipt fragment without a printed total imports its positions, with no mismatch banner
+- [ ] When no printed total was read, the plausibility bound uses the **magnitude of the booking** the scan is attached to
+- [ ] A row costing more than the booking is dropped, exactly as one costing more than a printed total is
+- [ ] With a printed total present, nothing changes — it keeps precedence over the booking amount
+- [ ] The booking amount reaches the parser without the parser learning about bookings: it is passed in, not looked up
+- [ ] Two fragments of one order attach to two different bookings through `Weiteren Bon scannen`, each with its own bound
+- [ ] `make check` green
 
 ## Out of Scope
 - Parsing `Hinzugefügt am` sections out of one document; dropped with the reframe
@@ -58,5 +60,9 @@ _Not refined yet — one question open._
 ## Fixtures Needed
 No. A fragment without a total, built inline.
 
-## Token Usage
+### Refinement Tokens (estimate)
+- Input: ~9k tokens
+- Output: ~2k tokens
+
+### Implementation Tokens (estimate)
 _Filled after Done._
