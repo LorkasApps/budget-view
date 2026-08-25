@@ -60,3 +60,4 @@
 | 056-category-suggestion-per-line-item.md | Feature | Auto-Tagging | Tagging | Draft | None | Suggest a category per scanned position, keyed on the article description; needs matchField in the lookup, value hinges on 055 |
 | 057-picnic-receipt-sections-per-reorder.md | Feature | Drilldown | Drilldown | Draft | None | `Hinzugefügt am <dd MMMM>` splits a Picnic receipt into per-charge sections; one PDF then describes several bookings |
 | 058-tr-import-row-without-a-readable-date.md | Bug | Import | Transaction | Done | None | One unreadable date drops a row, the reconciliation then refuses the whole statement; likely a glued `01 Juli` token |
+| 059-month-filter-in-the-account-list.md | Feature | None | Transaction | Draft | None | One month at a time in the account list with stepping; same control row as 053, and the boundary a per-month query could use |
