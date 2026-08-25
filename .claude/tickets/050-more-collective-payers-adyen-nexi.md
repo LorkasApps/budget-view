@@ -6,7 +6,7 @@
 | **Epic** | Auto-Tagging |
 | **Domain** | Transaction |
 | **Blocked By** | None (047 shipped the seam) |
-| **Status** | Draft |
+| **Status** | Ready |
 
 ## Description
 Ticket 047 reads the merchant behind PayPal and left other collective payers out until one appeared. Two have:
@@ -34,20 +34,35 @@ Lastschrift KAUFLAND
 No Nexi line has been read yet. Its shape is **unknown** and must be dumped before any pattern is written — the same rule
 047 followed, which is what turned up that PayPal prints its merchant twice.
 
-## Open questions for refinement
-- **Shape or whitelist?** A shape rule ("leading segment before `/`, followed by an address and an ISO timestamp") follows
-  the house style (`decisions.md`, 2026-08-11 and 2026-08-21: derive from layout, never from a sender vocabulary) and would
-  also fill `merchant` on ordinary card rows, where it changes nothing because the counterparty already names the shop. A
-  whitelist of processor names is narrower but needs an entry per processor, forever
-- Does Nexi print the same card-terminal shape, or a third one? Dump first
-- The leading segment is also mid-word wrapped (`Bergisc h Gladbach`). Does the 047 trick apply — is the merchant printed
-  twice here as well, or is there only the one spelling?
-- Does the street belong in the merchant, or only the name? `Salon Pia Bruchmann` reads right; a branch suffix like
-  `Kaufland Bergisch Gladbach` is arguably the better key than a bare `Kaufland`, but it splits one chain into per-branch rules
-- Are the rules already learned on `Adyen N.V.` worth cleaning up, or does the dev wipe cover it as in 047?
+## Resolved during refinement
+- **A whitelist of payer names, not a shape rule** — and this reverses the lean the ticket was filed with. The card-terminal
+  shape is also printed by **ordinary** card payments, where the counterparty already names the shop (`Lastschrift KAUFLAND` with
+  `Kaufland Bergisch Gladbach//…`). A shape rule would set `merchant` there too, and since `taggingKey` prefers the merchant, one
+  `kaufland` rule would become one rule **per branch** — a doubling of rules for rows that work today. The shape does not say
+  that a counterparty is a proxy; only the name does. Accepted cost: one entry per processor, extended by hand in code, which is
+  at least visible in one place instead of hidden in a heuristic
+- **The merchant is the leading segment before the first `/`**, trimmed. For Adyen that is `Salon Pia Bruchmann`
+- **PayPal keeps its own path**, keyed on its `/PP.####.PP/` marker rather than on the list
+- **Nexi's shape is still unknown** and is dumped before the pattern is written — the rule that turned up three wrong
+  assumptions in 040 and the twice-printed merchant in 047
+- **No cleanup of rules already learned on `Adyen N.V.`**: the dev data gets wiped anyway (`decisions.md`, 2026-08-10), same as
+  in 047
+- **Accepted limit:** the text layer drops characters — the real Adyen row reads `Knigswinter`, missing the `ö` of
+  Königswinter. A merchant name from this shape is therefore occasionally incomplete, and nothing on our side can recover it.
+  It stays a stable *key* regardless, which is what tagging needs
 
 ## Acceptance Criteria
-_Not refined yet — the Nexi dump comes first._
+- [ ] **First step:** the env-gated harness prints the purpose text of every row whose counterparty is a listed payer, whether or
+      not a merchant was extracted, and the rule is derived from the real Adyen and Nexi rows
+- [ ] The finding is written into this ticket, including whether Nexi shares Adyen's shape or prints a third one
+- [ ] A `const` set of collective payers lives beside `extractMerchant`, compared through `normalizeForMatching` with a
+      `startsWith`, so casing and spacing variants of a name still hit
+- [ ] For a listed payer, the merchant is the leading segment before the first `/`
+- [ ] For an **unlisted** counterparty nothing changes — a `KAUFLAND` row keeps its single rule, with no branch in the key
+- [ ] A listed payer whose purpose text yields nothing falls back to the counterparty, as PayPal's empty row already does
+- [ ] PayPal rows behave exactly as they do today; the 047 test cases stay green
+- [ ] Nothing about the dedupe hash changes
+- [ ] `make check` green
 
 ## Out of Scope (proposed, to confirm)
 - Any change to the dedupe hash, as in 047
@@ -60,5 +75,9 @@ _Not refined yet — the Nexi dump comes first._
 ## Fixtures Needed
 No. Purpose strings inline, taken from real statement lines, as in 047.
 
-## Token Usage
+### Refinement Tokens (estimate)
+- Input: ~11k tokens
+- Output: ~2k tokens
+
+### Implementation Tokens (estimate)
 _Filled after Done._
