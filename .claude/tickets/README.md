@@ -58,6 +58,6 @@
 | 054-search-in-the-category-tree-screen.md | Feature | Categories | Category | Ready | None | Search in the tree screen, deferred by 038; reuses filterCategoryTree, open question is what reorder does under a filter |
 | 055-picnic-photo-still-reads-wrong.md | Bug | Drilldown | Drilldown | Ready | None | After 043/045 a real photo still reads wrong; ML Kit has no test-VM binding, so the fix needs an OcrResult dump from the app |
 | 056-category-suggestion-per-line-item.md | Feature | Auto-Tagging | Tagging | Ready | 055 | Suggest a category per scanned position, keyed on the article description; needs matchField in the lookup, value hinges on 055 |
-| 057-picnic-receipt-sections-per-reorder.md | Feature | Drilldown | Drilldown | Draft | None | `Hinzugefügt am <dd MMMM>` splits a Picnic receipt into per-charge sections; one PDF then describes several bookings |
+| 057-picnic-receipt-sections-per-reorder.md | Feature | Drilldown | Drilldown | Draft | None | Reframed: the user crops per day, so a fragment has no printed total and the booking is the only figure to judge against |
 | 058-tr-import-row-without-a-readable-date.md | Bug | Import | Transaction | Done | None | One unreadable date drops a row, the reconciliation then refuses the whole statement; likely a glued `01 Juli` token |
 | 059-month-filter-in-the-account-list.md | Feature | None | Transaction | Draft | None | One month at a time in the account list with stepping; same control row as 053, and the boundary a per-month query could use |
