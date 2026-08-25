@@ -5,8 +5,8 @@
 | **Type** | Feature |
 | **Epic** | Auto-Tagging |
 | **Domain** | Tagging |
-| **Blocked By** | None (see the note on 055) |
-| **Status** | Draft |
+| **Blocked By** | 055 (article names must read correctly first) |
+| **Status** | Ready |
 
 Secondary domain: Drilldown — the suggestion is shown in the scan review screen and the line-item sheet, both of which live
 there.
@@ -38,19 +38,39 @@ A scanned receipt therefore arrives with thirty uncategorised positions, and the
   currently reads badly. Building this on top of wrong article names would teach wrong rules that then have to be curated away.
   Refinement should decide whether this blocks on 055 or ships behind it
 
-## Open questions for refinement
-- Where does the suggestion appear in the review row — as a filled chip like the import preview does, with a marker and its
-  count, or only as an offer the user taps?
-- Does it apply automatically to every matching row on arrival, like the import preview fills rows, or does nothing move until
-  the user acts? Thirty rows silently pre-filled is a lot of trust in one heuristic
-- Does an accepted per-position suggestion count as a hit for the article rule, and does an override raise the new category the
-  way the booking side does?
-- Does `alle kategorisieren` still override everything, including suggested rows?
-- Do positions of a **PDF** receipt (033/044) get the same treatment? Same data shape, so presumably yes
-- Does the line-item sheet outside the scan flow suggest too, or is this scan-only?
+## Resolved during refinement
+- **Blocked by 055.** The key is the article description, and the photo path currently reads descriptions badly. What that
+  produces is not merely poor suggestions but **stored rules on wrong names**, and 025 deliberately has no bulk cleanup — the
+  mistake would write itself into data instead of passing
+- **Rows are filled automatically**, with the marker and hit count of the import preview — at thirty positions a suggestion one
+  has to tap per row halves the work instead of doing it. But **only when the rule is unambiguous**: exactly one candidate
+  category, or a strongest one with a strictly higher `hitCount` than the next. Otherwise the row stays empty and the marker
+  only offers the alternatives
+- **No persisted flag on `LineItem`.** Learning happens at `Übernehmen`, from the candidates, which are still in memory — a
+  transient `categorySuggested` on `LineItemCandidate`, mirroring `ImportRow`, is enough to skip the machine's own guesses. The
+  booking side needs a stored flag because a booking is edited later by paths that do not know its history; a position's only
+  other write path is the line-item sheet, where every change is by hand and therefore teaches
+- **`alle kategorisieren` overrides everything**, suggested rows included: it is an explicit bulk action and already touches
+  only kept rows
+- **PDF positions behave identically** — both parsers hand over the same candidate shape
+- **The line-item sheet outside the scan flow suggests too**; it is the same question about the same article
+- **The rules screen keeps one list with a switch by kind** (`Empfänger` / `Artikel`). Both kinds need the same curating, a
+  second settings entry would bloat the menu, and doing nothing would drown the handful of counterparty rules under hundreds of
+  article rules — devaluing the surface 025 just built
 
 ## Acceptance Criteria
-_Not refined yet._
+- [ ] Setting a position's category by hand writes a rule with `matchField = description` and
+      `normalizeForMatching(description)` as its key — from the review's confirm and from the line-item sheet
+- [ ] The rule lookup is field-aware: a counterparty rule and an article rule with the same text never match each other
+- [ ] On arrival in the review, a position with an unambiguous rule is pre-filled and marked with its hit count
+- [ ] A position whose rules tie (equal `hitCount` at the top) is **not** pre-filled; the marker offers the alternatives
+- [ ] A pre-filled row that the user leaves alone teaches nothing on confirm; overriding it raises the chosen category
+- [ ] `alle kategorisieren` overrides suggested and hand-set rows alike
+- [ ] Positions from a PDF receipt behave the same as from a photo
+- [ ] The line-item sheet suggests outside the scan flow as well
+- [ ] `TaggingRulesScreen` switches between `Empfänger` and `Artikel` rules, and curating either still works
+- [ ] No schema change, no `kDbSchemaVersion` bump, nothing about the dedupe hash or price-trend grouping
+- [ ] `make check` green
 
 ## Out of Scope (proposed, to confirm)
 - Learning from the booking's own category onto its positions; that is inheritance and already exists
@@ -64,5 +84,9 @@ _Not refined yet._
 ## Fixtures Needed
 Ask during refinement.
 
-## Token Usage
+### Refinement Tokens (estimate)
+- Input: ~16k tokens
+- Output: ~3k tokens
+
+### Implementation Tokens (estimate)
 _Filled after Done._
