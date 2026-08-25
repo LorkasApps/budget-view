@@ -354,11 +354,9 @@ DateTime? _parseDate(List<String> tokens) {
   int? year;
 
   for (final token in tokens) {
-    final asMonth = monthNamesDe.indexWhere(
-      (name) => name.toLowerCase() == token.toLowerCase(),
-    );
-    if (asMonth != -1) {
-      month = asMonth + 1;
+    final asMonth = _monthOf(token);
+    if (asMonth != null) {
+      month = asMonth;
     } else if (_yearPattern.hasMatch(token)) {
       year = int.parse(token);
     } else if (_dayPattern.hasMatch(token)) {
@@ -368,6 +366,27 @@ DateTime? _parseDate(List<String> tokens) {
 
   if (day == null || month == null || year == null) return null;
   return DateTime(year, month, day);
+}
+
+/// Month number for a spelled-out or abbreviated German month name, or null.
+///
+/// The statement abbreviates: `10 Apr. 2024`, `Sept.`, `Dez.` — while `Mai`,
+/// `Juni` and `Juli` are short enough to be printed in full, which is why a
+/// statement covering only July parsed and one covering April did not. A prefix
+/// of at least three letters is unambiguous across the twelve German names
+/// (`Jun`/`Jul`, `Mär`/`Mai` all differ by then); two would not be.
+int? _monthOf(String token) {
+  final needle = token.toLowerCase().replaceAll('.', '').trim();
+  if (needle.length < 3) return null;
+
+  var found = -1;
+  for (var index = 0; index < monthNamesDe.length; index++) {
+    if (monthNamesDe[index].toLowerCase().startsWith(needle)) {
+      if (found != -1) return null; // ambiguous, so not a month
+      found = index;
+    }
+  }
+  return found == -1 ? null : found + 1;
 }
 
 int? _toCents(String text) {

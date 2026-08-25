@@ -7,7 +7,7 @@
 | **Domain** | Transaction |
 | **Blocked By** | None |
 | **Severity** | High |
-| **Status** | Draft |
+| **Status** | Done |
 
 ## Description
 Importing a Trade Republic statement fails with `Seite 1: Zeile ohne lesbares Datum`. That warning comes from
@@ -26,26 +26,27 @@ the entire import.
 - **Expected:** every row of the cash table parses, or the failure names a row a human can find on the paper
 - **Actual:** one row's date is unreadable, and the statement is refused entirely
 
-## Leading hypothesis
-The date is parsed **token by token**: a word matching `\d{1,2}` is the day, a word in `monthNamesDe` the month, a word
-matching `\d{4}` the year. That assumes the extractor hands over `01`, `Juli`, `2026` as three words, which is what the
-January statement's dump showed.
+## Cause — not the hypothesis, something simpler
+**Trade Republic abbreviates the month.** The failing statement covers April 2024 and prints `10 Apr.` / `2024`, while the
+statement 040 was verified against covers July and prints `01 Juli`. `_parseDate` compared the token against `monthNamesDe`
+for equality, so `Apr.` was not a month, the date stayed incomplete and the row was dropped — which then broke the
+reconciliation and refused the document.
 
-The same document class already proves the extractor glues things: an amount arrives as **one** word including its currency
-(`38,71 €`), which is why `_toCents` strips a trailing `€`. If a date arrives glued as `01 Juli` — or the month wraps
-differently in a month with a longer name — no token matches any of the three patterns and the whole date is lost.
+The abbreviation hits `Jan.`, `Feb.`, `Mär.`, `Apr.`, `Aug.`, `Sept.`, `Okt.`, `Nov.`, `Dez.` — while `Mai`, `Juni` and `Juli`
+are short enough to be printed in full. So the bug was live in eight months of the year and invisible in three, and the one
+verified statement happened to fall in the three. The glued-token hypothesis was wrong.
 
-If that holds, the fix is to join the date column and read it with one pattern
-(`(\d{1,2})\s+(\p{L}+)\s+(\d{4})`) instead of classifying tokens, which is both more robust and shorter.
+## Fix
+`_monthOf` matches a month by **prefix** after stripping a trailing period, requiring at least three letters and refusing an
+ambiguous prefix. Three letters are unambiguous across the twelve German names (`Jun`/`Jul` and `Mär`/`Mai` differ by then),
+two would not be.
 
-Second candidate, cheaper to rule out than to argue about: the band tolerance of 5.0 chains transitively, so two dense rows can
-merge into one band — that would produce a *wrong* date rather than none, but the dump will say.
+Verified against the real April 2024 statement through the harness: two bookings, `2024-04-10` and `2024-04-22`, sum 620000
+cents equal to the closing balance, no warnings.
 
-## Evidence needed
-- [ ] The full warning line, including the row text it quotes in `"…"` — that is the band, verbatim
-- [ ] The statement itself, out of band, and a harness run:
-      `TR_PDF=/pfad/auszug.pdf flutter test test/tool/trade_republic_geometry_dump_test.dart`
-      It prints the warnings and writes the per-word geometry, which is exactly what decided the three layout questions of 040
+Nebenbefund worth keeping: this document's columns sit at different x than January's (`TYP` at 110.5 versus 113.2,
+`BESCHREIBUNG` at 155.1 versus 157.8). Deriving the columns from each page's header instead of hard-coding them, decided in
+040, absorbed that without a line of change.
 
 ## Affected Envs
 `dev`, `prod` — the parser is the same everywhere.
@@ -58,11 +59,16 @@ Since ticket 040 (2026-08-24). The parser was verified against one statement, an
 statement's word split.
 
 ## Affected Tests
-- `trade_republic_layout_test.dart` gains the real glued shape as a fixture. Its current date fixture uses three separate
-  words, taken from the January dump — evidently not the only shape that occurs
+- `trade_republic_layout_test.dart`: `10 Apr.` and `22 Sept.` parse, and a word that is not a month at all still leaves the
+  row unread with its warning. The full-name fixtures from 040 stay green
 
 ## Fixtures Needed
-No committed document. The real word split, transcribed from the dump.
+No committed document. The abbreviated month, transcribed from the real statement.
 
-## Token Usage
-_Filled after Done._
+### Refinement Tokens (estimate)
+- Input: ~6k tokens
+- Output: ~1k tokens
+
+### Implementation Tokens (estimate)
+- Input: ~25k tokens
+- Output: ~3k tokens

@@ -346,6 +346,65 @@ void main() {
     expect(result.warnings.single, contains('passt nicht zur Saldoänderung'));
   });
 
+  test('an abbreviated month is read too (ticket 058)', () {
+    // A statement covering April prints `10 Apr.`, one covering July prints
+    // `01 Juli` — the short months are never abbreviated, which is why the first
+    // verified statement gave no hint of this.
+    final result = parseTradeRepublicStatement([
+      ..._overview(opening: '0,00', closing: '6.200,00'),
+      ..._tableHeader(534),
+      ..._row(
+        560,
+        day: '10',
+        month: 'Apr.',
+        year: '2024',
+        type: 'Überweisung',
+        description: const ['Einzahlung', 'akzeptiert:'],
+        amount: '5.000,00',
+        balance: '5.000,00',
+        income: true,
+      ),
+      ..._row(
+        610,
+        day: '22',
+        month: 'Sept.',
+        year: '2024',
+        type: 'Überweisung',
+        description: const ['Einzahlung', 'akzeptiert:'],
+        amount: '1.200,00',
+        balance: '6.200,00',
+        income: true,
+      ),
+    ]);
+
+    expect(result.warnings, isEmpty);
+    expect(result.transactions.map((c) => c.bookingDate), [
+      DateTime(2024, 4, 10),
+      DateTime(2024, 9, 22),
+    ]);
+  });
+
+  test('a word that is not a month stays unread', () {
+    final result = parseTradeRepublicStatement([
+      ..._overview(opening: '0,00', closing: '5.000,00'),
+      ..._tableHeader(534),
+      ..._row(
+        560,
+        day: '10',
+        month: 'Überweisung',
+        year: '2024',
+        type: 'Zinsen',
+        description: const ['Interest'],
+        amount: '5.000,00',
+        balance: '5.000,00',
+        income: true,
+      ),
+    ]);
+
+    expect(result.transactions, isEmpty);
+    expect(result.warnings.first, contains('ohne lesbares Datum'));
+  });
+
   test('a foreign layout is refused instead of half-parsed', () {
     final result = parseTradeRepublicStatement([
       ..._overview(),

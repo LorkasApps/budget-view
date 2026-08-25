@@ -161,7 +161,7 @@ Pure function: `List<PositionedWord> → ParseResult`
 
 **Counterparty Priority:** ISIN from description (e.g. `IE00077FRP95`); else payee from `for <name> (` pattern; else row's `TYP`.
 
-**Text Quirks:** Amount is ONE word with currency (`38,71 €`). Date wraps: `01 Juli` 3.8pt above baseline, `2026` 3.8pt below → band tolerance = 5.0pt (ING uses 3.0pt).
+**Text Quirks:** Amount is ONE word with currency (`38,71 €`). Date wraps: `01 Juli` 3.8pt above baseline, `2026` 3.8pt below → band tolerance = 5.0pt (ING uses 3.0pt). The month may be **abbreviated** (`10 Apr.`, `Sept.`, `Dez.`) while `Mai`, `Juni`, `Juli` are printed in full, so `_monthOf` matches a prefix of ≥ 3 letters after dropping a trailing period — two letters would confuse `Jun`/`Jul` (ticket 058). Column x-positions also differ between statements (`TYP` at 110.5 in one, 113.2 in another), which the header-derived boundaries absorb.
 
 **Exclusions:** `TRANSAKTIONSÜBERSICHT` (page 2, money-market sweep) deliberately not imported — its rows mirror cash rows that triggered them (e.g. `38,71 €` interest on 1st comes back as fund purchase on 2nd), so both would double-count and break reconciliation.
 
