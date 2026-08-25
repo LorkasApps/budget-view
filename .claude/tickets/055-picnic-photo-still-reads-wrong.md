@@ -26,6 +26,34 @@ What can be done instead, and what this ticket proposes: **export the recognised
 `OcrResult` — blocks, lines, their `Rect`s — turns into a fixture with real coordinates, and from there the parser is testable
 offline and deterministically, like every other layout rule in this project.
 
+## Evidence in hand: the summary block is unaccounted for
+A real screenshot of the receipt (Picnic app, 1080 × 6362) was read on 2026-08-25. Its summary block:
+
+```
+Bestellung            72,80
+Gespart               -5,73
+Betrag                67,07
+Eingereichtes Pfand   -4,95
+Endsumme              62,12
+```
+
+Of these the vocabulary knows two: `Endsumme` as the total (045) and `Eingereichtes Pfand` as a credit (043).
+`Bestellung`, `Gespart` and `Betrag` are in no list, and that has consequences:
+
+- **`Betrag 67,07` survives as a position.** It equals the position budget exactly (62,12 + 4,95), and the plausibility bound
+  only drops rows costing *more* than the budget. So a row the size of the whole receipt enters the positions
+- **`Gespart 5,73` survives as a position too** — the minus is not even read, the money pattern carries no sign
+- **`Bestellung 72,80` is dropped**, because it exceeds the budget. By luck, not by design
+
+Two invented positions, one of them as large as the entire purchase: enough for the sum warning to fire and for the review to
+read as garbage. This is very plausibly the dominant cause, and it is a **vocabulary** gap rather than the geometry 045 fixed.
+
+Also visible: a discounted item prints its struck-through original beside the real price together with a red `Rabatt` badge
+carrying the discount amount. The badge is a third money token in that row and may become a position of its own.
+
+These readings come from a downscaled view of the screenshot and are to be **confirmed against the `OcrResult` dump** — what
+ML Kit makes of the block is what the parser actually sees.
+
 ## Evidence to collect before any fix
 - [ ] The photo itself, handed over out of band (never committed — `decisions.md`, 2026-08-10: raw documents are not persisted)
 - [ ] The dump of its `OcrResult` from the app
@@ -49,6 +77,12 @@ offline and deterministically, like every other layout rule in this project.
 - [ ] That fixture reproduces the defect before the fix and passes after it
 - [ ] For the real receipt: the positions the review offers match the paper — around 30 rows rather than four summary lines —
       and the printed total is recognised so the checksum can judge them
+- [ ] **No line of the summary block becomes a position**: `Bestellung`, `Gespart` and `Betrag` are handled, while `Endsumme`
+      stays the total and `Eingereichtes Pfand` the credit
+- [ ] The plausibility bound drops a row that equals the budget as well, not only one that exceeds it — `Betrag` is exactly the
+      budget, which is how it slipped through
+- [ ] A discounted row yields **one** position at the real price: neither the struck-through original nor the `Rabatt` badge
+      becomes a row of its own
 - [ ] Whatever the cause turns out to be, the finding is written into this ticket, including which of 045's synthetic
       assumptions was wrong
 - [ ] The synthetic cases of 045 stay green, or their removal is argued in this ticket rather than done quietly
