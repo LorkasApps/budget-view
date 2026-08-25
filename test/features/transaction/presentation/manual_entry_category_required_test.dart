@@ -119,4 +119,50 @@ void main() {
 
     expect(find.text('Keine Kategorie'), findsNothing);
   });
+
+  group('a transfer needs no category (ticket 041)', () {
+    Future<void> switchOnTransfer(WidgetTester tester) async {
+      await tester.tap(find.text('Umbuchung'));
+      await settle(tester);
+    }
+
+    testWidgets('the label says optional and the red hint goes', (
+      tester,
+    ) async {
+      await pumpForm(tester);
+      expect(find.text('Pflichtfeld'), findsOneWidget);
+
+      await switchOnTransfer(tester);
+
+      expect(find.text('Kategorie (optional)'), findsOneWidget);
+      expect(find.text('Kategorie'), findsNothing);
+      expect(find.text('Pflichtfeld'), findsNothing);
+    });
+
+    testWidgets('switching it off restores the requirement', (tester) async {
+      await pumpForm(tester);
+      await switchOnTransfer(tester);
+      await switchOnTransfer(tester);
+
+      expect(find.text('Kategorie'), findsOneWidget);
+      expect(find.text('Kategorie (optional)'), findsNothing);
+      expect(find.text('Pflichtfeld'), findsOneWidget);
+    });
+
+    testWidgets('a picked category survives the toggle', (tester) async {
+      await pumpForm(tester);
+
+      await tester.tap(find.text('Kategorie'));
+      await settle(tester);
+      await tester.tap(find.text('Einkauf'));
+      await settle(tester);
+
+      await switchOnTransfer(tester);
+      expect(find.text('Einkauf'), findsOneWidget);
+
+      await switchOnTransfer(tester);
+      expect(find.text('Einkauf'), findsOneWidget);
+      expect(find.text('Pflichtfeld'), findsNothing);
+    });
+  });
 }

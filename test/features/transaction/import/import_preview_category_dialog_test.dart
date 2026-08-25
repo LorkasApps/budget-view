@@ -285,4 +285,29 @@ void main() {
       expect(find.byIcon(Icons.auto_awesome_outlined), findsNothing);
     },
   );
+
+  testWidgets(
+    'a row marked as a transfer hides the suggestion marker (ticket 041)',
+    (tester) async {
+      await pumpFlow(tester);
+      await loadAndParse(tester);
+
+      // The suggested row shows its marker before the marking.
+      expect(find.byIcon(Icons.auto_awesome_outlined), findsWidgets);
+
+      container.read(importFlowProvider.notifier).setRowKind(
+            1,
+            TransactionKind.transfer,
+          );
+      await settle(tester);
+
+      final row = container.read(importFlowProvider).rows[1];
+      // The marking neither clears the category nor the provenance — only the
+      // marker, which would promise learning that the hook skips.
+      expect(row.kind, TransactionKind.transfer);
+      expect(row.categoryUuid, 'cat-1');
+      expect(row.categorySuggested, isTrue);
+      expect(find.byIcon(Icons.auto_awesome_outlined), findsNothing);
+    },
+  );
 }

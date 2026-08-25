@@ -411,8 +411,11 @@ class _RowTile extends StatelessWidget {
               onTap: enabled ? onPickCategory : null,
             ),
             // Marks the category as the machine's guess and opens the
-            // runners-up — the chip stays the way to the full tree.
-            if (row.categorySuggested) ...[
+            // runners-up — the chip stays the way to the full tree. Not on a row
+            // marked as a transfer: the learn hook skips those, so the marker
+            // would promise learning that never happens (ticket 041).
+            if (row.categorySuggested &&
+                row.kind != TransactionKind.transfer) ...[
               const SizedBox(width: 4),
               InkWell(
                 onTap: enabled && suggestions.length > 1

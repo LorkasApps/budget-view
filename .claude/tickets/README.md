@@ -42,7 +42,7 @@
 | 038-category-picker-search.md | Feature | Categories | Category | Done | None | Search in the category picker: a name hit pulls its whole subtree along, at any depth |
 | 039-back-from-a-tab-exits-the-app.md | Bug | None | Infra | In Progress | None | Back at tab root closes the app instead of returning to Konten; the IndexedStack has no history around it |
 | 040-trade-republic-import.md | Feature | Import | Transaction | Done | 032 | Trade Republic cash/Tagesgeld parser; securities lines are plain expenses/income, no holdings model |
-| 041-transfer-still-shows-category-required.md | Bug | None | Transaction | Ready | None | Category field keeps its red required marker on a transfer although saving works |
+| 041-transfer-still-shows-category-required.md | Bug | None | Transaction | Done | None | Category field keeps its red required marker on a transfer although saving works |
 | 042-transfer-counter-leg-on-target-account.md | Feature | None | Transaction | Ready | 032 | Name the target account of a transfer and book the counter-leg there; collides with dedupe on later import |
 | 043-ocr-path-misses-the-pdf-rules.md | Bug | Drilldown | Drilldown | Done | None | A screenshot of a receipt is read by weaker rules than its PDF: struck-through price, credits, plausibility bound |
 | 044-render-scanned-pdf-receipts.md | Feature | Drilldown | Drilldown | In Progress | 043 | Render a scanned PDF's pages through the OCR path; split out of 033 with the native-dependency risk |

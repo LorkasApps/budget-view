@@ -259,6 +259,38 @@ void main() {
     expect(find.text('Einkauf'), findsOneWidget);
   });
 
+  testWidgets('marking a transfer hides the suggestion and unhides it again', (
+    tester,
+  ) async {
+    await pumpForm(
+      tester,
+      suggestionsByCounterparty: {
+        'REWE Berlin': const [
+          CategorySuggestion(
+            categoryUuid: 'cat-1',
+            categoryName: 'Einkauf',
+            hitCount: 3,
+          ),
+        ],
+      },
+    );
+    await fillRequiredFields(tester);
+    await blurCounterparty(tester, 'REWE Berlin');
+    expect(find.text('Vorschlag · 3×'), findsOneWidget);
+
+    await tester.tap(find.text('Umbuchung'));
+    await settle(tester);
+
+    // Hidden, but the category itself stays picked (ticket 041).
+    expect(find.text('Vorschlag · 3×'), findsNothing);
+    expect(find.text('Einkauf'), findsOneWidget);
+
+    await tester.tap(find.text('Umbuchung'));
+    await settle(tester);
+
+    expect(find.text('Vorschlag · 3×'), findsOneWidget);
+  });
+
   testWidgets('a counterparty matching no rule shows no suggestion', (
     tester,
   ) async {

@@ -58,6 +58,8 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
 
   bool get _isEdit => widget.existing != null;
 
+  bool get _isTransfer => _kind == TransactionKind.transfer;
+
   bool get _isSuggested =>
       _suggestedCategoryUuid != null &&
       _categoryUuid == _suggestedCategoryUuid;
@@ -301,7 +303,7 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
                 'Geld zwischen eigenen Konten — zählt in keiner Report-Summe '
                 'und braucht keine Kategorie',
               ),
-              value: _kind == TransactionKind.transfer,
+              value: _isTransfer,
               onChanged: (value) => setState(
                 () => _kind =
                     value ? TransactionKind.transfer : TransactionKind.regular,
@@ -341,21 +343,32 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
             const SizedBox(height: 8),
             ListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Kategorie'),
-              subtitle: _isSuggested
-                  ? _SuggestionHint(
-                      hitCount: _suggestedHitCount,
-                      onShowAlternatives:
-                          _suggestions.length > 1 ? _chooseAlternative : null,
-                    )
-                  : _categoryUuid == null
-                      ? Text(
-                          'Pflichtfeld',
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
-                          ),
+              // A transfer needs no category (032), so the field says so the way
+              // every other optional field in this form does. The label changes
+              // while the form is open, which no other label does — accepted, as
+              // dropping only the marker would leave this the one field saying
+              // nothing either way (ticket 041).
+              title: Text(_isTransfer ? 'Kategorie (optional)' : 'Kategorie'),
+              subtitle: _isTransfer
+                  // No suggestion on a transfer either: the learn hook skips
+                  // them, so accepting one teaches nothing and no report reads
+                  // the category it offers.
+                  ? null
+                  : _isSuggested
+                      ? _SuggestionHint(
+                          hitCount: _suggestedHitCount,
+                          onShowAlternatives: _suggestions.length > 1
+                              ? _chooseAlternative
+                              : null,
                         )
-                      : null,
+                      : _categoryUuid == null
+                          ? Text(
+                              'Pflichtfeld',
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
+                            )
+                          : null,
               trailing: CategoryChip(categoryUuid: _categoryUuid),
               onTap: _saving ? null : _chooseCategory,
             ),

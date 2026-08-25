@@ -62,7 +62,7 @@ Pure statics: `description`, `amount` (magnitude — must be unsigned and ≠ 0)
 
 ## Form (`presentation/transaction_form_screen.dart`)
 
-**Transfer toggle** — `SwitchListTile` labelled `Umbuchung` under the Ausgabe/Einnahme toggle; subtitle says it counts in no report total and needs no category. The saved booking carries the chosen `kind`. The category row stays visible and still renders its required marker even for a transfer, although saving succeeds — known, ticket 041.
+**Transfer toggle** — `SwitchListTile` labelled `Umbuchung` under the Ausgabe/Einnahme toggle; subtitle says it counts in no report total and needs no category. The saved booking carries the chosen `kind`. With the switch **on**, the category row drops its required marker and its red `Pflichtfeld` text and its label reads `Kategorie (optional)` — the convention of every other optional field in this form. The suggestion marker is hidden too: the learn hook skips transfers, so accepting one would teach nothing. Toggling back restores both, and a category the user already picked survives either direction (ticket 041).
 
 **Category suggestion**
 - Counterparty field carries a `FocusNode`; **on blur** the form asks

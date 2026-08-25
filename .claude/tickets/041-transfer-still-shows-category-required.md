@@ -7,7 +7,7 @@
 | **Domain** | Transaction |
 | **Blocked By** | None |
 | **Severity** | Low |
-| **Status** | Ready |
+| **Status** | Done |
 
 ## Description
 Ticket 032 dropped the category requirement for a transfer, and saving one without a category works. But the booking form
@@ -53,16 +53,16 @@ the field's own decoration.
   learning that does not happen. So: marker hidden on a row marked as a transfer, everything else in the preview untouched
 
 ## Acceptance Criteria
-- [ ] Booking form with `Umbuchung` **on**: no required marker, no red `Pflichtfeld` text, and the label reads
+- [x] Booking form with `Umbuchung` **on**: no required marker, no red `Pflichtfeld` text, and the label reads
       `Kategorie (optional)`
-- [ ] Booking form with `Umbuchung` **off**: label reads `Kategorie`, marker and validation exactly as today
-- [ ] Toggling `Umbuchung` back and forth flips the label both ways and never clears a category the user already picked
-- [ ] The suggestion marker and its count are hidden while `Umbuchung` is on, and return when it is switched off
-- [ ] Import preview: a row marked `Umbuchung` shows no suggestion marker and no count; its category chip stays usable, and
+- [x] Booking form with `Umbuchung` **off**: label reads `Kategorie`, marker and validation exactly as today
+- [x] Toggling `Umbuchung` back and forth flips the label both ways and never clears a category the user already picked
+- [x] The suggestion marker and its count are hidden while `Umbuchung` is on, and return when it is switched off
+- [x] Import preview: a row marked `Umbuchung` shows no suggestion marker and no count; its category chip stays usable, and
       the row's category is not cleared by the marking
-- [ ] Import preview: nothing about the required behaviour changes — an uncategorised row stays importable
-- [ ] Saving a transfer without a category still succeeds; saving a **regular** booking without one is still refused
-- [ ] `make check` green
+- [x] Import preview: nothing about the required behaviour changes — an uncategorised row stays importable
+- [x] Saving a transfer without a category still succeeds; saving a **regular** booking without one is still refused
+- [x] `make check` green — 527 passed, 0 failed
 
 ## Affected Tests
 - The transaction form tests around the required category; `manual_entry_category_required_test.dart` must keep asserting the
@@ -78,4 +78,5 @@ No.
 - Output: ~1.5k tokens
 
 ### Implementation Tokens (estimate)
-_Filled after Done._
+- Input: ~30k tokens
+- Output: ~4k tokens

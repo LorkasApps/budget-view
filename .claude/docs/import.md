@@ -239,7 +239,8 @@ Pure function: `List<PositionedWord> → ParseResult`
   8. Per-row duplicate marker (copy icon, red) opens modal listing existing bookings; intra-batch duplicates flag **both** copies (user decides which to keep)
   9. Per-row edit dialog: expense/income toggle, amount, description, counterparty, date, **`Umbuchung` switch**, and the row's **category** —
      category button shows the resolved name or `Keine Kategorie`, plus the suggestion marker and `<n>×` while the category still is
-     the suggested one. Opens the same `pickCategory(allowNone: true)` as the row chip; a change is applied through
+     the suggested one — **not on a row marked `Umbuchung`**, where the marker would promise learning the hook skips (ticket 041);
+     the category and its provenance stay untouched by the marking. Opens the same `pickCategory(allowNone: true)` as the row chip; a change is applied through
      `setRowCategory`, so it counts as an override exactly like one on the row. Transfer toggle updates via `setRowKind(index, kind)`. Field edits keep going through `editRow` —
      the dialog returns both separately
   10. Target-account dropdown (pre-filled with entry account), import button (shows included count)
