@@ -55,7 +55,7 @@
 | 051-one-subcategory-level-only.md | Feature | Categories | Category | Ready | None | Cap the tree at roots plus one child level; parent picker shrinks to the roots, and depth-only helpers can go |
 | 052-net-result-per-month-and-year.md | Feature | Analytics | Analytics | Ready | None | Net result beside expenses-vs-income, plus a yearly big-scope view; computeSeries from 021 likely already has the data |
 | 053-search-and-category-filter-in-the-account-list.md | Feature | None | Transaction | Ready | None | Word search plus a category filter in the per-account list; overlaps 049, follows the 038 search semantics |
-| 054-search-in-the-category-tree-screen.md | Feature | Categories | Category | Draft | None | Search in the tree screen, deferred by 038; reuses filterCategoryTree, open question is what reorder does under a filter |
+| 054-search-in-the-category-tree-screen.md | Feature | Categories | Category | Ready | None | Search in the tree screen, deferred by 038; reuses filterCategoryTree, open question is what reorder does under a filter |
 | 055-picnic-photo-still-reads-wrong.md | Bug | Drilldown | Drilldown | Ready | None | After 043/045 a real photo still reads wrong; ML Kit has no test-VM binding, so the fix needs an OcrResult dump from the app |
 | 056-category-suggestion-per-line-item.md | Feature | Auto-Tagging | Tagging | Ready | 055 | Suggest a category per scanned position, keyed on the article description; needs matchField in the lookup, value hinges on 055 |
 | 057-picnic-receipt-sections-per-reorder.md | Feature | Drilldown | Drilldown | Draft | None | `Hinzugefügt am <dd MMMM>` splits a Picnic receipt into per-charge sections; one PDF then describes several bookings |
