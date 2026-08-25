@@ -6,7 +6,7 @@
 | **Epic** | Categories |
 | **Domain** | Category |
 | **Blocked By** | None |
-| **Status** | Draft |
+| **Status** | Ready |
 
 ## Description
 The category tree is free-depth today: a category may hang under any other, and `buildCategoryTree` recurses as far as the
@@ -26,20 +26,37 @@ or disappear.
 | `pickCategory` + its search (038) | "a hit pulls its whole subtree, at any depth" | the same rule, but "any depth" is now one |
 | Rollup, drilldown, line-item resolver | walk a subtree of unknown depth | unchanged in code, shallower in practice |
 
-## Open questions for refinement
-- **Who enforces it?** The repository (a `CategoryInvalid` when the chosen parent is not a root, like the unique-name rule
-  and the delete guard) or only the UI? Precedent points at the repository for structural invariants and the form for
-  input rules (`decisions.md`, 2026-08-12)
-- What happens to categories that are already three levels deep in existing data — refuse them on read, flatten them, or
-  leave them and only block new violations? Dev data gets wiped, so this may be a question about nothing
-- Does `ineligibleParents` survive at all, or does the form simply offer `findRoots()`?
-- A category that already has children: is its parent field disabled, or hidden with a note saying why?
-- Does the rule change what "archived" means for a root with children — archiving a root today leaves its children
-  reachable as promoted roots (`buildCategoryTree`), which is how they avoid disappearing. With two levels that promotion is
-  the only way a child can *become* a root, which may be fine or may need saying explicitly
+## Resolved during refinement
+- **The repository enforces it** with a `CategoryInvalid`, and the UI prevents it before that. Structural invariants live there
+  already — unique name per parent, the delete guard, the cycle protection — while the form owns input rules like the category
+  requirement (`decisions.md`, 2026-08-12). Practical reason too: quick-create in the picker (026) writes straight through the
+  repository, so a UI-only rule would leave exactly that path as the hole a third level slips through
+- **Existing deeper data is left alone**; only new violations are refused. `buildCategoryTree` tolerates any depth, dev data is
+  wiped anyway, a migration would silently move the user's categories and a read-time refusal would make the app unusable
+  against data it stored itself
+- **`ineligibleParents` goes.** It computes "myself plus all descendants" to prevent cycles, and with two levels a cycle cannot
+  exist. The form offers `findRoots()` minus itself instead — the reduction this ticket was asked for, helper and tests included
+- **A category that already has children keeps a disabled parent field with a reason** (`Hat Unterkategorien — kann selbst keine
+  werden`). Hiding it would make the form look different per category and provoke the question where it went; a disabled field
+  explains the rule where it applies
+- **Eligibility is decided on the stored `parentUuid`, not on the filtered tree.** `buildCategoryTree` promotes a category whose
+  parent is archived or absent to a root, so a child *looks* like a root in the picker. If it could take children there, the tree
+  would be two levels on screen and three in the data — and restoring the archived parent would produce exactly the depth the
+  repository forbids. So a parent is only choosable when it has `parentUuid == null` itself, archived or not, and the per-row `+`
+  stays off on a promoted child. Visible consequence, deliberately: a promoted child sits at root level but accepts no children —
+  it *is* not a root, its parent is merely hidden
 
 ## Acceptance Criteria
-_Not refined yet._
+- [ ] `CategoryRepository.save` throws `CategoryInvalid` when the chosen parent itself has a parent — archived or not
+- [ ] The category form offers only roots as parents, minus the category itself
+- [ ] A category with children has a disabled parent field carrying the reason
+- [ ] The per-row `+` in the picker is absent on any row whose stored `parentUuid` is set, including a promoted child
+- [ ] `ineligibleParents` is deleted, and nothing references it
+- [ ] `CategoryTreeScreen` shows at most one expand level; reorder across levels stays refused as today
+- [ ] Existing three-level data still renders and is not modified
+- [ ] The picker search of 038 keeps working; its three-level fixture becomes two, and the loss is noted in that ticket rather
+      than silently dropped
+- [ ] `make check` green
 
 ## Out of Scope (proposed, to confirm)
 - Any change to how a line item inherits its category (012)
@@ -52,7 +69,11 @@ _Not refined yet._
 - Repository tests if enforcement lands there
 
 ## Fixtures Needed
-Ask during refinement.
+No. Two- and three-level trees built inline, plus an archived parent for the promotion case.
 
-## Token Usage
+### Refinement Tokens (estimate)
+- Input: ~10k tokens
+- Output: ~2k tokens
+
+### Implementation Tokens (estimate)
 _Filled after Done._
