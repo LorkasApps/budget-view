@@ -21,9 +21,16 @@ Both tickets build the same control row (search, category filter, and now the mo
 controls that do not know about each other; designed together, it is one filter surface. Refinement should decide whether this
 blocks on 053 or is folded into it.
 
+## Settled before refinement (user, 2026-08-25)
+The month is **not a filter**, it is paging: the screen always shows exactly one month and steps through them like the report.
+There is no "all bookings" view any more, so the month cannot be cleared and the reset action of 053 must not touch it. The
+default is the current month.
+
+Consequence to carry into refinement: the account's full list is now unreachable, so the all-time balance in the header sits
+above one month **permanently** rather than occasionally. That makes the third option below — a balance as of the end of the
+shown month — weigh more than it did when this was a filter among filters.
+
 ## Open questions for refinement
-- **What is the default?** Current month, or all bookings as today? Defaulting to a month changes what the screen *is* — the
-  balance header then sits above one month of rows, which is either a welcome focus or a permanent question mark
 - **Which widget switches months?** The report uses the Material `DatePicker` and deliberately swallows the irrelevant day
   (`decisions.md`, 2026-08-20). Repeating that here repeats the compromise; a pair of arrows plus a month label is a different
   answer and needs no picker at all. "Durchwechseln wie beim Report" says stepping is wanted either way
