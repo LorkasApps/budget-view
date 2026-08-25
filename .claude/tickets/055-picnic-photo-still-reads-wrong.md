@@ -54,6 +54,32 @@ carrying the discount amount. The badge is a third money token in that row and m
 These readings come from a downscaled view of the screenshot and are to be **confirmed against the `OcrResult` dump** — what
 ML Kit makes of the block is what the parser actually sees.
 
+## Device report after the summary-block fix (2026-08-25)
+Scanned again on a debug build with the vocabulary fix in place. Still wrong, and the two symptoms together point somewhere
+else entirely:
+
+- **almost 2400 € recognised** where the receipt is about 62 €
+- **every row reads `Ohne Beschreibung`** — that is `parseState == ambiguous`, an amount without any text
+
+So the summary block was a real defect but not the dominant one. The next hypothesis, to be confirmed against the dump:
+
+**The row grouping fails on this layout.** Each row of the Picnic app is tall because a product thumbnail sits on the left, so
+the article name and its price are far apart vertically. The band tolerance is `(line height + row max height) / 4` — roughly
+15 px for 30 px text, while name and price can sit 40 px apart. Then the price forms a band of its own (amount, no
+description → `ambiguous`) and the name forms another (no money token → dropped into `unreadRows`). Both symptoms follow from
+that one cause.
+
+The inflated sum fits too: where no line carries a whole money token, 045's reassembly joins the digits of the price column's
+bottom-most band. If such a band actually holds two different prices, the digits concatenate into something like `4791189` —
+which is how a 62 € receipt reaches 2400 €.
+
+If this holds, the answer is not a wider tolerance — 045 rejected that for regrouping every layout — but grouping that leans on
+the **price column** rather than on text height. The dump decides. Not to be guessed: that is exactly how 045 produced a fix
+that did not survive contact with a real photo.
+
+**Next step, and the only one open:** the `OcrResult` dump of this receipt, fetched with the debug entry now in the app
+(`adb exec-out run-as de.lorkaps_apps.budget_view cat <path> > /tmp/ocr_dump.json`).
+
 ## Evidence to collect before any fix
 - [ ] The photo itself, handed over out of band (never committed — `decisions.md`, 2026-08-10: raw documents are not persisted)
 - [ ] The dump of its `OcrResult` from the app
