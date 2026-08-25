@@ -21,6 +21,7 @@ Future<List<LineItemCandidate>?> pushScanReview(
   required List<LineItemCandidate> candidates,
   int? expectedSumCents,
   List<String> unreadRows = const [],
+  Future<String?> Function()? onDumpRecognition,
 }) {
   return Navigator.of(context).push<List<LineItemCandidate>>(
     MaterialPageRoute(
@@ -29,6 +30,7 @@ Future<List<LineItemCandidate>?> pushScanReview(
         candidates: candidates,
         expectedSumCents: expectedSumCents,
         unreadRows: unreadRows,
+        onDumpRecognition: onDumpRecognition,
       ),
     ),
   );
@@ -41,6 +43,7 @@ class ScanReviewScreen extends ConsumerStatefulWidget {
     required this.candidates,
     this.expectedSumCents,
     this.unreadRows = const [],
+    this.onDumpRecognition,
   });
 
   final Transaction transaction;
@@ -51,6 +54,11 @@ class ScanReviewScreen extends ConsumerStatefulWidget {
   /// recognised text can be inspected when a layout reads as an empty receipt
   /// (ticket 045).
   final List<String> unreadRows;
+
+  /// Writes the recognised layout somewhere and returns the path. Null hides the
+  /// entry, which is how release builds and every test see this screen: the flow
+  /// only hands it in under `kDebugMode` (ticket 055).
+  final Future<String?> Function()? onDumpRecognition;
 
   /// What the kept positions have to add up to — the receipt's printed total plus
   /// any credit rows it already accounted for. Null when the document printed no
@@ -82,6 +90,17 @@ class _ScanReviewScreenState extends ConsumerState<ScanReviewScreen> {
     if (expected == null || _selectionTouched) return null;
     final difference = _includedSum - expected;
     return difference == 0 ? null : difference;
+  }
+
+  Future<void> _dumpRecognition() async {
+    final path = await widget.onDumpRecognition?.call();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(path ?? 'Kein OCR-Ergebnis vorhanden'),
+        duration: const Duration(seconds: 10),
+      ),
+    );
   }
 
   Future<void> _edit(int index) async {
@@ -144,6 +163,12 @@ class _ScanReviewScreenState extends ConsumerState<ScanReviewScreen> {
       appBar: AppBar(
         title: const Text('Erkannte Positionen'),
         actions: [
+          if (widget.onDumpRecognition != null)
+            IconButton(
+              tooltip: 'OCR-Layout sichern',
+              icon: const Icon(Icons.bug_report_outlined),
+              onPressed: _dumpRecognition,
+            ),
           IconButton(
             tooltip: 'Alle kategorisieren',
             icon: const Icon(Icons.local_offer_outlined),

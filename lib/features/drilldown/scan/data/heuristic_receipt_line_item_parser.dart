@@ -31,6 +31,14 @@ const _skipPrefixes = {
   'beleg',
   'ec-cash',
   'eur',
+  // A delivery receipt's summary block: `Bestellung` before discounts, `Gespart`
+  // the discount total, `Betrag` after them, and `Rabatt` on the badge beside a
+  // reduced item. None is an article, and all four carry a money token, so
+  // without this they arrive as positions (ticket 055).
+  'bestellung',
+  'gespart',
+  'betrag',
+  'rabatt',
 };
 
 /// A money token: `1,23`, `1.23`, `1234,56`, `1.234,56`, `1 234,56`, each with
@@ -110,7 +118,7 @@ class HeuristicReceiptLineItemParser implements ReceiptLineItemParser {
     }
 
     return ReceiptParseResult(
-      candidates: candidates,
+      candidates: dropTotalSizedRows(candidates, budget),
       printedTotalCents: printedTotalCents,
       creditCents: creditCents,
       unreadRows: unreadRows,

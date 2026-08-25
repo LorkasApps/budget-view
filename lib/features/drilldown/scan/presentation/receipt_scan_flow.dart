@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -90,6 +91,9 @@ Future<void> startReceiptScan(
         candidates: state.candidates,
         expectedSumCents: state.expectedSumCents,
         unreadRows: state.unreadRows,
+        // Debug builds only: the recognised layout is the one thing no test can
+        // produce, since ML Kit has no test-VM binding (ticket 055).
+        onDumpRecognition: kDebugMode ? controller.dumpRecognition : null,
       );
       if (reviewed == null) {
         controller.cancel();

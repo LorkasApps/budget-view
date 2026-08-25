@@ -1,5 +1,10 @@
+import 'dart:convert';
+import 'dart:io';
+import 'dart:ui' show Rect;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path_provider/path_provider.dart';
 
 import '../../../import/data/imported_source.dart';
 import '../../../import/data/imported_source_kind.dart';
@@ -151,6 +156,10 @@ class ReceiptScanFlowController extends AutoDisposeNotifier<ReceiptScanFlowState
   Uint8List? _bytes;
   String _contentHash = '';
   Transaction? _transaction;
+
+  /// The last recognition, kept for the debug dump only — deliberately outside the
+  /// state, which nobody else needs to rebuild on (ticket 055).
+  OcrResult? _lastRecognition;
 
   @override
   ReceiptScanFlowState build() {
@@ -337,9 +346,9 @@ class ReceiptScanFlowController extends AutoDisposeNotifier<ReceiptScanFlowState
     }
 
     state = state.copyWith(phase: ReceiptScanPhase.parsing, pagesRead: pages);
-    final parsed = ref
-        .read(receiptLineItemParserProvider)
-        .parse(stackOcrPages(recognized));
+    final stacked = stackOcrPages(recognized);
+    _lastRecognition = stacked;
+    final parsed = ref.read(receiptLineItemParserProvider).parse(stacked);
 
     state = state.copyWith(
       phase: ReceiptScanPhase.awaitingConfirm,
@@ -362,6 +371,7 @@ class ReceiptScanFlowController extends AutoDisposeNotifier<ReceiptScanFlowState
     if (_bytes == null) return;
 
     state = state.copyWith(phase: ReceiptScanPhase.parsing);
+    _lastRecognition = recognized;
     final parsed = ref.read(receiptLineItemParserProvider).parse(recognized);
 
     state = state.copyWith(
@@ -439,6 +449,52 @@ class ReceiptScanFlowController extends AutoDisposeNotifier<ReceiptScanFlowState
       _fail(error);
     }
   }
+
+  /// Writes the last recognition to a file and returns its path, or null when
+  /// nothing was recognised yet.
+  ///
+  /// Debug instrument, called from a `kDebugMode`-only entry: ML Kit has no
+  /// test-VM binding, so the app is the only place the recognised layout can be
+  /// looked at — and ticket 045 was built on assumed coordinates because of
+  /// exactly that gap. Coordinates are what make the dump worth having; plain text
+  /// would repeat the mistake.
+  Future<String?> dumpRecognition() async {
+    final recognition = _lastRecognition;
+    if (recognition == null) return null;
+
+    final json = jsonEncode({
+      'fullText': recognition.fullText,
+      'blocks': [
+        for (final block in recognition.blocks)
+          {
+            'text': block.text,
+            'rect': _rectJson(block.boundingBox),
+            'lines': [
+              for (final line in block.lines)
+                {
+                  'text': line.text,
+                  'rect': _rectJson(line.boundingBox),
+                  if (line.confidence case final double confidence)
+                    'confidence': confidence,
+                },
+            ],
+          },
+      ],
+    });
+
+    final directory = await getApplicationCacheDirectory();
+    final stamp = DateTime.now().toIso8601String().replaceAll(':', '-');
+    final file = File('${directory.path}/ocr_dump_$stamp.json');
+    await file.writeAsString(json);
+    return file.path;
+  }
+
+  Map<String, double> _rectJson(Rect rect) => {
+        'left': rect.left,
+        'top': rect.top,
+        'width': rect.width,
+        'height': rect.height,
+      };
 
   /// Leaves the flow without a trace: no positions, no [ImportedSource] row.
   void cancel() {

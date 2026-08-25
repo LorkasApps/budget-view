@@ -107,7 +107,7 @@ ReceiptParseResult parseReceiptPdf(List<ReceiptWord> words) {
   }
 
   return ReceiptParseResult(
-    candidates: candidates,
+    candidates: dropTotalSizedRows(candidates, budget),
     printedTotalCents: printedTotalCents,
     creditCents: creditCents,
     unreadRows: unreadRows,

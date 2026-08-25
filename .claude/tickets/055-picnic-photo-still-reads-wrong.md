@@ -7,7 +7,7 @@
 | **Domain** | Drilldown |
 | **Blocked By** | None |
 | **Severity** | High |
-| **Status** | Ready |
+| **Status** | In Progress |
 
 ## Description
 Tickets 043 and 045 landed and `make check` is green, but a scan taken on the device after them still reads almost nothing
@@ -70,18 +70,19 @@ ML Kit makes of the block is what the parser actually sees.
 - **The pattern is derived from that dump inside this ticket**, not before it, the way ticket 047 handled its purpose texts
 
 ## Acceptance Criteria
-- [ ] A debug-only action in the scan review writes the full `OcrResult` as JSON to the app cache and names the file; it is
+- [x] A debug-only action in the scan review writes the full `OcrResult` as JSON to the app cache and names the file; it is
       absent from a release build
 - [ ] The dump of the failing Picnic photo is fetched, and the fixture in `heuristic_receipt_line_item_parser_test.dart` is
       built from its **real** coordinates
 - [ ] That fixture reproduces the defect before the fix and passes after it
 - [ ] For the real receipt: the positions the review offers match the paper — around 30 rows rather than four summary lines —
       and the printed total is recognised so the checksum can judge them
-- [ ] **No line of the summary block becomes a position**: `Bestellung`, `Gespart` and `Betrag` are handled, while `Endsumme`
+- [x] **No line of the summary block becomes a position**: `Bestellung`, `Gespart` and `Betrag` are handled, while `Endsumme`
       stays the total and `Eingereichtes Pfand` the credit
-- [ ] The plausibility bound drops a row that equals the budget as well, not only one that exceeds it — `Betrag` is exactly the
-      budget, which is how it slipped through
-- [ ] A discounted row yields **one** position at the real price: neither the struck-through original nor the `Rabatt` badge
+- [x] The plausibility bound drops a row that equals the budget as well, not only one that exceeds it — `Betrag` is exactly the
+      budget, which is how it slipped through. `dropTotalSizedRows` keeps such a row when it is the **only** one, because a
+      receipt with a single article legitimately equals its own total
+- [x] A discounted row yields **one** position at the real price: neither the struck-through original nor the `Rabatt` badge
       becomes a row of its own
 - [ ] Whatever the cause turns out to be, the finding is written into this ticket, including which of 045's synthetic
       assumptions was wrong

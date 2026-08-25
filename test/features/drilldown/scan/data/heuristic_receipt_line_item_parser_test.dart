@@ -292,6 +292,64 @@ void main() {
       expect(result.unreadRows, isEmpty);
     });
 
+    test('the summary block of a delivery receipt yields no positions', () {
+      // The real block of a Picnic receipt, ticket 055. Only `Endsumme` is the
+      // total and only `Eingereichtes Pfand` a credit; the other three carry a
+      // money token each and used to arrive as items.
+      final result = _parser.parse(
+        _blocks([
+          [_line('Bio Milch 1,19', top: 0)],
+          [_line('Bestellung 72,80', top: 100)],
+          [_line('Gespart -5,73', top: 150)],
+          [_line('Betrag 67,07', top: 200)],
+          [_line('Eingereichtes Pfand 4,95', top: 250)],
+          [_line('Endsumme 62,12', top: 300)],
+        ]),
+      );
+
+      expect(result.candidates.map((c) => c.description), ['Bio Milch']);
+      expect(result.printedTotalCents, 6212);
+      expect(result.creditCents, 495);
+    });
+
+    test('a Rabatt badge beside a reduced item is not a position', () {
+      final result = _parser.parse(
+        _blocks([
+          [_line('Bratwurst 4,79', top: 0)],
+          [_line('Rabatt 6,79', top: 60)],
+          [_line('Endsumme 4,79', top: 120)],
+        ]),
+      );
+
+      expect(result.candidates.map((c) => c.amountCents), [479]);
+    });
+
+    test('a row as large as the whole receipt is dropped', () {
+      final result = _parser.parse(
+        _blocks([
+          [_line('Milch 1,19', top: 0)],
+          [_line('Brot 2,00', top: 100)],
+          // Exactly the budget, so the plausibility bound lets it pass — this is
+          // the gap `Betrag 67,07` slipped through on the real receipt.
+          [_line('Zwischenzeile 3,19', top: 200)],
+          [_line('Endsumme 3,19', top: 300)],
+        ]),
+      );
+
+      expect(result.candidates.map((c) => c.description), ['Milch', 'Brot']);
+    });
+
+    test('a single article may equal the receipt total', () {
+      final result = _parser.parse(
+        _blocks([
+          [_line('Milch 1,19', top: 0)],
+          [_line('Endsumme 1,19', top: 100)],
+        ]),
+      );
+
+      expect(result.candidates.single.amountCents, 119);
+    });
+
     test('a credit row without a total still counts as a credit', () {
       final result = _parser.parse(_row('Gutschrift 3,00'));
 

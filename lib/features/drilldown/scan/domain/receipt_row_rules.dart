@@ -8,6 +8,8 @@
 /// layer hand over different rectangles.
 library;
 
+import 'receipt_line_item_parser.dart';
+
 /// Rows stating the document's own total.
 const receiptTotalPrefixes = {'summe', 'gesamt', 'total'};
 
@@ -57,6 +59,27 @@ int? positionBudgetCents(int? printedTotalCents, int creditCents) =>
 /// falls below single legitimate items.
 bool exceedsPositionBudget(int amountCents, int? budgetCents) =>
     budgetCents != null && amountCents > budgetCents;
+
+/// Drops rows that are exactly as large as the whole receipt.
+///
+/// [exceedsPositionBudget] only catches rows costing *more* than the budget, and a
+/// receipt's own summary prints a figure that is precisely it — Picnic's
+/// `Betrag 67,07` beside an `Endsumme 62,12` and a 4,95 deposit return slipped
+/// through that gap and entered the positions as an item the size of the purchase
+/// (ticket 055).
+///
+/// Kept when it is the **only** row: a receipt with a single article legitimately
+/// has one position equal to its total.
+List<LineItemCandidate> dropTotalSizedRows(
+  List<LineItemCandidate> candidates,
+  int? budgetCents,
+) {
+  if (budgetCents == null || candidates.length < 2) return candidates;
+  return [
+    for (final candidate in candidates)
+      if (candidate.amountCents != budgetCents) candidate,
+  ];
+}
 
 List<String> _words(String label) => label
     .toLowerCase()
