@@ -42,7 +42,10 @@ That collision is the ticket. The picker for the target account is the easy half
   (`decisions.md`, 2026-08-13): a line item is only reachable through its booking, while both legs here are reachable through
   their own account, so a leftover leg stays visible and wrong.
   Note for 048: once one leg can come from an import, the cascade deletes a row the bank confirmed — that case is 048's to
-  answer, not this ticket's
+  answer, not this ticket's.
+  **Clarified while refining 048 (2026-08-25): the mirroring of amount and date is a rule for form edits only.** When an import
+  replaces a mirror leg with the bank's own figures, nothing propagates to the other leg — money leaves on one day and arrives on
+  another, and a fee can make the amounts differ legitimately
 
 - **Choosable accounts** → every other **non-archived** own account. Archived ones stay out: the category picker sets that
   precedent, and archiving means "no longer in use", so writing a fresh booking into one contradicts it
