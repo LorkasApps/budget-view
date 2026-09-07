@@ -62,6 +62,16 @@ class Transaction implements SyncableEntity {
   @Enumerated(EnumType.name)
   TransactionKind kind = TransactionKind.regular;
 
+  /// The [uuid] of the other leg of a transfer, once the user named a target
+  /// account (ticket 042). Null for every other booking, and for a transfer
+  /// whose money left the app — `Umbuchung` without a target stays legal.
+  ///
+  /// A written link rather than read-time matching on amount, day and the two
+  /// accounts: that heuristic invents connections, since two coincidentally
+  /// equal amounts on one day are not a transfer (`decisions.md`, 2026-08-21).
+  /// No index — the value *is* the other row's unique-indexed `uuid`.
+  String? counterpartUuid;
+
   bool deleted = false;
 
   late DateTime createdAt;
@@ -92,6 +102,7 @@ class Transaction implements SyncableEntity {
         'dedupeHash': dedupeHash,
         'categoryAutoSuggested': categoryAutoSuggested,
         'kind': kind.name,
+        'counterpartUuid': counterpartUuid,
         'deleted': deleted,
         'createdAt': createdAt.toIso8601String(),
         'updatedAt': updatedAt.toIso8601String(),
