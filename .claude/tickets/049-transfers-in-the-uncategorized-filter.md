@@ -7,7 +7,16 @@
 | **Domain** | Transaction |
 | **Blocked By** | 053 (its fix lands there) |
 | **Severity** | Low |
-| **Status** | Draft |
+| **Status** | Done |
+
+## Closed by ticket 053
+The fix landed as one option of 053's category filter, not as a change to the old
+toggle — that toggle no longer exists, `Ohne Kategorie` replaced it, and the rule
+lives there. `TransactionFilter._matchesCategory` drops a transfer under
+`CategoryFilterMode.without`, covered by a unit test in
+`test/features/transaction/domain/transaction_filter_test.dart`. Never refined on
+its own: its rule was absorbed into 053 during that ticket's refinement, which is
+why this file goes straight from `Draft` to `Done`.
 
 ## Description
 The booking list carries a `Nur ohne Kategorie` filter (`transaction_list_screen.dart:43`), whose purpose is "what still

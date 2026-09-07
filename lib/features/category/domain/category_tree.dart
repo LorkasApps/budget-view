@@ -106,24 +106,28 @@ List<CategoryNode> filterCategoryTree(List<CategoryNode> roots, String query) {
   return prune(roots);
 }
 
-/// Uuids that may not become [category]'s parent: itself and its descendants.
-Set<String> ineligibleParents(List<Category> categories, Category category) {
-  if (category.uuid.isEmpty) return const {};
+/// [rootUuid] plus every uuid below it. Empty [rootUuid] yields nothing.
+Set<String> subtreeUuids(List<Category> categories, String rootUuid) {
+  if (rootUuid.isEmpty) return const {};
 
-  final blocked = {category.uuid};
+  final inside = {rootUuid};
   var grew = true;
   while (grew) {
     grew = false;
     for (final candidate in categories) {
-      if (blocked.contains(candidate.uuid)) continue;
-      if (blocked.contains(candidate.parentUuid)) {
-        blocked.add(candidate.uuid);
+      if (inside.contains(candidate.uuid)) continue;
+      if (inside.contains(candidate.parentUuid)) {
+        inside.add(candidate.uuid);
         grew = true;
       }
     }
   }
-  return blocked;
+  return inside;
 }
+
+/// Uuids that may not become [category]'s parent: itself and its descendants.
+Set<String> ineligibleParents(List<Category> categories, Category category) =>
+    subtreeUuids(categories, category.uuid);
 
 int _bySortOrderThenName(Category a, Category b) {
   final bySortOrder = a.sortOrder.compareTo(b.sortOrder);

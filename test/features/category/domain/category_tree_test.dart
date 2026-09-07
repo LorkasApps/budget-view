@@ -88,4 +88,29 @@ void main() {
 
     expect(blocked, isEmpty);
   });
+
+  group('subtreeUuids', () {
+    final categories = [
+      _cat('a', 'Wohnen'),
+      _cat('b', 'Strom', parent: 'a'),
+      _cat('c', 'Grundgebühr', parent: 'b'),
+      _cat('d', 'Mobilität'),
+    ];
+
+    test('root plus its children plus grandchildren', () {
+      expect(subtreeUuids(categories, 'a'), {'a', 'b', 'c'});
+    });
+
+    test('a leaf yields just itself', () {
+      expect(subtreeUuids(categories, 'c'), {'c'});
+    });
+
+    test('an empty rootUuid yields nothing', () {
+      expect(subtreeUuids(categories, ''), isEmpty);
+    });
+
+    test('an unknown uuid yields just that uuid', () {
+      expect(subtreeUuids(categories, 'ghost'), {'ghost'});
+    });
+  });
 }

@@ -50,11 +50,11 @@
 | 046-backup-local-and-google-drive.md | Feature | None | Infra | Draft | None | Backup to a local file and to Google Drive; first network access, and an unencrypted DB leaving the sandbox |
 | 047-merchant-behind-a-collective-payer.md | Feature | Auto-Tagging | Transaction | Done | None | PayPal hides the real merchant in the purpose text; needs a `merchant` field, pattern to be read off real lines first |
 | 048-import-meets-a-booked-counter-leg.md | Feature | Import | Transaction | Ready | 042 | Split from 042: an import meets the mirror booking; dedupe cannot catch it, and only ING Giro ↔ TR Cash can collide |
-| 049-transfers-in-the-uncategorized-filter.md | Bug | None | Transaction | Draft | 053 | `Nur ohne Kategorie` lists every transfer forever; since 032 they need no category, so the filter never empties |
+| 049-transfers-in-the-uncategorized-filter.md | Bug | None | Transaction | Done | 053 | Closed by 053: the toggle is gone and the rule lives in its `Ohne Kategorie` option, so transfers no longer clog it |
 | 050-more-collective-payers-adyen-nexi.md | Feature | Auto-Tagging | Transaction | Ready | None | Adyen and Nexi hide the shop too, but in the card-terminal shape; Nexi still unseen, so dump before pattern |
 | 051-one-subcategory-level-only.md | Feature | Categories | Category | Ready | None | Cap the tree at roots plus one child level; parent picker shrinks to the roots, and depth-only helpers can go |
 | 052-net-result-per-month-and-year.md | Feature | Analytics | Analytics | Ready | None | Net result beside expenses-vs-income, plus a yearly big-scope view; computeSeries from 021 likely already has the data |
-| 053-search-and-category-filter-in-the-account-list.md | Feature | None | Transaction | Ready | None | Word search plus a category filter in the per-account list; overlaps 049, follows the 038 search semantics |
+| 053-search-and-category-filter-in-the-account-list.md | Feature | None | Transaction | Done | None | Word search plus a category filter in the per-account list; overlaps 049, follows the 038 search semantics |
 | 054-search-in-the-category-tree-screen.md | Feature | Categories | Category | Ready | None | Search in the tree screen, deferred by 038; reuses filterCategoryTree, open question is what reorder does under a filter |
 | 055-picnic-photo-still-reads-wrong.md | Bug | Drilldown | Drilldown | In Progress | None | After 043/045 a real photo still reads wrong; ML Kit has no test-VM binding, so the fix needs an OcrResult dump from the app |
 | 056-category-suggestion-per-line-item.md | Feature | Auto-Tagging | Tagging | Ready | 055 | Suggest a category per scanned position, keyed on the article description; needs matchField in the lookup, value hinges on 055 |

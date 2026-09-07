@@ -6,12 +6,16 @@ import '../../../core/money/money.dart';
 import '../../account/data/account.dart';
 import '../../account/domain/account_providers.dart';
 import '../../account/presentation/account_form_screen.dart';
+import '../../category/data/category.dart';
+import '../../category/domain/category_providers.dart';
 import '../../category/presentation/category_chip.dart';
 import '../../category/presentation/category_picker.dart';
 import '../../tagging/domain/tagging_providers.dart';
 import '../data/transaction.dart';
+import '../domain/transaction_filter.dart';
 import '../domain/transaction_providers.dart';
 import '../import/presentation/pdf_import_screen.dart';
+import 'category_filter_sheet.dart';
 import 'transaction_form_screen.dart';
 
 /// Transactions of one account, newest first.
@@ -26,7 +30,22 @@ class TransactionListScreen extends ConsumerStatefulWidget {
 }
 
 class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
-  bool _onlyUncategorized = false;
+  // Not persisted: this is a pushed screen, not a tab, so its state ends with
+  // it. A filter that still bit on the next visit is the kind of state one
+  // forgets and then mistakes for missing data.
+  final _queryController = TextEditingController();
+  TransactionFilter _filter = const TransactionFilter();
+
+  @override
+  void dispose() {
+    _queryController.dispose();
+    super.dispose();
+  }
+
+  void _reset() {
+    _queryController.clear();
+    setState(() => _filter = const TransactionFilter());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,16 +56,6 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
       appBar: AppBar(
         title: Text(account.name),
         actions: [
-          IconButton(
-            tooltip: _onlyUncategorized
-                ? 'Alle Buchungen zeigen'
-                : 'Nur ohne Kategorie',
-            icon: Icon(
-              _onlyUncategorized ? Icons.label : Icons.label_off_outlined,
-            ),
-            onPressed: () =>
-                setState(() => _onlyUncategorized = !_onlyUncategorized),
-          ),
           IconButton(
             tooltip: 'PDF importieren',
             icon: const Icon(Icons.picture_as_pdf_outlined),
@@ -71,6 +80,20 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
         children: [
           _AccountBalanceHeader(accountUuid: account.uuid),
           const Divider(height: 1),
+          _FilterRow(
+            controller: _queryController,
+            category: _filter.category,
+            onQueryChanged: (query) =>
+                setState(() => _filter = TransactionFilter(
+                      query: query,
+                      category: _filter.category,
+                    )),
+            onCategoryChanged: (category) =>
+                setState(() => _filter = TransactionFilter(
+                      query: _filter.query,
+                      category: category,
+                    )),
+          ),
           Expanded(
             child: transactionsAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
@@ -82,13 +105,9 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
                   );
                 }
 
-                final transactions = _onlyUncategorized
-                    ? all.where((t) => t.categoryUuid == null).toList()
-                    : all;
+                final transactions = _filter.apply(all);
                 if (transactions.isEmpty) {
-                  return const Center(
-                    child: Text('Alle Buchungen haben eine Kategorie.'),
-                  );
+                  return _NoMatch(onReset: _reset);
                 }
 
                 return ListView.separated(
@@ -110,6 +129,116 @@ class _TransactionListScreenState extends ConsumerState<TransactionListScreen> {
           ),
         ),
         child: const Icon(Icons.add),
+      ),
+    );
+  }
+}
+
+class _FilterRow extends StatelessWidget {
+  const _FilterRow({
+    required this.controller,
+    required this.category,
+    required this.onQueryChanged,
+    required this.onCategoryChanged,
+  });
+
+  final TextEditingController controller;
+  final CategoryFilter category;
+  final ValueChanged<String> onQueryChanged;
+  final ValueChanged<CategoryFilter> onCategoryChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: controller,
+              onChanged: onQueryChanged,
+              decoration: InputDecoration(
+                isDense: true,
+                prefixIcon: const Icon(Icons.search),
+                hintText: 'Suchen',
+                border: const OutlineInputBorder(),
+                suffixIcon: controller.text.isEmpty
+                    ? null
+                    : IconButton(
+                        tooltip: 'Suche leeren',
+                        icon: const Icon(Icons.close),
+                        onPressed: () {
+                          controller.clear();
+                          onQueryChanged('');
+                        },
+                      ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          _CategoryFilterChip(category: category, onChanged: onCategoryChanged),
+        ],
+      ),
+    );
+  }
+}
+
+class _CategoryFilterChip extends ConsumerWidget {
+  const _CategoryFilterChip({required this.category, required this.onChanged});
+
+  final CategoryFilter category;
+  final ValueChanged<CategoryFilter> onChanged;
+
+  String _label(List<Category> categories) {
+    switch (category.mode) {
+      case CategoryFilterMode.all:
+        return 'Alle Kategorien';
+      case CategoryFilterMode.without:
+        return 'Ohne Kategorie';
+      case CategoryFilterMode.subtree:
+        // `?` for a uuid pointing nowhere, as `CategoryChip` already does — an
+        // archived category the filter still holds must not blank the label.
+        final picked = categories.where((c) => c.uuid == category.rootUuid);
+        return picked.isEmpty ? '?' : picked.first.name;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final categories =
+        ref.watch(categoriesProvider(false)).value ?? const <Category>[];
+
+    return InputChip(
+      avatar: const Icon(Icons.filter_list, size: 18),
+      label: Text(_label(categories)),
+      onPressed: () async {
+        final picked = await pickCategoryFilter(context, selected: category);
+        if (picked != null) onChanged(picked);
+      },
+      onDeleted:
+          category.isAll ? null : () => onChanged(const CategoryFilter.all()),
+    );
+  }
+}
+
+class _NoMatch extends StatelessWidget {
+  const _NoMatch({required this.onReset});
+
+  final VoidCallback onReset;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Text('Keine Buchung passt zu Suche und Filter.'),
+          const SizedBox(height: 8),
+          TextButton(
+            onPressed: onReset,
+            child: const Text('Filter zurücksetzen'),
+          ),
+        ],
       ),
     );
   }

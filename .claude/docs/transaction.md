@@ -16,6 +16,7 @@ Implements `SyncableEntity` (`entityType = 'transaction'`).
 | `bookingDate` | DateTime | Buchungstag |
 | `description` | String | Required, non-empty |
 | `counterparty` | String | May be empty |
+| `merchant` | String | Who the money really went to when `counterparty` is a collective payer (PayPal, Adyen), read from the purpose text on import (ticket 047). Empty otherwise. Beside `counterparty`, never replacing it — that field is the booking's identity and feeds `dedupeHash`, which must not depend on a parser heuristic |
 | `note` | String | May be empty |
 | `dedupeHash` | String | Indexed, non-nullable. SHA-256 over amount + booking day + normalized counterparty; computed on every write by the repository |
 | `deleted` | bool | Soft-delete marker |
@@ -86,7 +87,22 @@ Pure statics: `description`, `amount` (magnitude — must be unsigned and ≠ 0)
 5. If user confirms (or no matches), proceed to `TransactionRepository.save`
 
 ## UI (`presentation/`)
-- `TransactionListScreen(account)` (`ConsumerStatefulWidget`) — saldo header (`Start … · Buchungen …`), newest-first list, swipe→delete (confirm), tap→edit, FAB→create, app-bar actions: filter toggle (uncategorized-only), edit account. Each row shows a `CategoryChip`; tap opens quick-pick to reassign inline, saves immediately.
+- `TransactionListScreen(account)` (`ConsumerStatefulWidget`) — saldo header (`Start … · Buchungen …`), filter row, newest-first list, swipe→delete (confirm), tap→edit, FAB→create, app-bar actions: PDF import, edit account. Each row shows a `CategoryChip`; tap opens quick-pick to reassign inline, saves immediately. The row also shows `taggingKey` (`merchant` when one was read, else `counterparty`) — the row answers "who did I pay", and `PayPal Europe S.a.r.l.` is the useless answer (ticket 047).
+
+**Filter row** (ticket 053) — search `TextField` (dense, `Icons.search`, hint `Suchen`, clear cross as in 038) plus an `InputChip` that opens `pickCategoryFilter`.
+
+| Piece | Where | Rule |
+|-------|-------|------|
+| `TransactionFilter` | `domain/transaction_filter.dart` | Pure predicate over the streamed list, AND of search and category. `apply` returns the input unchanged while inactive |
+| Search fields | — | `description`, `counterparty`, `merchant`, `note`, and **both** `formatCentsEur` (`1.234,56 €`) and `formatCentsPlain` (`1234,56`) of the amount — the grouping dot would otherwise swallow a typed `1234,56` |
+| Search semantics | — | Case-insensitive substring, umlauts literal: `Bruehe` does not find `Brühe`. Not `normalizeForMatching` (ticket 038) |
+| `CategoryFilter` | same file | `all` / `without` / `subtree`; subtree carries `rootUuid` plus the uuids from `subtreeUuids`, so a parent shows its children's bookings |
+| `Ohne Kategorie` | — | Transfers drop out — they need no category, so they would dominate the list (ticket 049 closed here) |
+| `pickCategoryFilter` | `presentation/category_filter_sheet.dart` | Own sheet, not `pickCategory`: that one carries quick-create, and all three states belong on screen as rows |
+| Persistence | — | None. Pushed screen, so state ends with it |
+| No match | — | `Keine Buchung passt zu Suche und Filter.` plus `Filter zurücksetzen` |
+
+The balance header never reacts to the filter: it is a *balance* — opening balance plus every booking — not a list total, and a filtered figure would contradict the account list. Sums are the report's job (020, 052).
 - `TransactionFormScreen({existing, initialAccountUuid})` — `SegmentedButton` Ausgabe/Einnahme + magnitude amount, description, **mandatory category row** (shows error "Kategorie erforderlich" in red if missing), account dropdown, date picker, optional counterparty + note.
 
 ## Import (`import/`)

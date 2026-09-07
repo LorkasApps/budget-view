@@ -48,7 +48,8 @@ Pure tree-building functions:
 - **`buildCategoryTree(categories)`**: groups flat list into roots + children. Siblings order by `sortOrder` then case-insensitive `name`. A category whose parent is null or absent is promoted to a root (orphaned archived parents never hide their children).
 - **`flattenVisible(roots, expanded)`**: depth-first traversal for on-screen list; a node's children included only if its uuid is in the `expanded` set.
 - **`filterCategoryTree(roots, query)`**: prunes tree for search; a name hit keeps its whole subtree, non-matching ancestors kept as path to matching descendants, case-insensitive substring (umlauts literal), empty query returns roots unchanged, node depth preserved.
-- **`ineligibleParents(categories, category)`**: returns set of uuids that cannot be the category's parent (itself + all descendants; guards cycle prevention).
+- **`subtreeUuids(categories, rootUuid)`**: `rootUuid` plus every uuid below it, by fixpoint walk over `parentUuid`. Empty `rootUuid` yields nothing. Backs the booking-list category filter (053), where picking a parent must show its children's bookings.
+- **`ineligibleParents(categories, category)`**: returns set of uuids that cannot be the category's parent (itself + all descendants; guards cycle prevention). Delegates to `subtreeUuids` — the same walk, which only ever carried a name about parent eligibility.
 
 ## Providers (`domain/category_providers.dart`)
 - `categoryRepositoryProvider` → `CategoryRepository(isar, syncAdapter, transactionRepository)`
