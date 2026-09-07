@@ -324,11 +324,23 @@ class _TransactionTile extends ConsumerWidget {
         child: const Icon(Icons.delete_outline),
       ),
       confirmDismiss: (_) async {
+        final service = ref.read(transferPairServiceProvider);
+        // Resolved before asking, because the question changes: taking one leg
+        // of a transfer down takes the other with it, and the user has to be
+        // told which account that is.
+        final other = await service.counterpartAccountOf(transaction);
+        if (!context.mounted) return false;
+
         final ok = await showDialog<bool>(
           context: context,
           builder: (_) => AlertDialog(
             title: const Text('Buchung löschen?'),
-            content: Text('"${transaction.description}" wird gelöscht.'),
+            content: Text(
+              other == null
+                  ? '"${transaction.description}" wird gelöscht.'
+                  : '"${transaction.description}" wird gelöscht — die '
+                      'Gegenbuchung auf ${other.name} ebenfalls.',
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
@@ -341,11 +353,10 @@ class _TransactionTile extends ConsumerWidget {
             ],
           ),
         );
-        if (ok ?? false) {
-          await ref
-              .read(transactionRepositoryProvider)
-              .softDelete(transaction.uuid);
-        }
+        // Always through the service, never `softDelete` directly: it is the
+        // one place that knows about the other leg, and an unpaired booking
+        // takes the same path, so no call site decides which case it is in.
+        if (ok ?? false) await service.deletePair(transaction);
         return false; // list refreshes reactively
       },
       child: ListTile(

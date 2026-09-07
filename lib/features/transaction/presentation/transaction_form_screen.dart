@@ -49,6 +49,11 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
   late TransactionKind _kind;
   String? _accountUuid;
   String? _categoryUuid;
+
+  /// The account on the other side of a transfer, null while there is none.
+  /// Kept across a toggle of [_kind] the way a picked category survives it
+  /// (ticket 041) — only [_save] decides whether it is acted on.
+  String? _targetAccountUuid;
   List<CategorySuggestion> _suggestions = const [];
 
   /// The category the suggestion filled in, kept apart from [_categoryUuid] so
@@ -91,6 +96,17 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
     _accountUuid = existing?.accountUuid ?? widget.initialAccountUuid;
     _categoryUuid = existing?.categoryUuid;
     _counterpartyFocus.addListener(_onCounterpartyFocusChange);
+    if (existing?.counterpartUuid != null) _loadExistingTarget(existing!);
+  }
+
+  /// The link stores the other *booking*; the picker shows the other *account*,
+  /// so it has to be resolved once when an existing pair is opened.
+  Future<void> _loadExistingTarget(Transaction existing) async {
+    final account = await ref
+        .read(transferPairServiceProvider)
+        .counterpartAccountOf(existing);
+    if (!mounted || account == null) return;
+    setState(() => _targetAccountUuid = account.uuid);
   }
 
   @override
@@ -260,6 +276,14 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
       ..kind = _kind;
 
     await ref.read(transactionRepositoryProvider).save(transaction);
+    // Straight after the save, because it is about this booking's own
+    // integrity: a transfer with a named target owes the other account a leg.
+    // Passing null when this is no longer a transfer is what takes a stale
+    // counter-leg back down.
+    await ref.read(transferPairServiceProvider).syncCounterpart(
+          transaction,
+          targetAccountUuid: _isTransfer ? _targetAccountUuid : null,
+        );
     await ref.read(taggingLearnServiceProvider).learnFrom(transaction);
     // A changed booking amount moves the gap its positions have to close. No-op
     // for a booking without positions, which is the case for every fresh one.
@@ -336,10 +360,46 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
                   for (final Account a in accounts)
                     DropdownMenuItem(value: a.uuid, child: Text(a.name)),
                 ],
-                onChanged: (v) => setState(() => _accountUuid = v),
+                onChanged: (v) => setState(() {
+                  _accountUuid = v;
+                  // An account cannot transfer to itself; picking the target as
+                  // the source drops the target rather than leaving a pair that
+                  // would cancel out on one balance.
+                  if (_targetAccountUuid == v) _targetAccountUuid = null;
+                }),
                 validator: (v) => TransactionValidation.account(v),
               ),
             ),
+            if (_isTransfer) ...[
+              const SizedBox(height: 16),
+              accountsAsync.when(
+                loading: () => const LinearProgressIndicator(),
+                error: (e, _) => Text('Konten nicht geladen: $e'),
+                data: (accounts) => DropdownButtonFormField<String>(
+                  initialValue: _targetAccountUuid,
+                  decoration: const InputDecoration(
+                    labelText: 'Gegenkonto (optional)',
+                    helperText: 'Bucht die Gegenseite dort — gleicher Betrag '
+                        'mit umgekehrtem Vorzeichen, gleiches Datum',
+                  ),
+                  items: [
+                    // Legal and the 032 case: money moving to a broker outside
+                    // the app is a real transfer with nothing to mirror.
+                    const DropdownMenuItem(
+                      value: null,
+                      child: Text('Kein Gegenkonto'),
+                    ),
+                    // Archived accounts stay out, as in the category picker:
+                    // archiving means "no longer in use", so writing a fresh
+                    // booking into one contradicts it.
+                    for (final Account a in accounts)
+                      if (a.uuid != _accountUuid)
+                        DropdownMenuItem(value: a.uuid, child: Text(a.name)),
+                  ],
+                  onChanged: (v) => setState(() => _targetAccountUuid = v),
+                ),
+              ),
+            ],
             const SizedBox(height: 8),
             ListTile(
               contentPadding: EdgeInsets.zero,

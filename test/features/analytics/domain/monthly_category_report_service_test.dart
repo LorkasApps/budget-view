@@ -434,4 +434,51 @@ void main() {
       expect(result.isEmpty, isTrue);
     },
   );
+
+  // Regression guard for ticket 042: once a transfer can name a target
+  // account, its counter-leg is a real booking on that other account. Both
+  // legs already carry `kind: transfer`, which the two tests above already
+  // proved excludes a single leg — this pins that the exclusion still holds
+  // once a second leg exists on a second account, categorized or not, seen
+  // from either account's own report and from the all-accounts one.
+  test(
+    'a paired transfer across two accounts stays out on both legs',
+    () async {
+      final giro = await account(name: 'Giro');
+      final tagesgeld = await account(name: 'Tagesgeld');
+      final food = await category('Lebensmittel');
+      await booking(
+        accountUuid: giro.uuid,
+        amountCents: -500,
+        categoryUuid: food.uuid,
+      );
+      final source = await booking(
+        accountUuid: giro.uuid,
+        amountCents: -700,
+        categoryUuid: food.uuid,
+        description: 'Umbuchung nach Tagesgeld',
+        kind: TransactionKind.transfer,
+      );
+      final leg = await booking(
+        accountUuid: tagesgeld.uuid,
+        amountCents: 700,
+        description: 'Umbuchung von Giro',
+        kind: TransactionKind.transfer,
+      );
+      source.counterpartUuid = leg.uuid;
+      await transactions.save(source);
+      leg.counterpartUuid = source.uuid;
+      await transactions.save(leg);
+
+      final all = await report();
+      expect(all.totalCents, 500);
+      expect(all.rowFor(food.uuid)!.ownCents, 500);
+      expect(all.uncategorizedCents, 0);
+
+      expect((await report(accountUuid: giro.uuid)).totalCents, 500);
+      final tagesgeldReport = await report(accountUuid: tagesgeld.uuid);
+      expect(tagesgeldReport.isEmpty, isTrue);
+      expect(tagesgeldReport.uncategorizedCents, 0);
+    },
+  );
 }

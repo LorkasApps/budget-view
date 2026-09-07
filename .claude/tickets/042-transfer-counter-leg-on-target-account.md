@@ -6,7 +6,7 @@
 | **Epic** | None |
 | **Domain** | Transaction |
 | **Blocked By** | 032 |
-| **Status** | Ready |
+| **Status** | Done |
 
 ## Description
 A transfer is marked per booking today: the leg on the account being looked at is flagged, and the report leaves it out.
@@ -62,21 +62,21 @@ That collision is the ticket. The picker for the target account is the easy half
   soft-deletes the counter-leg and drops the link on the source — the delete rule, triggered from the other side
 
 ## Acceptance Criteria
-- [ ] With `Umbuchung` on, the booking form offers a target-account picker listing every other non-archived account
-- [ ] Leaving the target empty is allowed, saves, and writes no counter-leg — the 032 case stays intact
-- [ ] Choosing a target writes the counter-leg on that account: same amount with the opposite sign, same date,
+- [x] With `Umbuchung` on, the booking form offers a target-account picker listing every other non-archived account
+- [x] Leaving the target empty is allowed, saves, and writes no counter-leg — the 032 case stays intact
+- [x] Choosing a target writes the counter-leg on that account: same amount with the opposite sign, same date,
       `kind = transfer`, `counterparty` = the source account's name, description `Umbuchung von <Kontoname>`
-- [ ] Both legs carry `Transaction.counterpartUuid` pointing at each other; the field is additive and `kDbSchemaVersion` is
+- [x] Both legs carry `Transaction.counterpartUuid` pointing at each other; the field is additive and `kDbSchemaVersion` is
       **not** bumped
-- [ ] Editing amount or date on either leg mirrors onto the other; category, description and counterparty stay per leg
-- [ ] Deleting either leg soft-deletes both, after a confirmation that names the other account
-- [ ] Changing the target account moves the counter-leg without changing its uuid, and regenerates its description only if
+- [x] Editing amount or date on either leg mirrors onto the other; category, description and counterparty stay per leg
+- [x] Deleting either leg soft-deletes both, after a confirmation that names the other account
+- [x] Changing the target account moves the counter-leg without changing its uuid, and regenerates its description only if
       the user never edited it
-- [ ] Clearing the target account soft-deletes the counter-leg and clears the link on the source booking
-- [ ] Both account balances reflect the movement at once — transfers stay in the balance (`decisions.md`, 2026-08-21)
-- [ ] Neither leg appears in the monthly report
-- [ ] Nothing is paired automatically: a transfer whose target was never chosen stays unpaired forever
-- [ ] `make check` green
+- [x] Clearing the target account soft-deletes the counter-leg and clears the link on the source booking
+- [x] Both account balances reflect the movement at once — transfers stay in the balance (`decisions.md`, 2026-08-21)
+- [x] Neither leg appears in the monthly report
+- [x] Nothing is paired automatically: a transfer whose target was never chosen stays unpaired forever
+- [x] `make check` green
 
 ## Out of Scope (proposed, to confirm)
 - Multi-currency transfers
@@ -99,4 +99,57 @@ in a temp directory, the form side against fakes.
 - Output: ~2.5k tokens
 
 ### Implementation Tokens (estimate)
-_Filled after Done._
+- Input: ~150k tokens
+- Output: ~18k tokens
+- Delegated: ~125k tokens across two Sonnet sub-agents (the repository suite, then
+  the balance/report/form suites)
+
+## How it was built
+Built in three gates rather than one, because the new field needs `make gen`
+before anything can compile, and that step is the user's.
+
+**The pair lives in `TransferPairService` (`domain/`), not in
+`TransactionRepository.save`.** Both legs are Transactions, so unlike the
+line-item reconcile and the tagging learn hook (`decisions.md`, 2026-08-13) no
+dependency edge would have been inverted by putting it in the repository. Two
+other reasons decided it anyway:
+
+- Mirroring has to stay a form-edit rule. 048 replaces a mirror leg with the
+  bank's own figures and must not propagate them — money can leave on one day and
+  arrive on another, and a fee can make the amounts differ. An unconditional
+  `save` invariant would have walled that ticket off.
+- The cascading delete needs a confirmation naming the other account, and a
+  repository cannot show a dialog. A silent cascade underneath a UI that is still
+  asking is two answers to one question.
+
+The accepted risk is a write path forgetting the service. Answered as in
+2026-08-13: a guard plus a test, not a compiler — a widget test pins that the
+booking list's swipe-delete reaches `deletePair` and that
+`TransactionRepository.softDelete` is never called directly.
+
+Details worth keeping:
+
+- The counter-leg is **moved** on a target change: `accountUuid` is updated and
+  the uuid stays, so the change queue sees one `update` instead of a `delete`
+  plus a `create`, and anything the user edited on that row survives.
+- Its description is regenerated only while it still equals either generated
+  wording, which is what makes a sign flip rewrite `Umbuchung von X` to
+  `Umbuchung nach X` while leaving the user's own text alone.
+- `counterparty` on the counter-leg is written once and then belongs to that leg,
+  like its category.
+- The target picker drops its choice when the source account is changed to the
+  same account: a pair inside one account would cancel out on that balance.
+
+Two findings from the gates, neither in the feature itself:
+
+- `softDelete` sets a flag and keeps the row, and `findByUuid` does **not** filter
+  deleted rows while `findByAccount` does. Three tests asserted `findByUuid`
+  returns null after a delete. They now assert `deleted` **and** that the account
+  no longer lists the row, which is the half the user sees.
+- Reading `transferPairServiceProvider` in the form pulls `AccountRepository` and
+  therefore `isarProvider` into every form widget test that drives a save to
+  completion. `manual_entry_suggest_test.dart` needed a fake; the other two
+  manual-entry suites never finish a save, so they were left alone.
+- Noted in passing, not acted on: `Transaction` has no `operator ==`, so
+  comparing booking lists directly is an identity comparison against freshly
+  queried rows. Compare uuids.

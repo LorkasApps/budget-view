@@ -11,6 +11,7 @@ import 'package:budget_view/features/account/data/local_balance_service.dart';
 import 'package:budget_view/features/account/domain/account_repository.dart';
 import 'package:budget_view/features/transaction/data/transaction.dart';
 import 'package:budget_view/features/transaction/domain/transaction_repository.dart';
+import 'package:budget_view/features/transaction/domain/transfer_pair_service.dart';
 
 Account _account({required String name, required int openingBalanceCents}) {
   return Account()
@@ -133,5 +134,34 @@ void main() {
     final balance = await service.watch(acc.uuid).first;
     expect(balance.transactionSumCents, -1500);
     expect(balance.totalCents, 3500);
+  });
+
+  // The point of ticket 042: a target-account transfer is not one row that
+  // happens to sit in one balance, it is two rows in two balances, kept in
+  // step by `TransferPairService`.
+  test('a transfer with a target moves both balances at once (042)',
+      () async {
+    final source =
+        await accounts.save(_account(name: 'Giro', openingBalanceCents: 5000));
+    final target = await accounts.save(
+      _account(name: 'Tagesgeld', openingBalanceCents: 5000),
+    );
+    final pairing = TransferPairService(transactions, accounts);
+    final booking = await transactions.save(
+      _tx(
+        accountUuid: source.uuid,
+        amountCents: -5000,
+        kind: TransactionKind.transfer,
+      ),
+    );
+
+    await pairing.syncCounterpart(booking, targetAccountUuid: target.uuid);
+
+    final sourceBalance = await service.watch(source.uuid).first;
+    final targetBalance = await service.watch(target.uuid).first;
+    expect(sourceBalance.transactionSumCents, -5000);
+    expect(sourceBalance.totalCents, 0);
+    expect(targetBalance.transactionSumCents, 5000);
+    expect(targetBalance.totalCents, 10000);
   });
 }

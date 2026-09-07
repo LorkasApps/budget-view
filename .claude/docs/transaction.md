@@ -13,6 +13,7 @@ Implements `SyncableEntity` (`entityType = 'transaction'`).
 | `categoryUuid` | String? | Indexed FK to `Category.uuid`; null while uncategorized. Required by manual-entry form, optional in PDF import. |
 | `amountCents` | int | **Signed**: negative = expense, positive = income |
 | `kind` | `TransactionKind` | `regular` \| `transfer`; default `regular`. A transfer is money between user's own accounts: leaves one balance, arrives in another. Transfers need no category, exclude from reports. |
+| `counterpartUuid` | String? | The other leg's `uuid` once a transfer named a target account (ticket 042). Null for everything else, including a transfer whose money left the app. No index — the value *is* the other row's unique-indexed `uuid`. Additive, so no `kDbSchemaVersion` bump |
 | `bookingDate` | DateTime | Buchungstag |
 | `description` | String | Required, non-empty |
 | `counterparty` | String | May be empty |
@@ -52,8 +53,30 @@ Two entry points:
 
 Normalization lives in `lib/core/text/normalize.dart` because tagging (ticket 013) must normalize identically.
 
+## Transfer pairs — `TransferPairService` (`domain/transfer_pair_service.dart`)
+
+Owns both legs of a transfer. Called from the UI paths, never from
+`TransactionRepository.save` (`decisions.md`, 2026-09-07).
+
+| Method | Does |
+|--------|------|
+| `syncCounterpart(source, targetAccountUuid:)` | Called right after the form's save. Creates the counter-leg, or moves and mirrors an existing one, or takes it down when the target is null or the booking is no longer a transfer |
+| `deletePair(transaction)` | Soft-deletes both legs. An unpaired booking takes the same path, so no call site has to decide which case it is in |
+| `counterpartAccountOf(transaction)` | The account holding the other leg, so a confirmation can name it. Null when unpaired |
+
+Rules the service enforces:
+
+- Counter-leg: same amount **opposite sign**, same date, `kind = transfer`, no category, `counterparty` = the source account's name, description `Umbuchung von <Konto>` when it receives the money and `Umbuchung nach <Konto>` when it loses it
+- **Moved, not rewritten** on a target change: `accountUuid` is updated and the uuid stays, so the change queue sees one `update` and user edits on that row survive
+- The description is regenerated **only while it still equals either generated wording** — that is what lets a sign flip rewrite it while leaving the user's own text alone. `counterparty` and category belong to that leg once written
+- Mirroring is a **form-edit rule**, not a `save` invariant: ticket 048 replaces a mirror leg with the bank's figures and must not propagate them
+- Nothing pairs automatically. No target means no counter-leg, which is the legal 032 case — money moving to a broker outside the app is a real transfer with nothing to mirror
+
+**Widget-test consequence:** the booking form reaches this service on every save, and the service composes `AccountRepository`, hence `isarProvider`. Any form widget test that drives a save to completion must override `transferPairServiceProvider` with a fake (`implements` works; no interface exists and none is needed).
+
 ## Providers (`domain/transaction_providers.dart`)
 - `transactionRepositoryProvider`
+- `transferPairServiceProvider` → `TransferPairService(transactionRepository, accountRepository)`
 - `transactionsProvider` (`StreamProvider.family<List<Transaction>, String>`) — per account, re-queries on `isar.transactions.watchLazy()`
 
 ## Validation (`domain/transaction_validation.dart`)
@@ -62,6 +85,8 @@ Pure statics: `description`, `amount` (magnitude — must be unsigned and ≠ 0)
 **Category check** (`category(String? categoryUuid, {TransactionKind kind})`): Returns `null` for a transfer (no category needed); for `regular` returns `'Kategorie erforderlich'` if missing.
 
 ## Form (`presentation/transaction_form_screen.dart`)
+
+**Target account** (ticket 042) — with `Umbuchung` on, a second dropdown appears: `Gegenkonto (optional)`, first item `Kein Gegenkonto`, then every non-archived account **except** the source. Changing the source account to the chosen target drops the choice, since a pair inside one account cancels out on that balance. The choice survives toggling `Umbuchung` off and on, like a picked category (041); only the save acts on it. Editing an existing pair resolves the picker's initial value through `counterpartAccountOf`, because the link stores the other *booking* while the picker shows the other *account*.
 
 **Transfer toggle** — `SwitchListTile` labelled `Umbuchung` under the Ausgabe/Einnahme toggle; subtitle says it counts in no report total and needs no category. The saved booking carries the chosen `kind`. With the switch **on**, the category row drops its required marker and its red `Pflichtfeld` text and its label reads `Kategorie (optional)` — the convention of every other optional field in this form. The suggestion marker is hidden too: the learn hook skips transfers, so accepting one would teach nothing. Toggling back restores both, and a category the user already picked survives either direction (ticket 041).
 
@@ -87,7 +112,7 @@ Pure statics: `description`, `amount` (magnitude — must be unsigned and ≠ 0)
 5. If user confirms (or no matches), proceed to `TransactionRepository.save`
 
 ## UI (`presentation/`)
-- `TransactionListScreen(account)` (`ConsumerStatefulWidget`) — saldo header (`Start … · Buchungen …`), filter row, newest-first list, swipe→delete (confirm), tap→edit, FAB→create, app-bar actions: PDF import, edit account. Each row shows a `CategoryChip`; tap opens quick-pick to reassign inline, saves immediately. The row also shows `taggingKey` (`merchant` when one was read, else `counterparty`) — the row answers "who did I pay", and `PayPal Europe S.a.r.l.` is the useless answer (ticket 047).
+- `TransactionListScreen(account)` (`ConsumerStatefulWidget`) — saldo header (`Start … · Buchungen …`), filter row, newest-first list, swipe→delete (confirm; the dialog names the other account when the booking is one leg of a transfer, and deletion always runs through `TransferPairService.deletePair` — a widget test pins that `softDelete` is never called directly), tap→edit, FAB→create, app-bar actions: PDF import, edit account. Each row shows a `CategoryChip`; tap opens quick-pick to reassign inline, saves immediately. The row also shows `taggingKey` (`merchant` when one was read, else `counterparty`) — the row answers "who did I pay", and `PayPal Europe S.a.r.l.` is the useless answer (ticket 047).
 
 **Filter row** (ticket 053) — search `TextField` (dense, `Icons.search`, hint `Suchen`, clear cross as in 038) plus an `InputChip` that opens `pickCategoryFilter`.
 

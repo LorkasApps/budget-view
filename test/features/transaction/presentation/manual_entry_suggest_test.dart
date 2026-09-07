@@ -14,6 +14,7 @@ import 'package:budget_view/features/tagging/domain/tagging_suggest_service.dart
 import 'package:budget_view/features/transaction/data/transaction.dart';
 import 'package:budget_view/features/transaction/domain/transaction_providers.dart';
 import 'package:budget_view/features/transaction/domain/transaction_repository.dart';
+import 'package:budget_view/features/transaction/domain/transfer_pair_service.dart';
 import 'package:budget_view/features/transaction/presentation/transaction_form_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -57,6 +58,25 @@ class _NoopReconciler implements RestpostenReconciler {
 
   @override
   Future<void> reconcile(String transactionUuid) async {}
+}
+
+/// The form asks the pairing service on every save (ticket 042). Nothing here
+/// is a transfer, so nothing has to happen — but the real service composes
+/// `AccountRepository`, and reaching it would open Isar.
+class _NoopPairService implements TransferPairService {
+  const _NoopPairService();
+
+  @override
+  Future<void> syncCounterpart(
+    Transaction source, {
+    required String? targetAccountUuid,
+  }) async {}
+
+  @override
+  Future<void> deletePair(Transaction transaction) async {}
+
+  @override
+  Future<Account?> counterpartAccountOf(Transaction transaction) async => null;
 }
 
 /// Records what the form hands to the learn hook, without touching the real
@@ -153,6 +173,9 @@ void main() {
           learnService ?? _RecordingLearnService(),
         ),
         restpostenReconcilerProvider.overrideWithValue(const _NoopReconciler()),
+        transferPairServiceProvider.overrideWithValue(
+          const _NoopPairService(),
+        ),
       ],
     );
     addTearDown(container.dispose);

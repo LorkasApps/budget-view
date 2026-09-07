@@ -10,21 +10,32 @@ import 'package:budget_view/features/tagging/domain/tagging_providers.dart';
 import 'package:budget_view/features/transaction/data/transaction.dart';
 import 'package:budget_view/features/transaction/domain/transaction_providers.dart';
 import 'package:budget_view/features/transaction/domain/transaction_repository.dart';
+import 'package:budget_view/features/transaction/domain/transfer_pair_service.dart';
 import 'package:budget_view/features/transaction/presentation/transaction_list_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-/// Records nothing: the list screen only reaches these two providers when a
-/// row's category chip is reassigned by hand, which none of these tests do.
-/// `implements` (not `extends`) keeps the real constructors, which want a
-/// live `Isar`, out of it — see `manual_entry_suggest_test.dart`.
+/// Records saves and soft-deletes. The former only fires when a row's
+/// category chip is reassigned by hand, which most of these tests never do;
+/// the latter must never fire at all — deletion always goes through
+/// `TransferPairService.deletePair` (ticket 042), never this repository
+/// directly. `implements` (not `extends`) keeps the real constructor, which
+/// wants a live `Isar`, out of it — see `manual_entry_suggest_test.dart`.
 class _RecordingTransactionRepository implements TransactionRepository {
-  @override
-  Future<Transaction> save(Transaction transaction) async => transaction;
+  final List<Transaction> saved = [];
+  final List<String> softDeleteCalls = [];
 
   @override
-  Future<void> softDelete(String uuid) async {}
+  Future<Transaction> save(Transaction transaction) async {
+    saved.add(transaction);
+    return transaction;
+  }
+
+  @override
+  Future<void> softDelete(String uuid) async {
+    softDeleteCalls.add(uuid);
+  }
 
   @override
   Future<Transaction?> findByUuid(String uuid) async => null;
@@ -54,6 +65,27 @@ class _RecordingTransactionRepository implements TransactionRepository {
 class _NoopLearnService implements TaggingLearnService {
   @override
   Future<void> learnFrom(Transaction transaction) async {}
+}
+
+/// Records what the swipe-delete confirmation hands to the pairing service,
+/// so a test can pin that call site without a real Isar behind it.
+class _RecordingTransferPairService implements TransferPairService {
+  final List<Transaction> deleteCalls = [];
+
+  @override
+  Future<void> syncCounterpart(
+    Transaction source, {
+    required String? targetAccountUuid,
+  }) async {}
+
+  @override
+  Future<void> deletePair(Transaction transaction) async {
+    deleteCalls.add(transaction);
+  }
+
+  @override
+  Future<Account?> counterpartAccountOf(Transaction transaction) async =>
+      null;
 }
 
 void main() {
@@ -108,7 +140,11 @@ void main() {
       ..updatedAt = now;
   }
 
-  ProviderContainer buildContainer(List<Transaction> transactions) {
+  ProviderContainer buildContainer(
+    List<Transaction> transactions, {
+    _RecordingTransactionRepository? repository,
+    _RecordingTransferPairService? pairService,
+  }) {
     final container = ProviderContainer(
       overrides: [
         transactionsProvider(account.uuid)
@@ -119,9 +155,13 @@ void main() {
             .overrideWith((ref) => Stream.value(categories)),
         categoriesProvider(true)
             .overrideWith((ref) => Stream.value(categories)),
-        transactionRepositoryProvider
-            .overrideWithValue(_RecordingTransactionRepository()),
+        transactionRepositoryProvider.overrideWithValue(
+          repository ?? _RecordingTransactionRepository(),
+        ),
         taggingLearnServiceProvider.overrideWithValue(_NoopLearnService()),
+        transferPairServiceProvider.overrideWithValue(
+          pairService ?? _RecordingTransferPairService(),
+        ),
       ],
     );
     addTearDown(container.dispose);
@@ -136,15 +176,21 @@ void main() {
 
   Future<void> pumpScreen(
     WidgetTester tester,
-    List<Transaction> transactions,
-  ) async {
+    List<Transaction> transactions, {
+    _RecordingTransactionRepository? repository,
+    _RecordingTransferPairService? pairService,
+  }) async {
     tester.view.physicalSize = const Size(1200, 2400);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
     await tester.pumpWidget(
       UncontrolledProviderScope(
-        container: buildContainer(transactions),
+        container: buildContainer(
+          transactions,
+          repository: repository,
+          pairService: pairService,
+        ),
         child: MaterialApp(home: TransactionListScreen(account: account)),
       ),
     );
@@ -337,6 +383,34 @@ void main() {
       await pumpScreen(tester, const []);
 
       expect(find.byTooltip('Nur ohne Kategorie'), findsNothing);
+    },
+  );
+
+  // Pins the accepted risk `transfer_pair_service.dart` names in its own
+  // doc comment: a future write path could forget the service and call
+  // `softDelete` directly. This is the guard, not a compiler.
+  testWidgets(
+    'swipe-delete goes through TransferPairService.deletePair, never '
+    'TransactionRepository.softDelete directly (042)',
+    (tester) async {
+      final repository = _RecordingTransactionRepository();
+      final pairService = _RecordingTransferPairService();
+      await pumpScreen(
+        tester,
+        [tx(uuid: 't1', description: 'Wocheneinkauf', amountCents: -4200)],
+        repository: repository,
+        pairService: pairService,
+      );
+
+      await tester.drag(find.byType(Dismissible), const Offset(-1000, 0));
+      await settle(tester);
+      expect(find.text('"Wocheneinkauf" wird gelöscht.'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Löschen'));
+      await settle(tester);
+
+      expect(pairService.deleteCalls.single.uuid, 't1');
+      expect(repository.softDeleteCalls, isEmpty);
     },
   );
 }
