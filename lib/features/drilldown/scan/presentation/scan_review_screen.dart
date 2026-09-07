@@ -94,6 +94,10 @@ class _ScanReviewScreenState extends ConsumerState<ScanReviewScreen> {
 
   Future<void> _dumpRecognition() async {
     final path = await widget.onDumpRecognition?.call();
+    // Also to the console, and before the mounted check so the path survives
+    // even if the screen is gone: the snackbar holds it for ten seconds, and
+    // copying a cache path off a device screen in that window is the fiddly bit.
+    debugPrint('OCR dump: ${path ?? 'kein Ergebnis'}');
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
