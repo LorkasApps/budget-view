@@ -131,3 +131,27 @@ Extract one section from a doc under `.claude/docs/` instead of reading the whol
     ...
 
 **Exit codes:** `0` OK, `1` file not found, `2` heading not found, `3` ambiguous match (prints the candidates and their line numbers).
+
+## `guard_paths.py`
+
+Not called by hand — this is the `PreToolUse` hook wired in `.claude/settings.json`. It is the backstop behind `permissions.deny`: deny rules match the path as written, while the hook also resolves it, weighs the file, and sees `Bash` readers (`cat .env`) that no path-based rule covers. Inspects paths and sizes only, never contents.
+
+**Usage:** reads hook JSON on stdin. `./.claude/helper/guard_paths.py [--max-bytes N]`, or `--self-test` to run the built-in cases.
+
+**Args:**
+- `--max-bytes N` (optional, default 65536) — `Read` above this size is rejected. Calibrated against the largest legitimate file in the repo (`pdf_import_screen.dart`, 748 lines / 26 KB) so real source always fits
+- `--self-test` (optional) — run the 16 built-in cases and exit
+
+**Output:** nothing when the call is fine. Otherwise one JSON object with `permissionDecision`:
+- `deny` — secrets (`.env`, `secrets/`, `*.pem|jks|keystore|p12`, `key.properties`, SSH keys), ballast (`build/`, `dist/`, `node_modules/`, `.dart_tool/`, `*.g.dart`, `*.lock`, `libisar.*`, `.claude/tmp/`), or oversized
+- `ask` — raw documents (`*.pdf`, `*.heic`). Not blocked: the repo holds no fixture PDFs by decision (`decisions.md`, 2026-08-11), so one appearing here is real bank data, and handing it over deliberately is legitimate — it just must never load silently
+
+**Example:**
+
+    $ echo '{"tool_name":"Read","tool_input":{"file_path":"pubspec.lock"}}' | ./.claude/helper/guard_paths.py
+    {"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", ...}}
+
+    $ ./.claude/helper/guard_paths.py --self-test
+    PASS: 16 cases
+
+**Exit codes:** `0` always for hook calls (a guard that crashes must not block the tool); `--self-test` returns `1` on a failed case.

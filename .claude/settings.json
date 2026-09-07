@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(./secrets/**)",
+      "Read(**/*.pem)",
+      "Read(**/*.jks)",
+      "Read(**/*.keystore)",
+      "Read(**/*.p12)",
+      "Read(./android/key.properties)",
+      "Read(./build/**)",
+      "Read(./dist/**)",
+      "Read(./node_modules/**)",
+      "Read(./.dart_tool/**)",
+      "Read(**/*.g.dart)",
+      "Read(**/*.lock)",
+      "Read(./.claude/tmp/**)"
+    ],
+    "ask": [
+      "Read(**/*.pdf)",
+      "Read(**/*.heic)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Read|Edit|Write|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PROJECT_DIR:-.}/.claude/helper/guard_paths.py\"",
+            "timeout": 10,
+            "statusMessage": "Guarding paths"
+          }
+        ]
+      }
+    ]
+  }
+}
