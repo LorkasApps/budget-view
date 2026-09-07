@@ -6,7 +6,7 @@
 | **Epic** | Drilldown |
 | **Domain** | Drilldown |
 | **Blocked By** | 043 (the OCR parser must carry the borrowed rules first) |
-| **Status** | In Progress |
+| **Status** | Done |
 
 ## Description
 Split out of 033. A PDF that carries a text layer is read directly — no OCR involved — and that path is done. A **scanned**
@@ -89,10 +89,27 @@ shows up.
   around an await — rendering begins inside the controller call, after the file picker is gone
 
 ## Device checks (release APK — the lesson of 034)
+
+**Not run. Waived by the user on 2026-09-07, knowingly and as an exception.** No
+scanned PDF was at hand — and a document *with* a text layer proves nothing here,
+since it takes the 033 path instead. The boxes stay unchecked on purpose: a tick
+for something nobody ran would read as evidence later.
+
 - [ ] A real scanned PDF is read end to end on a **release** build, not on `make run`
 - [ ] A multi-page scan: every page contributes positions, and the progress text advances
 - [ ] The confirmation above 10 pages appears and both answers behave
 - [ ] Note the wall-clock time per page and the APK size delta in the ticket — both are the numbers this decision rests on
+
+What this leaves exposed, so a later bug can be traced here instead of
+re-discovered: the section is named after 034 because that is where R8 struck in a
+release build and nowhere else, and `pdfx` reaches the OS's own
+`android.graphics.pdf.PdfRenderer` — a native path is exactly the kind that passes
+every test and fails once minified. The unit tests cover the seam
+(`ReceiptPdfRenderer` with a fake), never the real renderer.
+
+Of the two numbers this decision was meant to rest on, one is in: the APK size,
+verified above. The wall-clock time per page was never taken, so the throughput
+half of the `pdfx` choice is unmeasured. Nothing depends on it today.
 
 ## Out of Scope (proposed, to confirm)
 - Improving OCR accuracy itself; the rendered page is treated like a photo
