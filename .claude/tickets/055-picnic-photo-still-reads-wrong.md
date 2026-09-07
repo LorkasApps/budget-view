@@ -80,6 +80,44 @@ that did not survive contact with a real photo.
 **Next step, and the only one open:** the `OcrResult` dump of this receipt, fetched with the debug entry now in the app
 (`adb exec-out run-as de.lorkaps_apps.budget_view cat <path> > /tmp/ocr_dump.json`).
 
+## What the dump says (2026-09-07)
+Dump taken on an emulator from the original 1080 × 6362 screenshot: 81 blocks, 91 lines, 71 blocks holding exactly one line.
+Replaying the parser's own algorithm over it reproduces both reported symptoms, so the diagnosis no longer rests on a guess.
+
+**Layout.** Three columns: quantity badge at x 26–58, article block at x 92–318, price right-aligned at x≈327.
+`_priceColumnLeft` resolves to 268.
+
+**The hypothesis holds in its core, and is wrong in its premise.**
+
+- Confirmed: **no price line ever shares a band with its article name.** Of 22 price lines, 12 overlap nothing at all; the
+  other 10 overlap only a sub-line — `Bündel-Bonus`, `30% Rabatt`, `2 x 125g`, `1ko`, `4 Stück`. The tolerance is
+  `(line height + row max height) / 4` ≈ 8 px here, while the real gap between an article block's last line and its price is
+  14–30 px. Replayed: 72 rows, **14 candidates summing to 37,71 €** against a printed 62,12 €, and **50 unread rows carrying
+  every article name**. 11 of the 14 candidates have no description at all — the reported `Ohne Beschreibung`.
+- Wrong premise: **there are no fragments to reassemble.** ML Kit returns each price as one token — `129`, `399`, `1060` —
+  with the raised cents already merged, only without a separator. The assumption that `3` and `79` arrive on baselines 7 units
+  apart does not describe this dump. `_priceBand` and `_bandToCents` then do the right thing by accident: `129` → 1,29.
+- Also wrong: the inflation is not digit concatenation across a band. A promo row prints **both prices inside one line**,
+  space-separated (`649 479`, `1196 1156`, `698 678`), and `_bandToCents` reads that as `119611,56 €`. Those rows are then
+  dropped by `exceedsPositionBudget` — which is why the ~2400 € of 2026-08-25 no longer appears, and also why seven real
+  articles vanish silently. The 24 € missing from the sum are exactly those.
+
+**Reading the prices was never the defect.** Taking the rightmost token of each price line with the last two digits as cents
+sums the column to 67,49 € against the printed `Betrag 67,07` — the difference being OCR misreads. The defect is pairing.
+
+**Two further defects the dump exposes, independent of the grouping:**
+
+1. **The skip vocabulary cannot match what OCR returns.** The labels come back misspelled: `Bestelung` (one `l` missing) and
+   `Gespat` (the `r` missing). `_skipPrefixes` holds `bestellung` and `gespart`, so neither fires, and the replay shows
+   `Gespat -5.73` **entering the positions as a 5,73 € item**. The AC claiming those three words are handled is ticked but does
+   not hold on real data. `Bestelung 72.80` only escapes because 72,80 exceeds the budget, and `Betrag 67.07` only because it
+   equals it — both by luck of a bound, not by the vocabulary.
+2. **`_priceFragment` rejects a price with OCR noise in it.** Its charset is `[\d.,\s]`, so `3% 178` and `11:6 1060` are not
+   fragments, their rows lose the price entirely and land in `unreadRows`.
+
+Recorded so a later reader does not have to re-derive it: the replay was a throwaway Python mirror of the Dart, deliberately
+not kept as a helper — a second implementation of parser logic drifts. The durable artifact is the fixture below.
+
 ## Evidence to collect before any fix
 - [ ] The photo itself, handed over out of band (never committed — `decisions.md`, 2026-08-10: raw documents are not persisted)
 - [ ] The dump of its `OcrResult` from the app
