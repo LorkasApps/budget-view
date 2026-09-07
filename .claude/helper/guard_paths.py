@@ -36,7 +36,6 @@ BALLAST: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"\.g\.dart$"), "generated Isar code"),
     (re.compile(r"\.lock$"), "a lock file"),
     (re.compile(r"(^|/)(libisar\.(dylib|so)|isar\.dll)$"), "a native binary"),
-    (re.compile(r"(^|/)\.claude/tmp/"), "an agent scratch log"),
 ]
 
 # Not blocked outright: this repo holds no fixture PDFs by decision

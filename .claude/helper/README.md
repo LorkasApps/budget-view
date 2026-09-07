@@ -143,7 +143,7 @@ Not called by hand — this is the `PreToolUse` hook wired in `.claude/settings.
 - `--self-test` (optional) — run the 16 built-in cases and exit
 
 **Output:** nothing when the call is fine. Otherwise one JSON object with `permissionDecision`:
-- `deny` — secrets (`.env`, `secrets/`, `*.pem|jks|keystore|p12`, `key.properties`, SSH keys), ballast (`build/`, `dist/`, `node_modules/`, `.dart_tool/`, `*.g.dart`, `*.lock`, `libisar.*`, `.claude/tmp/`), or oversized
+- `deny` — secrets (`.env`, `secrets/`, `*.pem|jks|keystore|p12`, `key.properties`, SSH keys), ballast (`build/`, `dist/`, `node_modules/`, `.dart_tool/`, `*.g.dart`, `*.lock`, `libisar.*`), or oversized. `.claude/tmp/check.log` is deliberately **not** blocked — reading it after a failed gate is the documented workflow above; the size check governs it instead, so slice it with `offset`/`limit`
 - `ask` — raw documents (`*.pdf`, `*.heic`). Not blocked: the repo holds no fixture PDFs by decision (`decisions.md`, 2026-08-11), so one appearing here is real bank data, and handing it over deliberately is legitimate — it just must never load silently
 
 **Example:**

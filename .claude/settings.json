@@ -15,8 +15,7 @@
       "Read(./node_modules/**)",
       "Read(./.dart_tool/**)",
       "Read(**/*.g.dart)",
-      "Read(**/*.lock)",
-      "Read(./.claude/tmp/**)"
+      "Read(**/*.lock)"
     ],
     "ask": [
       "Read(**/*.pdf)",
