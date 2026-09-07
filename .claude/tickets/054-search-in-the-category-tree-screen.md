@@ -6,7 +6,7 @@
 | **Epic** | Categories |
 | **Domain** | Category |
 | **Blocked By** | None (038 shipped the filter this reuses) |
-| **Status** | Ready |
+| **Status** | Done |
 
 ## Description
 `CategoryTreeScreen` shows the whole tree with no way to narrow it down. Ticket 038 gave the *picker* a search and left the
@@ -43,15 +43,15 @@ Options, to decide during refinement:
   it, just shallower
 
 ## Acceptance Criteria
-- [ ] A search field narrows the tree through `filterCategoryTree`, unchanged from 038 — a hit keeps its subtree, the path to it
+- [x] A search field narrows the tree through `filterCategoryTree`, unchanged from 038 — a hit keeps its subtree, the path to it
       stays visible, case-insensitive substring, umlauts literal
-- [ ] While a query is active the drag handles are gone and the screen says why
-- [ ] Clearing the query brings the handles back and restores the full tree
-- [ ] With the show-archived toggle off, no archived category appears in a result; with it on, they do
-- [ ] The visible-children count is unaffected by the query
-- [ ] Long-press still archives from a filtered row, with the existing refusal when children exist
-- [ ] `filterCategoryTree` itself is untouched, and the 038 picker tests stay green
-- [ ] `make check` green
+- [x] While a query is active the drag handles are gone and the screen says why
+- [x] Clearing the query brings the handles back and restores the full tree
+- [x] With the show-archived toggle off, no archived category appears in a result; with it on, they do
+- [x] The visible-children count is unaffected by the query
+- [x] Long-press still archives from a filtered row, with the existing refusal when children exist
+- [x] `filterCategoryTree` itself is untouched, and the 038 picker tests stay green
+- [x] `make check` green
 
 ## Out of Scope (proposed, to confirm)
 - Changing the matching rule; it is shared with 038 by design
@@ -70,4 +70,38 @@ No. A two-level tree with one archived parent, built inline.
 - Output: ~1.5k tokens
 
 ### Implementation Tokens (estimate)
-_Filled after Done._
+- Input: ~55k tokens
+- Output: ~7k tokens
+- Delegated: a Sonnet sub-agent wrote the test file but died on an API error
+  before reporting; its output was verified by hand and kept
+
+## How it was built
+Two traps sat between the refined decisions and the ACs, both found while reading
+the screen rather than while running it:
+
+- **The path to a hit would have been invisible.** `filterCategoryTree` keeps
+  non-matching ancestors as the path, but `flattenVisible` only descends into
+  nodes in the expanded set — and this screen starts collapsed. So while a query
+  is active every node is treated as expanded, the way the picker already does
+  it. `_expanded` itself is never touched by a query, which is what lets clearing
+  the search restore the previous collapse state.
+- **`N Unterkategorien` would have shrunk.** For a node kept only as a path,
+  `filterCategoryTree` rebuilds it with its children pruned, so
+  `node.children.length` counts matches rather than children. The subtitle now
+  counts off the unfiltered list. `_delete` takes that same count, so its refusal
+  states the real number too; the refusal *condition* is unchanged, archived
+  children still being the repository's business alone.
+
+Two choices beyond what the ticket settled:
+
+- **While searching the list is a plain `ListView`**, not a `ReorderableListView`
+  with its handles hidden. That widget also exposes reorder through semantics
+  actions, so hiding the handle alone would have left sorting reachable on a
+  filtered list — the exact thing the refinement decided against.
+- **The expand chevrons go too**, since everything is expanded already and a
+  toggle that visibly does nothing is worse than no toggle.
+
+Testing note for whoever comes next: on this screen `find.text('<name>')` matches
+twice once a query is typed, because the search field holds that text as well.
+The suite uses `find.widgetWithText(ListTile, name)`. Seven tests failed on this
+before it was understood — the finder, not the screen, was wrong.

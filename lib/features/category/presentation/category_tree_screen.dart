@@ -19,6 +19,13 @@ class CategoryTreeScreen extends ConsumerStatefulWidget {
 class _CategoryTreeScreenState extends ConsumerState<CategoryTreeScreen> {
   bool _showArchived = false;
   final Set<String> _expanded = <String>{};
+  final _search = TextEditingController();
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
 
   void _openForm({Category? existing}) {
     Navigator.of(context).push(
@@ -34,13 +41,15 @@ class _CategoryTreeScreenState extends ConsumerState<CategoryTreeScreen> {
     );
   }
 
-  Future<void> _delete(CategoryNode node) async {
+  /// [childCount] comes from the unfiltered list, not from `node.children`,
+  /// which a search prunes — the refusal must state the real number.
+  Future<void> _delete(CategoryNode node, int childCount) async {
     // Children are already known here, so refuse before asking rather than
     // asking and then refusing. The repository still guards the real rule,
     // including archived children that this list may be hiding.
-    if (node.hasChildren) {
+    if (childCount > 0) {
       _notify(
-        'Kategorie hat ${node.children.length} Unterkategorien '
+        'Kategorie hat $childCount Unterkategorien '
         '— bitte zuerst verschieben.',
       );
       return;
@@ -103,6 +112,9 @@ class _CategoryTreeScreenState extends ConsumerState<CategoryTreeScreen> {
   @override
   Widget build(BuildContext context) {
     final categoriesAsync = ref.watch(categoriesProvider(_showArchived));
+    final theme = Theme.of(context);
+    final query = _search.text;
+    final searching = query.trim().isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(
@@ -119,47 +131,122 @@ class _CategoryTreeScreenState extends ConsumerState<CategoryTreeScreen> {
           ),
         ],
       ),
-      body: categoriesAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Fehler: $e')),
-        data: (categories) {
-          if (categories.isEmpty) {
-            return const Center(
-              child: Text('Noch keine Kategorien. Lege eine an.'),
-            );
-          }
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+            child: TextField(
+              controller: _search,
+              decoration: InputDecoration(
+                isDense: true,
+                prefixIcon: const Icon(Icons.search),
+                hintText: 'Suchen',
+                border: const OutlineInputBorder(),
+                suffixIcon: query.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.clear),
+                        tooltip: 'Suche leeren',
+                        onPressed: () => setState(_search.clear),
+                      ),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+          ),
+          if (searching)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, size: 16, color: theme.hintColor),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Sortieren erst ohne Suche',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+          Expanded(
+            child: categoriesAsync.when(
+              loading: () => const Center(child: CircularProgressIndicator()),
+              error: (e, _) => Center(child: Text('Fehler: $e')),
+              data: (categories) {
+                if (categories.isEmpty) {
+                  return const Center(
+                    child: Text('Noch keine Kategorien. Lege eine an.'),
+                  );
+                }
 
-          final visible = flattenVisible(
-            buildCategoryTree(categories),
-            _expanded,
-          );
+                final roots = buildCategoryTree(categories);
+                // Every node expanded while searching: `filterCategoryTree`
+                // keeps the path down to a hit, and a collapsed path is a path
+                // nobody can see.
+                final visible = flattenVisible(
+                  searching ? filterCategoryTree(roots, query) : roots,
+                  searching
+                      ? {for (final c in categories) c.uuid}
+                      : _expanded,
+                );
+                if (visible.isEmpty) {
+                  return const Center(child: Text('Kein Treffer.'));
+                }
 
-          return ReorderableListView.builder(
-            // Default drag handles hijack long-press, which archives here.
-            buildDefaultDragHandles: false,
-            itemCount: visible.length,
-            onReorderItem: (oldIndex, newIndex) =>
-                _reorder(visible, oldIndex, newIndex),
-            itemBuilder: (context, index) {
-              final node = visible[index];
-              return _CategoryRow(
-                key: ValueKey(node.category.uuid),
-                node: node,
-                index: index,
-                expanded: _expanded.contains(node.category.uuid),
-                onToggleExpanded: () => setState(() {
-                  final uuid = node.category.uuid;
-                  if (!_expanded.remove(uuid)) _expanded.add(uuid);
-                }),
-                onEdit: () => _openForm(existing: node.category),
-                onDelete: () => _delete(node),
-                onRestore: () => ref
-                    .read(categoryRepositoryProvider)
-                    .restore(node.category.uuid),
-              );
-            },
-          );
-        },
+                // Counted off the unfiltered list: a search prunes a path
+                // node's children, and a subtitle that shrinks with a query
+                // reads as if children had been archived or lost.
+                final childCounts = <String, int>{};
+                for (final category in categories) {
+                  final parent = category.parentUuid;
+                  if (parent == null) continue;
+                  childCounts[parent] = (childCounts[parent] ?? 0) + 1;
+                }
+
+                Widget rowAt(int index) {
+                  final node = visible[index];
+                  final childCount = childCounts[node.category.uuid] ?? 0;
+                  return _CategoryRow(
+                    key: ValueKey(node.category.uuid),
+                    node: node,
+                    index: index,
+                    childCount: childCount,
+                    searching: searching,
+                    expanded: _expanded.contains(node.category.uuid),
+                    onToggleExpanded: () => setState(() {
+                      final uuid = node.category.uuid;
+                      if (!_expanded.remove(uuid)) _expanded.add(uuid);
+                    }),
+                    onEdit: () => _openForm(existing: node.category),
+                    onDelete: () => _delete(node, childCount),
+                    onRestore: () => ref
+                        .read(categoryRepositoryProvider)
+                        .restore(node.category.uuid),
+                  );
+                }
+
+                // A plain list while searching rather than a reorderable one
+                // with hidden handles: `ReorderableListView` also offers
+                // reorder through semantics actions, so hiding the handle
+                // alone would leave sorting reachable on a filtered list.
+                if (searching) {
+                  return ListView.builder(
+                    itemCount: visible.length,
+                    itemBuilder: (_, index) => rowAt(index),
+                  );
+                }
+
+                return ReorderableListView.builder(
+                  // Default handles hijack long-press, which archives here.
+                  buildDefaultDragHandles: false,
+                  itemCount: visible.length,
+                  onReorderItem: (oldIndex, newIndex) =>
+                      _reorder(visible, oldIndex, newIndex),
+                  itemBuilder: (context, index) => rowAt(index),
+                );
+              },
+            ),
+          ),
+        ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _openForm,
@@ -174,6 +261,8 @@ class _CategoryRow extends StatelessWidget {
     super.key,
     required this.node,
     required this.index,
+    required this.childCount,
+    required this.searching,
     required this.expanded,
     required this.onToggleExpanded,
     required this.onEdit,
@@ -183,6 +272,8 @@ class _CategoryRow extends StatelessWidget {
 
   final CategoryNode node;
   final int index;
+  final int childCount;
+  final bool searching;
   final bool expanded;
   final VoidCallback onToggleExpanded;
   final VoidCallback onEdit;
@@ -197,7 +288,9 @@ class _CategoryRow extends StatelessWidget {
     return Padding(
       padding: EdgeInsets.only(left: node.depth * 20),
       child: ListTile(
-        leading: node.hasChildren
+        // No chevron while searching: everything is expanded already, so a
+        // toggle would be a control that visibly does nothing.
+        leading: !searching && node.hasChildren
             ? IconButton(
                 tooltip: expanded ? 'Einklappen' : 'Ausklappen',
                 icon: Icon(
@@ -227,9 +320,9 @@ class _CategoryRow extends StatelessWidget {
             ),
           ],
         ),
-        subtitle: node.hasChildren
+        subtitle: childCount > 0
             ? Text(
-                '${node.children.length} Unterkategorien',
+                '$childCount Unterkategorien',
                 style: theme.textTheme.bodySmall,
               )
             : null,
@@ -239,10 +332,12 @@ class _CategoryRow extends StatelessWidget {
                 icon: const Icon(Icons.unarchive_outlined),
                 onPressed: onRestore,
               )
-            : ReorderableDragStartListener(
-                index: index,
-                child: const Icon(Icons.drag_handle),
-              ),
+            : searching
+                ? null
+                : ReorderableDragStartListener(
+                    index: index,
+                    child: const Icon(Icons.drag_handle),
+                  ),
         onTap: onEdit,
         onLongPress: category.archived ? null : onDelete,
       ),

@@ -61,6 +61,20 @@ Pure tree-building functions:
 ## UI (`presentation/`)
 **`CategoryTreeScreen`**: expandable tree view, drag-to-reorder within siblings, tap → edit, long-press → archive (refused if children exist—UI checks before asking). Show archived toggle in app bar. Archived rows show restore button instead of drag handle. Reorder across levels refused with snackbar.
 
+Search (ticket 054), through the same `filterCategoryTree` as the picker:
+
+| While a query is active | Why |
+|-------------------------|-----|
+| Every node counts as expanded | `filterCategoryTree` keeps the path down to a hit, and this screen starts collapsed — a collapsed path is a path nobody sees. `_expanded` is not touched, so clearing the search restores the previous collapse state |
+| Plain `ListView`, not `ReorderableListView` | Handles *and* the widget itself go: `ReorderableListView` also offers reorder via semantics actions, so hiding the handle alone would leave sorting reachable on a filtered list |
+| Hint `Sortieren erst ohne Suche` | Says why the handles left |
+| Expand chevrons hidden | Everything is expanded; a toggle that does nothing visible is worse than none |
+| `N Unterkategorien` counted off the **unfiltered** list | A path node's children are pruned by the filter, and a number shrinking with a query reads as if children were archived or lost. `_delete` uses the same count, so its refusal states the real number |
+| Archived rows follow the toggle only | Search narrows what the screen shows; the toggle decides what the screen is about. A query must not override an explicit choice |
+| `Kein Treffer.` on no match | Same string as the picker |
+
+Testing note: `find.text('<name>')` matches twice on this screen once a query is typed — the search field holds that text too. Use `find.widgetWithText(ListTile, name)`.
+
 Non-obvious details:
 - `buildDefaultDragHandles: false` with explicit `ReorderableDragStartListener` handle (default would hijack long-press needed for archive).
 - Visible children count shown as subtitle.
