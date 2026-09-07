@@ -1,0 +1,76 @@
+{
+  "baselineVersion": "1.0.0",
+  "installedAt": "2026-09-07",
+  "installMode": "merged-into-existing",
+  "notes": [
+    "Repo already carried a hand-built equivalent when the baseline was installed, so this is a merge rather than a fresh write. Deviations are listed below and are deliberate; a re-run should treat them as user-owned rather than drift to be corrected.",
+    "The marker table in the skill has no Dart/Flutter row. pubspec.yaml is the only marker here and detection would have produced no language-specific deny rules, so build/, .dart_tool/, *.g.dart and *.lock were derived by hand. *.g.dart is the heavy one in this repo: 15009 lines across four generated Isar files."
+  ],
+  "deviations": {
+    "hook": {
+      "expected": ".claude/hooks/guard_context.py",
+      "actual": ".claude/helper/guard_paths.py",
+      "why": "Pre-existing hook with 21 self-test cases. It matches Read|Edit|Write|NotebookEdit|Bash, so unlike the baseline's Read|Grep|Glob|Bash it also stops writes into build/. It carries project knowledge a generic guard cannot: *.g.dart, an ask rather than a deny for raw documents (no fixture PDFs by decision, decisions.md 2026-08-11), and a deliberate non-block on .claude/tmp/check.log, which the project workflow requires the agent to read after a failed gate. Installing a second hook alongside it would mean two sources of truth for one rule.",
+      "reRun": "Update guard_paths.py instead of writing guard_context.py, or ask before replacing."
+    },
+    "sizeThreshold": {
+      "expected": "100 KB",
+      "actual": "64 KB",
+      "why": "Calibrated against the largest legitimate file in this repo (pdf_import_screen.dart, 748 lines / 26 KB) and the largest doc (receipt-scan.md, 28 KB), leaving 2.3x headroom while still catching the generated files."
+    },
+    "defaultMode": {
+      "expected": "plan",
+      "actual": "not set",
+      "why": "Declined by the user on 2026-09-07. The project already owns its planning layer: tickets are refined and ACs locked before implementation, with a hard stop after ticket creation. Plan mode would be a second gate in front of an existing one."
+    },
+    "claudeMdBlock": {
+      "why": "Inserted with markers as specified, but two facts were corrected to match this repo: the hook path and the size threshold. Verbatim text would have pointed future sessions at a file that does not exist.",
+      "alsoTrimmed": "The hand-written 'Cheap lookups first' section was cut down to its project-specific half so the block and the project content do not restate each other."
+    }
+  },
+  "ownedDenyRules": [
+    "Read(**/.env)",
+    "Read(**/.env.*)",
+    "Read(**/secrets/**)",
+    "Read(**/*.pem)",
+    "Read(**/*.p12)",
+    "Read(**/*.pfx)",
+    "Read(**/id_rsa)",
+    "Read(**/id_ed25519)",
+    "Read(**/.npmrc)",
+    "Read(**/.netrc)",
+    "Read(**/credentials)",
+    "Read(**/credentials.json)",
+    "Read(**/node_modules/**)",
+    "Read(**/vendor/**)",
+    "Read(**/dist/**)",
+    "Read(**/build/**)",
+    "Read(**/coverage/**)",
+    "Read(**/.next/**)",
+    "Read(**/.venv/**)",
+    "Read(**/__pycache__/**)",
+    "Read(**/*.lock)",
+    "Read(**/package-lock.json)",
+    "Read(**/*.min.js)",
+    "Read(**/*.min.css)",
+    "Read(**/*.map)"
+  ],
+  "userOwnedDenyRules": [
+    "Read(**/*.jks)",
+    "Read(**/*.keystore)",
+    "Read(**/key.properties)",
+    "Read(**/.dart_tool/**)",
+    "Read(**/*.g.dart)"
+  ],
+  "userOwnedAskRules": [
+    "Read(**/*.pdf)",
+    "Read(**/*.heic)"
+  ],
+  "ownedSettingsKeys": [
+    "permissions.deny"
+  ],
+  "ownedFiles": [
+    ".claude/commands/scope.md",
+    "CLAUDE.md#token-efficiency-baseline"
+  ]
+}

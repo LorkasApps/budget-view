@@ -23,18 +23,24 @@ ASK = "ask"
 SECRETS: list[tuple[re.Pattern[str], str]] = [
     (re.compile(r"(^|/)\.env(\.|$)"), "an environment file"),
     (re.compile(r"(^|/)secrets?/"), "a secrets directory"),
-    (re.compile(r"\.(pem|jks|keystore|p12|der)$"), "a key or certificate"),
+    (re.compile(r"\.(pem|jks|keystore|p12|pfx|der)$"), "a key or certificate"),
     (re.compile(r"(^|/)key\.properties$"), "the Android signing config"),
     (re.compile(r"(^|/)id_(rsa|dsa|ecdsa|ed25519)$"), "an SSH private key"),
+    (re.compile(r"(^|/)\.(npmrc|netrc)$"), "a registry or network credential"),
+    (re.compile(r"(^|/)credentials(\.json)?$"), "a credentials file"),
 ]
 
 BALLAST: list[tuple[re.Pattern[str], str]] = [
     (
-        re.compile(r"(^|/)(build|dist|node_modules|\.dart_tool)/"),
-        "a build or dependency directory",
+        re.compile(
+            r"(^|/)(build|dist|node_modules|vendor|coverage|\.next|\.venv"
+            r"|__pycache__|\.dart_tool)/"
+        ),
+        "a build, dependency or coverage directory",
     ),
     (re.compile(r"\.g\.dart$"), "generated Isar code"),
     (re.compile(r"\.lock$"), "a lock file"),
+    (re.compile(r"\.min\.(js|css)$|\.map$"), "a minified or source-map artifact"),
     (re.compile(r"(^|/)(libisar\.(dylib|so)|isar\.dll)$"), "a native binary"),
 ]
 
@@ -142,7 +148,12 @@ CASES: list[tuple[dict, str | None]] = [
     (read_case("secrets/token.txt"), DENY),
     (read_case("a/b.pem"), DENY),
     (read_case("android/key.properties"), DENY),
+    (read_case(".npmrc"), DENY),
+    (read_case("gcp/credentials.json"), DENY),
+    (read_case("a/b.pfx"), DENY),
     (read_case("build/app/out.apk"), DENY),
+    (read_case("coverage/lcov.info"), DENY),
+    (read_case("web/app.min.js"), DENY),
     (read_case("lib/features/transaction/data/transaction.g.dart"), DENY),
     (read_case("pubspec.lock"), DENY),
     ({"tool_name": "Bash", "tool_input": {"command": "cat .env"}}, DENY),
