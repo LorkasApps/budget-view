@@ -28,11 +28,23 @@ never mark `Done` with an unchecked AC.
 | `make release-check` | check + APK; R8 runs nowhere else |
 | `make help` | everything else |
 
-## Helper scripts before Read/Grep
+## Cheap lookups first
 
-`.claude/helper/README.md`. `doc_section.py` for a slice of a long doc,
-`ticket_status_count.py` for backlog state, `check.py` for the gate. If a
-question needs three files read, write a helper instead.
+In this order, never skipping down:
+
+1. **Helper script** — `.claude/helper/README.md`. `doc_section.py` for a slice
+   of a long doc, `ticket_status_count.py` for backlog state, `check.py` for the
+   gate. A question needing three files read is a helper, not three reads.
+2. **LSP for symbols** — `goToDefinition`, `findReferences`, `documentSymbol`,
+   `workspaceSymbol`. Anything shaped like an identifier goes here. Grep is for
+   strings and phrases: error messages, German UI text, config keys.
+3. **Explore subagent** for open-ended recon — "how does X work", "where does Y
+   live". Past three file-locator queries it belongs in a subagent, so the grep
+   dumps stay in its context and only the summary comes back.
+4. **Read** last, with `offset`/`limit` before the whole file.
+
+`*.g.dart`, `build/`, `.dart_tool/` and `*.lock` are blocked outright — see
+`guard_paths.py`. If a read is refused, that is the rule working, not a bug.
 
 ## Gotchas
 
