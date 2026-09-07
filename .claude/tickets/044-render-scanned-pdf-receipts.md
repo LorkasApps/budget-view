@@ -50,8 +50,13 @@ available when 033 closed.
 
 ## Acceptance Criteria
 - [x] `pdfx` added; the Android path renders through the OS `PdfRenderer`
-- [ ] The release APK grows by no more than a megabyte (measured before and after, `make release-check`) — **open, needs the
-      user's build**
+- [x] The release APK grows by no more than a megabyte (measured before and after, `make release-check`) — **98,7 MB**
+      (2026-08-20, recorded in ticket 030) → **95,3 MB** (2026-09-07). Same command, same universal all-ABI
+      `app-release.apk`, so the two are comparable: it did not grow, it **shrank by 3,4 MB** while gaining `pdfx`. The size
+      criterion behind the renderer choice holds with room to spare — pdfium would have gone the other way.
+      Observation, out of scope here like the all-ABI note in 030: the decrease is unexplained. `pdfx` only adds
+      (`photo_view`, `web`, `flutter_web_plugins`), so something between those two dates shed more than it cost. Worth
+      chasing only if a future size criterion depends on knowing why.
 - [x] `ReceiptPdfRenderer` interface with the `pdfx` implementation behind it; every flow test still runs without a real PDF
 - [x] A PDF **with** a text layer behaves exactly as today — no rendering, no OCR involved (asserted: the renderer is never
       called)

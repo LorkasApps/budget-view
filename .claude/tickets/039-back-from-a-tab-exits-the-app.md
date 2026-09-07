@@ -7,7 +7,7 @@
 | **Domain** | Infra |
 | **Blocked By** | None |
 | **Severity** | Medium |
-| **Status** | In Progress |
+| **Status** | Done |
 
 ## Description
 `AppShell` switches three tabs over an `IndexedStack`. The stack has no navigation history of its own, so the system back
@@ -73,12 +73,12 @@ Since the shell landed (ticket 020, extended by 029). No device pass had happene
   handled it, index back to 0), `false` at `Konten` (the route may pop, the rest is the platform's)
 
 ## Device checks (predictive back touches every route)
-- [ ] Tab root: gesture returns to `Konten`, and no half-finished preview animation is left on screen
-- [ ] Pushed screen (`Import-Historie`, `Tagging-Regeln`, forecast, trends): the gesture shows the preview and pops
-- [ ] Bottom sheets — category picker, line-item sheet: the gesture dismisses the sheet, not the screen behind it
-- [ ] Dialogs — quick-create, every confirm dialog: the gesture cancels the dialog and writes nothing
-- [ ] A booking form with unsaved input: the gesture must not make discarding easier than it is today
-- [ ] Scan review with candidates: the gesture does not silently drop a reviewed list
+- [x] Tab root: gesture returns to `Konten`, and no half-finished preview animation is left on screen
+- [x] Pushed screen (`Import-Historie`, `Tagging-Regeln`, forecast, trends): the gesture shows the preview and pops
+- [x] Bottom sheets — category picker, line-item sheet: the gesture dismisses the sheet, not the screen behind it
+- [x] Dialogs — quick-create, every confirm dialog: the gesture cancels the dialog and writes nothing
+- [x] A booking form with unsaved input: the gesture must not make discarding easier than it is today
+- [x] Scan review with candidates: the gesture does not silently drop a reviewed list
 
 ## Affected Tests
 - A widget test can drive back at shell level: pump `AppShell`, select a tab, invoke the pop and assert the selected index
@@ -93,4 +93,12 @@ No.
 - Output: ~2k tokens
 
 ### Implementation Tokens (estimate)
-_Filled after Done._
+Not recorded: the implementation landed in an earlier session and its cost was
+never written down. This session only ran the device pass — roughly ~3k input,
+~1k output for that.
+
+## Verified
+Device pass on 2026-09-07 against the release APK of that day (95,3 MB): all six
+routes behave, reported as passing without exception. `infrastructure.md` already
+carried the `PopScope<void>` and predictive-back notes from when the code landed,
+so nothing needed adding there.
