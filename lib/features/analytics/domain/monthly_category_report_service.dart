@@ -8,6 +8,7 @@ import '../../drilldown/domain/line_item_repository.dart';
 import '../../transaction/data/transaction.dart';
 import '../../transaction/domain/transaction_repository.dart';
 import 'monthly_category_report.dart';
+import 'result_series.dart';
 
 /// Aggregates bookings into the category tree, one month at a time.
 ///
@@ -132,6 +133,44 @@ class MonthlyCategoryReportService {
       cursor = DateTime(cursor.year, cursor.month + 1);
     }
     return points;
+  }
+
+  /// Income, expenses and their difference for every month of the span, oldest
+  /// first.
+  ///
+  /// Runs [computeSeries] once per direction instead of aggregating a second
+  /// time: the figures are the very `totalCents` the table below them shows, so
+  /// a result cannot contradict its own rows. The price is one extra load per
+  /// recomputation, accepted for a local database with one user (ticket 052).
+  ///
+  /// Both windows are non-null, so the two series cover the same months in the
+  /// same order and can be zipped by index.
+  Future<ResultSeries> computeResultSeries({
+    required DateTime anchorMonth,
+    required int windowMonths,
+    String? accountUuid,
+  }) async {
+    final expenses = await computeSeries(
+      anchorMonth: anchorMonth,
+      windowMonths: windowMonths,
+      accountUuid: accountUuid,
+      direction: ReportDirection.expenses,
+    );
+    final income = await computeSeries(
+      anchorMonth: anchorMonth,
+      windowMonths: windowMonths,
+      accountUuid: accountUuid,
+      direction: ReportDirection.income,
+    );
+    return ResultSeries([
+      for (var i = 0; i < expenses.length; i++)
+        MonthResult(
+          year: expenses[i].year,
+          month: expenses[i].month,
+          incomeCents: income[i].report.totalCents,
+          expenseCents: expenses[i].report.totalCents,
+        ),
+    ]);
   }
 
   MonthlyCategoryReport _reportFrom(

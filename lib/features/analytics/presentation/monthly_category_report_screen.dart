@@ -9,11 +9,18 @@ import '../../category/presentation/category_style.dart';
 import '../domain/analytics_providers.dart';
 import '../domain/forecast.dart';
 import '../domain/monthly_category_report.dart';
+import '../domain/result_series.dart';
 import 'account_filter_sheet.dart';
 import 'forecast_screen.dart';
+import 'result_view.dart';
+
+/// Which span the screen describes. A mode of one surface rather than a second
+/// screen: one set of filters, and one load answers both (ticket 052).
+enum _ReportMode { month, year }
 
 /// Month → category breakdown, donut on top and the same numbers as a table
-/// beneath. Owns the filter state; drilldowns inherit it unchanged.
+/// beneath, with the month's result above it. `Jahr` swaps the category table
+/// for twelve month rows. Owns the filter state; drilldowns inherit it as is.
 class MonthlyCategoryReportScreen extends ConsumerStatefulWidget {
   const MonthlyCategoryReportScreen({super.key});
 
@@ -25,41 +32,115 @@ class MonthlyCategoryReportScreen extends ConsumerStatefulWidget {
 class _MonthlyCategoryReportScreenState
     extends ConsumerState<MonthlyCategoryReportScreen> {
   MonthlyReportFilter _filter = MonthlyReportFilter.of(DateTime.now());
+  _ReportMode _mode = _ReportMode.month;
+
+  /// The month survives a trip through year mode, so switching back lands where
+  /// it left. Direction is deliberately absent: a result covers both.
+  ResultFilter get _resultFilter => ResultFilter(
+    year: _filter.year,
+    month: _mode == _ReportMode.year ? null : _filter.month,
+    accountUuid: _filter.accountUuid,
+  );
 
   @override
   Widget build(BuildContext context) {
-    final report = ref.watch(monthlyCategoryReportProvider(_filter));
+    final result = ref.watch(resultSeriesProvider(_resultFilter));
     return Scaffold(
       appBar: AppBar(title: const Text('Report')),
       body: Column(
         children: [
           _FilterBar(
             filter: _filter,
+            mode: _mode,
             onChanged: (filter) => setState(() => _filter = filter),
+            onModeChanged: (mode) => setState(() => _mode = mode),
           ),
           const Divider(height: 1),
           Expanded(
-            child: report.when(
-              data: (data) => data.isEmpty
-                  ? _EmptyState(filter: _filter)
-                  : ReportLevelView(
-                      report: data,
-                      filter: _filter,
-                      parentUuid: null,
-                    ),
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text('Report nicht berechenbar: $error'),
-                ),
-              ),
-            ),
+            child: _mode == _ReportMode.year
+                ? _YearBody(
+                    year: _filter.year,
+                    result: result,
+                    onMonthTap: _openMonth,
+                  )
+                : _MonthBody(filter: _filter, result: result),
           ),
         ],
       ),
     );
   }
+
+  void _openMonth(MonthResult point) => setState(() {
+    _filter = _filter.withMonth(point.monthStart);
+    _mode = _ReportMode.month;
+  });
+}
+
+class _MonthBody extends ConsumerWidget {
+  const _MonthBody({required this.filter, required this.result});
+
+  final MonthlyReportFilter filter;
+  final AsyncValue<ResultSeries> result;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final report = ref.watch(monthlyCategoryReportProvider(filter));
+    final series = result.valueOrNull;
+    return Column(
+      children: [
+        // Rendered even for an empty month: "nothing happened" and "balanced"
+        // are both zero, and the table below keeps its own empty state. A
+        // failure needs no message here — the report area carries it.
+        if (series != null) ...[
+          ResultSummaryLine(series: series),
+          const Divider(height: 1),
+        ],
+        Expanded(
+          child: report.when(
+            data: (data) => data.isEmpty
+                ? _EmptyState(filter: filter)
+                : ReportLevelView(
+                    report: data,
+                    filter: filter,
+                    parentUuid: null,
+                  ),
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (error, _) => Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text('Report nicht berechenbar: $error'),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _YearBody extends StatelessWidget {
+  const _YearBody({
+    required this.year,
+    required this.result,
+    required this.onMonthTap,
+  });
+
+  final int year;
+  final AsyncValue<ResultSeries> result;
+  final ValueChanged<MonthResult> onMonthTap;
+
+  @override
+  Widget build(BuildContext context) => result.when(
+    data: (series) =>
+        YearResultView(year: year, series: series, onMonthTap: onMonthTap),
+    loading: () => const Center(child: CircularProgressIndicator()),
+    error: (error, _) => Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Text('Ergebnis nicht berechenbar: $error'),
+      ),
+    ),
+  );
 }
 
 /// One level of the report: the donut plus the table below it. Reused verbatim
@@ -261,10 +342,17 @@ class CategorySubtreeReportScreen extends ConsumerWidget {
 }
 
 class _FilterBar extends ConsumerWidget {
-  const _FilterBar({required this.filter, required this.onChanged});
+  const _FilterBar({
+    required this.filter,
+    required this.mode,
+    required this.onChanged,
+    required this.onModeChanged,
+  });
 
   final MonthlyReportFilter filter;
+  final _ReportMode mode;
   final ValueChanged<MonthlyReportFilter> onChanged;
+  final ValueChanged<_ReportMode> onModeChanged;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -273,6 +361,7 @@ class _FilterBar extends ConsumerWidget {
     for (final account in accounts) {
       if (account.uuid == filter.accountUuid) accountLabel = account.name;
     }
+    final isYear = mode == _ReportMode.year;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 4, 8, 8),
@@ -281,20 +370,29 @@ class _FilterBar extends ConsumerWidget {
           Row(
             children: [
               IconButton(
-                tooltip: 'Vorheriger Monat',
+                tooltip: isYear ? 'Vorheriges Jahr' : 'Vorheriger Monat',
                 icon: const Icon(Icons.chevron_left),
-                onPressed: () => onChanged(filter.shiftMonths(-1)),
+                onPressed: () =>
+                    onChanged(filter.shiftMonths(isYear ? -12 : -1)),
               ),
               Expanded(
-                child: TextButton(
-                  onPressed: () => _pickMonth(context),
-                  child: Text(formatMonthYearDe(filter.year, filter.month)),
-                ),
+                child: isYear
+                    // Arrows and a label, no picker: `DatePickerMode` knows
+                    // only day and year grids, and repeating that crutch one
+                    // level up would be worse than two arrows (decisions.md,
+                    // 2026-08-20).
+                    ? Center(child: Text('${filter.year}'))
+                    : TextButton(
+                        onPressed: () => _pickMonth(context),
+                        child: Text(
+                          formatMonthYearDe(filter.year, filter.month),
+                        ),
+                      ),
               ),
               IconButton(
-                tooltip: 'Nächster Monat',
+                tooltip: isYear ? 'Nächstes Jahr' : 'Nächster Monat',
                 icon: const Icon(Icons.chevron_right),
-                onPressed: () => onChanged(filter.shiftMonths(1)),
+                onPressed: () => onChanged(filter.shiftMonths(isYear ? 12 : 1)),
               ),
             ],
           ),
@@ -314,21 +412,34 @@ class _FilterBar extends ConsumerWidget {
                   if (pick != null) onChanged(filter.withAccount(pick.accountUuid));
                 },
               ),
-              SegmentedButton<ReportDirection>(
+              SegmentedButton<_ReportMode>(
                 segments: const [
-                  ButtonSegment(
-                    value: ReportDirection.expenses,
-                    label: Text('Ausgaben'),
-                  ),
-                  ButtonSegment(
-                    value: ReportDirection.income,
-                    label: Text('Einnahmen'),
-                  ),
+                  ButtonSegment(value: _ReportMode.month, label: Text('Monat')),
+                  ButtonSegment(value: _ReportMode.year, label: Text('Jahr')),
                 ],
-                selected: {filter.direction},
+                selected: {mode},
                 onSelectionChanged: (selection) =>
-                    onChanged(filter.withDirection(selection.first)),
+                    onModeChanged(selection.first),
               ),
+              // Hidden in year mode: no table is left for the direction to act
+              // on, and a filter without effect is worse than none. It never
+              // reached the result figures in the first place.
+              if (!isYear)
+                SegmentedButton<ReportDirection>(
+                  segments: const [
+                    ButtonSegment(
+                      value: ReportDirection.expenses,
+                      label: Text('Ausgaben'),
+                    ),
+                    ButtonSegment(
+                      value: ReportDirection.income,
+                      label: Text('Einnahmen'),
+                    ),
+                  ],
+                  selected: {filter.direction},
+                  onSelectionChanged: (selection) =>
+                      onChanged(filter.withDirection(selection.first)),
+                ),
             ],
           ),
         ],

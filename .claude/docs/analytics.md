@@ -21,6 +21,15 @@ Named ctor `.of(DateTime)`, getter `monthStart`, and copies `shiftMonths(int)`, 
 
 `MonthlyReportPoint` — one month of a series: `year`, `month`, `report`, getter `monthStart`. Travels next to the report (not inside it) so `MonthlyCategoryReport.empty` can stay `const`.
 
+## Result model — `domain/result_series.dart`
+Income against expenses — the figure the direction filter can never show, since it shows one of the two at a time.
+
+**`ResultFilter`** — value-equal (family key of `resultSeriesProvider`). `year`, `month` (**`null` = the whole calendar year**), `accountUuid` (`null` = all non-archived). Getters `isYear`, `anchorMonth` (`DateTime(year, month ?? 12)`) and `windowMonths` (`1` or `12`) map the mode onto `computeSeries`' anchor/window language, so that mapping lives in one place. Copy helper `withAccount`. **No `direction`** — a result covers both, and having it in the key would recompute on every direction tap.
+
+**`MonthResult`** — `year`, `month`, `incomeCents`, `expenseCents` (both magnitudes, as the report carries them), `netCents` = income − expenses, getter `monthStart`. The subtraction is the only place a sign is made.
+
+**`ResultSeries`** — `points` (oldest first) plus `incomeCents` / `expenseCents` / `netCents`, which **fold over the points**. A one-month series therefore answers with that month's own figures: month mode and year mode read the same three numbers through the same path and cannot disagree, and the year total is the sum of its rows by construction. `ResultSeries.empty` has no points and answers zero three times.
+
 ## Service — `domain/monthly_category_report_service.dart`
 `MonthlyCategoryReportService(transactionRepo, lineItemRepo, categoryRepo, accountRepo)`.
 
@@ -42,6 +51,12 @@ Named ctor `.of(DateTime)`, getter `monthStart`, and copies `shiftMonths(int)`, 
 - Sums stay signed internally and become magnitudes only at the row edge (`abs()`), so a subtree can net against itself.
 - Rollup walks `buildCategoryTree`; a parent netting to zero keeps its row while a descendant has one, or that descendant would have no level to sit on.
 - The report trusts the Restposten invariant from ticket 019: positions add up to their booking, so replacing a booking by its positions loses nothing.
+
+`Future<ResultSeries> computeResultSeries({required DateTime anchorMonth, required int windowMonths, String? accountUuid})` — one `MonthResult` per month of the span.
+
+- Runs `computeSeries` **once per direction** and zips the two by index; the figures are the very `totalCents` the table below them shows, so a result cannot contradict its own rows. Both windows are non-null, so the two series cover the same months in the same order.
+- Deliberately no second aggregation and no shared load: the price is one extra pass over bookings, positions and tree per recomputation, accepted for a local database with one user (ticket 052). `findByAccount` has no date bound anyway, so a per-month query is the cheaper lever if this ever matters (noted in 059).
+- Transfers, the counting unit and the direction rule are whatever `computeSeries` already does — this method adds arithmetic, not policy.
 
 ## Forecast — `domain/forecast.dart`
 `minimumForecastMonths = 3` — fewer filled months than this and a line is not fit.
@@ -76,13 +91,22 @@ Copy helpers: `withCategory`, `withAccount`, `withDirection`, `withWindow`, `wit
 ## Providers — `domain/analytics_providers.dart`
 - `monthlyCategoryReportServiceProvider`, `forecastServiceProvider` (built on top of it).
 - `monthlyCategoryReportProvider` — `StreamProvider.family<MonthlyCategoryReport, MonthlyReportFilter>`.
+- `resultSeriesProvider` — `StreamProvider.family<ResultSeries, ResultFilter>`, one month or one calendar year. Separate from the report provider because its key must not carry a direction.
 - `forecastProvider` — `StreamProvider.family<ForecastResult, ForecastFilter>`.
 - Both emit an initial snapshot, then recompute on the shared private `_dataChanges(isar)` — a `StreamGroup.merge` of `watchLazy()` over `transactions`, `lineItems`, `categorys`, `accounts`. Mirrors `LocalBalanceService`.
 
 The file imports the four entity libraries because the Isar collection getters are extensions from their `.g.dart` parts.
 
 ## UI (`presentation/`)
-**`MonthlyCategoryReportScreen`** — owns the filter state. Month row (prev/next arrows + tap → `showDatePicker` opened in year mode), account chip (`Alle Konten` default), `SegmentedButton` Ausgaben/Einnahmen. Empty state: `Keine Transaktionen für <Monat>`.
+**`MonthlyCategoryReportScreen`** — owns the filter state (`MonthlyReportFilter` + a private `_ReportMode`). Period row (prev/next arrows + tap → `showDatePicker` opened in year mode), account chip (`Alle Konten` default), `SegmentedButton` Monat/Jahr, `SegmentedButton` Ausgaben/Einnahmen. Empty state: `Keine Transaktionen für <Monat>`.
+
+- **Month mode** (`_MonthBody`) — `ResultSummaryLine` above the donut, then the existing donut + table. The line renders for an empty month too (zeros): "nothing happened" and "balanced" are both 0, and the table keeps its own empty state. It reads `valueOrNull`, so a failure is reported once, by the report area below it.
+- **Year mode** (`_YearBody`) — `YearResultView` instead of donut and table; the period row steps ±12 months and shows a plain year label, and the **direction filter is hidden** (no table left for it to act on). Error text here is `Ergebnis nicht berechenbar: …` — nothing else on the surface would carry it.
+- The mode never touches `MonthlyReportFilter`, so the month survives a trip through year mode; year arrows are `shiftMonths(±12)`.
+
+**`result_view.dart`** — `ResultSummaryLine({series, leadingLabel})`: `Einnahmen · Ausgaben · Ergebnis` as three right-aligned columns, label above amount. The result carries **its sign** (`formatCentsEurSigned`) plus `netResultColor` — `colorScheme.error` below zero, `Colors.green.shade700` above, default at zero, the same pair the booking list uses. `leadingLabel` adds a first column, which is what lets the line double as the header row of the year table.
+
+**`YearResultView({year, series, onMonthTap})`** — the summary line with the year as `leadingLabel`, then one row per month: German month name plus the same three columns, muted income/expenses and an emphasised net. Shared `_labelFlex` / `_figureFlex` keep header and rows aligned; every cell is `maxLines: 1` with ellipsis. A row taps back into month mode for that month (no chevron — the column widths carry no fourth trailing widget).
 
 **`ReportLevelView`** — donut + table for one level, reused by both screens. Uncategorized renders as a muted first row labelled `Ohne Kategorie` and is **excluded** from the donut. Slice labels below 8 % are dropped (text would not fit the arc). A row is tappable only when the category has children.
 

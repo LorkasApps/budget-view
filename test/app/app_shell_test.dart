@@ -3,6 +3,7 @@ import 'package:budget_view/features/account/domain/account_providers.dart';
 import 'package:budget_view/features/account/presentation/account_list_screen.dart';
 import 'package:budget_view/features/analytics/domain/analytics_providers.dart';
 import 'package:budget_view/features/analytics/domain/monthly_category_report.dart';
+import 'package:budget_view/features/analytics/domain/result_series.dart';
 import 'package:budget_view/app/menu_screen.dart';
 import 'package:budget_view/features/analytics/presentation/monthly_category_report_screen.dart';
 import 'package:flutter/material.dart';
@@ -18,6 +19,11 @@ void main() {
           totalBalanceProvider(false).overrideWith((ref) => Stream.value(0)),
           monthlyCategoryReportProvider.overrideWith(
             (ref, filter) => Stream.value(MonthlyCategoryReport.empty),
+          ),
+          // The report tab builds its result line too, and the real provider
+          // would reach for Isar, which never completes inside testWidgets.
+          resultSeriesProvider.overrideWith(
+            (ref, filter) => Stream.value(ResultSeries.empty),
           ),
         ],
         child: const MaterialApp(home: AppShell()),

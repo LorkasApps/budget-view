@@ -12,6 +12,13 @@ final NumberFormat _eurFormat =
 /// Formats signed cents as a localized EUR string, e.g. `-1.234,56 €`.
 String formatCentsEur(int cents) => _eurFormat.format(cents / 100);
 
+/// Like [formatCentsEur], but a positive amount carries an explicit `+`.
+///
+/// For the one figure whose sign is the information — a net result. Zero stays
+/// unsigned: it is neither.
+String formatCentsEurSigned(int cents) =>
+    cents > 0 ? '+${formatCentsEur(cents)}' : formatCentsEur(cents);
+
 /// Parses a user-entered euro amount into signed cents.
 ///
 /// Accepts comma or dot as decimal separator (`"12,34"`, `"12.34"`, `"-5"`).

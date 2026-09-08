@@ -6,8 +6,10 @@ import 'package:budget_view/features/account/domain/account_providers.dart';
 import 'package:budget_view/features/analytics/domain/analytics_providers.dart';
 import 'package:budget_view/features/analytics/domain/monthly_category_report.dart';
 import 'package:budget_view/features/analytics/domain/forecast.dart';
+import 'package:budget_view/features/analytics/domain/result_series.dart';
 import 'package:budget_view/features/analytics/presentation/forecast_screen.dart';
 import 'package:budget_view/features/analytics/presentation/monthly_category_report_screen.dart';
+import 'package:budget_view/features/analytics/presentation/result_view.dart';
 import 'package:budget_view/features/category/data/category.dart';
 import 'package:budget_view/features/category/domain/category_providers.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -88,6 +90,7 @@ final _account = Account()
   ..openingDate = DateTime(2026, 1, 1);
 
 final _now = DateTime.now();
+final _previous = DateTime(_now.year, _now.month - 1);
 
 /// The fake stands in for the service: it answers per filter, so a tap on a
 /// filter control is observable as a different report.
@@ -99,6 +102,57 @@ MonthlyCategoryReport _reportFor(MonthlyReportFilter filter) {
   if (filter.accountUuid != null) return _giroOnly;
   return _expenses;
 }
+
+MonthResult _point(int month, {int income = 0, int expenses = 0, int? year}) =>
+    MonthResult(
+      year: year ?? _now.year,
+      month: month,
+      incomeCents: income,
+      expenseCents: expenses,
+    );
+
+/// Deliberately different figures from the report fake above: the result line
+/// is fed by its own provider, so no assertion here can pass by accidentally
+/// matching an amount from the table.
+ResultSeries _resultFor(ResultFilter filter) {
+  if (filter.isYear) {
+    if (filter.year != _now.year) {
+      return ResultSeries([
+        for (var m = 1; m <= 12; m++) _point(m, year: filter.year),
+      ]);
+    }
+    return ResultSeries([
+      _point(1, income: 100000, expenses: 40000),
+      _point(2),
+      _point(3, expenses: 70000),
+      for (var m = 4; m <= 12; m++) _point(m),
+    ]);
+  }
+  if (filter.year == _now.year && filter.month == _now.month) {
+    return ResultSeries([
+      if (filter.accountUuid != null)
+        _point(_now.month, income: 111100, expenses: 22200)
+      else
+        _point(_now.month, income: 300000, expenses: 187682),
+    ]);
+  }
+  if (filter.year == _previous.year && filter.month == _previous.month) {
+    return ResultSeries([
+      _point(
+        _previous.month,
+        income: 50000,
+        expenses: 59307,
+        year: _previous.year,
+      ),
+    ]);
+  }
+  return ResultSeries([_point(filter.month!, year: filter.year)]);
+}
+
+/// Only the summary line, so `Ausgaben` and `Einnahmen` cannot be confused with
+/// the direction filter's segments, which carry the same two words.
+Finder _inResultLine(Finder matching) =>
+    find.descendant(of: find.byType(ResultSummaryLine), matching: matching);
 
 void main() {
   Future<void> settle(WidgetTester tester) async {
@@ -118,6 +172,9 @@ void main() {
           accountsProvider(false).overrideWith((ref) => Stream.value([_account])),
           monthlyCategoryReportProvider.overrideWith(
             (ref, filter) => Stream.value(_reportFor(filter)),
+          ),
+          resultSeriesProvider.overrideWith(
+            (ref, filter) => Stream.value(_resultFor(filter)),
           ),
           // Reached by long-pressing a row; the forecast itself is covered in
           // forecast_screen_test.dart, here only the hand-over matters.
@@ -186,7 +243,13 @@ void main() {
   testWidgets('the direction toggle switches to income', (tester) async {
     await pumpScreen(tester);
 
-    await tester.tap(find.text('Einnahmen'));
+    // Scoped to the segment: `Einnahmen` is also a label of the result line.
+    await tester.tap(
+      find.descendant(
+        of: find.byType(SegmentedButton<ReportDirection>),
+        matching: find.text('Einnahmen'),
+      ),
+    );
     await settle(tester);
 
     expect(find.text('Gehalt'), findsOneWidget);
@@ -270,5 +333,127 @@ void main() {
     await settle(tester);
 
     expect(find.text('Miete (direkt)'), findsNothing);
+  });
+
+  testWidgets('the month carries a result line above the donut', (
+    tester,
+  ) async {
+    await pumpScreen(tester);
+
+    expect(_inResultLine(find.text('Einnahmen')), findsOneWidget);
+    expect(_inResultLine(find.text('Ausgaben')), findsOneWidget);
+    expect(_inResultLine(find.text('Ergebnis')), findsOneWidget);
+    expect(_inResultLine(find.text(formatCentsEur(300000))), findsOneWidget);
+    expect(_inResultLine(find.text(formatCentsEur(187682))), findsOneWidget);
+    // The one figure on this screen that shows its sign.
+    expect(
+      _inResultLine(find.text('+${formatCentsEur(112318)}')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a month in the minus shows a negative result', (tester) async {
+    await pumpScreen(tester);
+
+    await tester.tap(find.byTooltip('Vorheriger Monat'));
+    await settle(tester);
+
+    expect(_inResultLine(find.text(formatCentsEur(-9307))), findsOneWidget);
+  });
+
+  testWidgets('an empty month still shows zeros, not an empty line', (
+    tester,
+  ) async {
+    await pumpScreen(tester);
+
+    await tester.tap(find.byTooltip('Nächster Monat'));
+    await settle(tester);
+
+    expect(find.byType(ResultSummaryLine), findsOneWidget);
+    expect(_inResultLine(find.text(formatCentsEur(0))), findsNWidgets(3));
+  });
+
+  testWidgets('the direction filter never reaches the result figures', (
+    tester,
+  ) async {
+    await pumpScreen(tester);
+
+    await tester.tap(
+      find.descendant(
+        of: find.byType(SegmentedButton<ReportDirection>),
+        matching: find.text('Einnahmen'),
+      ),
+    );
+    await settle(tester);
+
+    expect(_inResultLine(find.text(formatCentsEur(300000))), findsOneWidget);
+    expect(_inResultLine(find.text(formatCentsEur(187682))), findsOneWidget);
+  });
+
+  testWidgets('the account chip reaches the result figures', (tester) async {
+    await pumpScreen(tester);
+
+    await tester.tap(find.text('Alle Konten'));
+    await settle(tester);
+    await tester.tap(find.text('Girokonto').last);
+    await settle(tester);
+
+    expect(_inResultLine(find.text(formatCentsEur(111100))), findsOneWidget);
+    expect(
+      _inResultLine(find.text('+${formatCentsEur(88900)}')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('the year mode lists twelve months instead of the table', (
+    tester,
+  ) async {
+    await pumpScreen(tester);
+
+    await tester.tap(find.text('Jahr'));
+    await settle(tester);
+
+    expect(find.text('Januar'), findsOneWidget);
+    expect(find.text('Dezember'), findsOneWidget);
+    expect(find.byType(YearResultView), findsOneWidget);
+    // No category table and no donut to filter by direction.
+    expect(find.byType(PieChart), findsNothing);
+    expect(find.text('Gesamt'), findsNothing);
+    expect(find.byType(SegmentedButton<ReportDirection>), findsNothing);
+    // Januar brings 1.000,00 €, März costs 700,00 €: the year nets −100,00 €.
+    expect(_inResultLine(find.text(formatCentsEur(100000))), findsOneWidget);
+    expect(_inResultLine(find.text(formatCentsEur(110000))), findsOneWidget);
+    expect(_inResultLine(find.text(formatCentsEur(-10000))), findsOneWidget);
+  });
+
+  testWidgets('the year steps with arrows and keeps the account filter', (
+    tester,
+  ) async {
+    await pumpScreen(tester);
+    await tester.tap(find.text('Jahr'));
+    await settle(tester);
+
+    await tester.tap(find.byTooltip('Nächstes Jahr'));
+    await settle(tester);
+
+    expect(
+      _inResultLine(find.text('${_now.year + 1}')),
+      findsOneWidget,
+    );
+    expect(find.byTooltip('Nächster Monat'), findsNothing);
+    expect(find.text('Alle Konten'), findsOneWidget);
+  });
+
+  testWidgets('tapping a month row returns to that month', (tester) async {
+    await pumpScreen(tester);
+    await tester.tap(find.text('Jahr'));
+    await settle(tester);
+
+    await tester.tap(find.text('März'));
+    await settle(tester);
+
+    expect(find.text(formatMonthYearDe(_now.year, 3)), findsOneWidget);
+    expect(find.byType(YearResultView), findsNothing);
+    expect(find.byType(SegmentedButton<ReportDirection>), findsOneWidget);
   });
 }

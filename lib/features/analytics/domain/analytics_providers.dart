@@ -18,6 +18,7 @@ import 'item_price_trend.dart';
 import 'item_price_trend_service.dart';
 import 'monthly_category_report.dart';
 import 'monthly_category_report_service.dart';
+import 'result_series.dart';
 
 final monthlyCategoryReportServiceProvider =
     Provider<MonthlyCategoryReportService>(
@@ -51,6 +52,28 @@ final monthlyCategoryReportProvider =
         yield await compute();
       }
     });
+
+/// The result figures of one month or one calendar year. Separate from
+/// [monthlyCategoryReportProvider] because a result covers both directions, so
+/// the report's direction must not be part of this key.
+final resultSeriesProvider = StreamProvider.family<ResultSeries, ResultFilter>((
+  ref,
+  filter,
+) async* {
+  final isar = ref.watch(isarProvider);
+  final service = ref.watch(monthlyCategoryReportServiceProvider);
+
+  Future<ResultSeries> compute() => service.computeResultSeries(
+    anchorMonth: filter.anchorMonth,
+    windowMonths: filter.windowMonths,
+    accountUuid: filter.accountUuid,
+  );
+
+  yield await compute();
+  await for (final _ in _dataChanges(isar)) {
+    yield await compute();
+  }
+});
 
 final forecastServiceProvider = Provider<ForecastService>(
   (ref) => ForecastService(ref.watch(monthlyCategoryReportServiceProvider)),

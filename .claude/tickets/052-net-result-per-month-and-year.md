@@ -6,7 +6,7 @@
 | **Epic** | Analytics |
 | **Domain** | Analytics |
 | **Blocked By** | None |
-| **Status** | Ready |
+| **Status** | In Progress |
 
 ## Description
 The monthly report answers "where did it go" one direction at a time: the direction filter shows expenses **or** income, so
@@ -50,17 +50,21 @@ the figure the user actually steers by — did the month end in plus or minus �
   own empty state already
 
 ## Acceptance Criteria
-- [ ] Month mode shows a line above the donut with `Einnahmen`, `Ausgaben` and a signed `Ergebnis`
-- [ ] Transfers are excluded from all three figures, on the same basis as the rows below them
-      (`decisions.md`, 2026-08-21)
-- [ ] A `Monat` / `Jahr` switch changes the mode without leaving the screen
-- [ ] Year mode lists twelve rows — one per month, each with income, expenses and net — plus the year's three figures
-- [ ] Year mode steps years with arrows and a year label, and shows no category table and no direction filter
-- [ ] The account filter applies in both modes; the direction filter applies only to the table and donut of month mode
-- [ ] The year's figures equal the sum of its twelve rows, and each month row equals what month mode shows for that month
-- [ ] The data comes from `computeSeries`; no second aggregation over bookings is written
-- [ ] An empty month and an empty year show zeros
-- [ ] `make check` green
+- [x] Month mode shows a line above the donut with `Einnahmen`, `Ausgaben` and a signed `Ergebnis`
+- [x] Transfers are excluded from all three figures, on the same basis as the rows below them
+      (`decisions.md`, 2026-08-21) — inherited, not re-implemented: the figures are `computeSeries`' own `totalCents`
+- [x] A `Monat` / `Jahr` switch changes the mode without leaving the screen
+- [x] Year mode lists twelve rows — one per month, each with income, expenses and net — plus the year's three figures
+- [x] Year mode steps years with arrows and a year label, and shows no category table and no direction filter
+- [x] The account filter applies in both modes; the direction filter applies only to the table and donut of month mode
+- [x] The year's figures equal the sum of its twelve rows, and each month row equals what month mode shows for that month —
+      structural: `ResultSeries`' three getters fold over its points, so a one-month series *is* its own row
+- [x] The data comes from `computeSeries`; no second aggregation over bookings is written — two calls, one per direction,
+      zipped by index (`decisions.md`, 2026-09-08)
+- [x] An empty month and an empty year show zeros
+- [x] **Added during implementation:** a month row in year mode taps back into month mode for that month — seeing an
+      outlier in the year is the moment its categories are wanted. No chevron: the four columns carry no fifth widget
+- [x] `make check` green — 614 passed, 6 skipped (2026-09-08), against 596 before
 
 ## Out of Scope (proposed, to confirm)
 - Budgets or targets to compare the result against
@@ -78,4 +82,41 @@ No. Bookings across a few months built inline, including one transfer that must 
 - Output: ~2.5k tokens
 
 ### Implementation Tokens (estimate)
-_Filled after Done._
+- Input: ~70k tokens
+- Output: ~11k tokens
+
+## How it was built
+- **`ResultFilter` owns the mode→window mapping** (`domain/result_series.dart`): `month == null` means the calendar year,
+  and `anchorMonth` / `windowMonths` translate that into the language `computeSeries` already speaks. The service method
+  therefore has no notion of "month mode" or "year mode", and the domain test drives it through the filter so the mapping
+  is covered by the same cases as the arithmetic.
+- **`ResultSeries`' three getters fold over its points**, which is what makes two acceptance criteria structural instead of
+  tested-by-coincidence: the year equals the sum of its rows, and a one-month series equals the row that month shows. The
+  screen reads the same three getters in both modes.
+- **The filter deliberately carries no direction.** A result covers both, so a direction in the family key would recompute
+  and cache twice on every `Ausgaben`/`Einnahmen` tap while producing identical figures.
+- **The result line is fed by its own provider**, so it renders above an empty month's empty state. In month mode it reads
+  `valueOrNull` — the report area below reports a failure, and two error texts for one cause would be noise. Year mode has
+  nothing below it, so there `.when` carries its own message.
+- **`ResultSummaryLine` doubles as the header row of the year table** via `leadingLabel`; shared `_labelFlex` /
+  `_figureFlex` are what keep the twelve rows aligned under it. Every cell is `maxLines: 1` + ellipsis, because
+  `September` next to three amounts is the tight case on a phone.
+- Known shape of the widget tests: `Einnahmen` and `Ausgaben` are now **both** the direction segments and the result
+  line's labels, so `find.text` is ambiguous on this screen. The tests scope through
+  `find.descendant(of: find.byType(ResultSummaryLine))` resp. `SegmentedButton<ReportDirection>`, and the result fake uses
+  amounts that appear nowhere in the report fake — an assertion must not pass by matching a number from the table.
+- `app_shell_test.dart` needed the new override too: the shell builds the report tab, and the real provider reaches for
+  Isar, which never completes inside `testWidgets`.
+
+## Device check
+The one thing `make check` cannot see: the widget tests run at 1200 px width, while four columns next to `September` on a
+360 px phone are the tight case. `maxLines: 1` + ellipsis means a miss shows as `…`, not as an overflow error.
+
+- [ ] `Report` tab, a month that has bookings: the line above the donut reads `Einnahmen`, `Ausgaben`, `Ergebnis`, and none
+      of the three amounts is cut off with `…`
+- [ ] `Jahr` tapped: twelve rows `Januar` … `Dezember`, and in the `September` row neither the month name nor any of its
+      three amounts is cut off
+- [ ] A month row tapped: the screen stands in month mode on exactly that month, with the donut and the
+      `Ausgaben` / `Einnahmen` switch back
+- [ ] A positive `Ergebnis` is green with a leading `+`, a negative one red with `-`, and both are legible under
+      `Einstellungen` → theme `Dunkel` as well as `Hell`
