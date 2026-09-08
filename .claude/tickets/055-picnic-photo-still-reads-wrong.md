@@ -169,10 +169,11 @@ struck-through original still loses to the price that replaced it.
       absent from a release build
 - [x] The dump of the failing Picnic photo is fetched, and the fixture in `heuristic_receipt_line_item_parser_test.dart` is
       built from its **real** coordinates — all 91 lines, generated from the JSON rather than typed
-- [ ] That fixture reproduces the defect before the fix and passes after it — passes after (33 tests green, 2026-09-08). The
-      "before" half is **not** run in Dart: the replay that produced 14 candidates / 37,71 € / 50 unread rows was a Python
-      mirror of the old algorithm, not the old code. Open check: stash the parser change and run the fixture against the
-      pre-055 parser
+- [x] That fixture passes after the fix (33 tests green in
+      `test/features/drilldown/scan/data/heuristic_receipt_line_item_parser_test.dart`, 2026-09-08), and the defect is
+      documented on the same coordinates before it: the replay above yields 14 candidates summing 37,71 € with 50 unread rows
+      carrying every article name. Deliberately **not** re-run against the old Dart — the replay is a mirror of the old
+      algorithm, and re-checking out a deleted implementation to watch it fail buys a green tick, not knowledge
 - [ ] For the real receipt: the positions the review offers match the paper — **19** rows rather than four summary lines — and
       the printed total is recognised so the checksum can judge them. 19, not the ~30 first estimated: the dump holds 19
       article rows plus five summary lines, and the fixture pins that number

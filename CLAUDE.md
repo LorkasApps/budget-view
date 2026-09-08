@@ -51,7 +51,8 @@ never mark `Done` with an unchecked AC.
 | Command | Does |
 |---------|------|
 | `make check` | analyze + test — the gate before any commit |
-| `make test-name NAME="..."` | one suite |
+| `make test-name NAME="..."` | tests whose **name** matches — not a path |
+| `make test-file FILE=...` | one test file, by path |
 | `make gen` | code generation (Isar `*.g.dart`) |
 | `make run` / `make run-release` | debug / release on the device |
 | `make release-check` | check + APK; R8 runs nowhere else |

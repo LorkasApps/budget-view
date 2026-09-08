@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help get upgrade outdated analyze format format-check test test-name coverage \
+.PHONY: help get upgrade outdated analyze format format-check test test-name test-file coverage \
         run run-release gen gen-watch icon-png icons splash clean doctor build-apk build-appbundle \
         install-apk check release-check pre-commit devices
 
@@ -39,6 +39,9 @@ test: ## Run all tests
 
 test-name: ## Run tests matching NAME=... (make test-name NAME="dedupe")
 	flutter test --plain-name "$(NAME)"
+
+test-file: ## Run one test file (make test-file FILE=test/features/.../foo_test.dart)
+	flutter test "$(FILE)"
 
 coverage: ## Run tests with coverage → coverage/lcov.info
 	flutter test --coverage
