@@ -113,44 +113,68 @@ All wired in `domain/receipt_scan_providers.dart`.
 
 ## Parser — `HeuristicReceiptLineItemParser` (Photo OCR)
 
-**Row grouping.** Lines are extracted from all blocks, sorted by vertical position,
-then grouped into rows: two lines belong to the same row if their vertical centers
-are within `(line height + row's max height) / 4` of each other. This merges a
-description column and a price column that ML Kit often splits across blocks while
-keeping unrelated text rows separate. Rows are sorted left-to-right and joined with
-spaces.
+**Row grouping — the price anchors the row (055).** Lines are extracted from all
+blocks (block boundaries are ignored, ML Kit splits the description and price columns
+across them) and sorted top to bottom. The prices are found first, and each one
+anchors a row; every other line joins the first price whose bottom edge sits at or
+below the line's centre, as long as it is no further away than `_rowReach` — the
+median distance between consecutive prices, derived per document. A line that reaches
+no price stays a diagnostic instead of joining a row it does not belong to, which is
+what keeps the page header out of the first item. Rows are joined left to right, ties
+by vertical position, so the label leads the row and the skip vocabulary can see it.
+
+The pitch, not the text height, is the measure: on the dumped Picnic layout a product
+thumbnail pushes the article name 14–30 px above its price while the text is 7–17 px
+tall, so *any* tolerance scaled off the line height (the pre-055 rule was
+`(line height + row max height) / 4` ≈ 8 px) leaves every price in a band of its own.
+That produced amounts without descriptions and articles without amounts at the same
+time — the two symptoms the device reported.
 
 **Skip list.** Rows whose normalized (lowercase, leading whitespace trimmed) start
 matches any prefix in the skip set are discarded: `summe`, `zwischensumme`,
 `total`, `mwst`, `ust`, `netto`, `brutto`, `gegeben`, `zurück`, `rückgeld`,
 `saldo`, `datum`, `uhrzeit`, `bon`, `filiale`, `kunden`, `karte`, `kasse`,
-`beleg`, `ec-cash`, `eur`, `gesamt`, `bargeld`, `girocard`, `ec-karte` — covering
-totals, taxes, payment lines, and metadata.
+`beleg`, `ec-cash`, `eur`, `gesamt`, `bargeld`, `girocard`, `ec-karte`,
+`bestellung`, `gespart`, `betrag`, `rabatt` — covering totals, taxes, payment lines,
+metadata, and a delivery receipt's summary block.
+
+**Misspelled labels (055).** The first word also matches at one edit's distance, for
+entries of six characters or more: OCR returned `Bestelung` and `Gespat`, so exact
+matching let `Gespat -5,73` through as a 5,73 € item. Six is the floor because below
+it one edit turns a word into an unrelated one. The PDF parser keeps exact matching —
+a text layer has no noise to forgive.
 
 **Printed total detection.** A row matching `summe`, `gesamt`, or `total` prefix,
 with a readable money token, records that token as the receipt's printed total
 (the last such row wins). `zwischensumme` is deliberately excluded. Rows without a
 money token are dropped entirely instead of becoming candidates.
 
-**Price choice inside a row (043).** A row can hold several money tokens on different
-baselines: a promotional row prints the struck-through original above the price that
-replaced it, both right-aligned. The **bottom-most line** carrying a money token
-decides, and within that line the rightmost token wins — picking by x alone was a coin
-flip, because `List.sort` is not stable. A line that is nothing but a price adds no
+**What counts as a price (043, 055).** The rightmost money token of a line wins,
+because that is where a receipt puts the price. A line carrying **no** token and no
+word at all is read as a price too: its rightmost group of digits, last two as cents.
+ML Kit returns a price as one token with the raised cents already merged but no
+separator — `129` for 1,29 — and a promotional row prints both prices inside one line
+(`649 479` → 4,79). Fewer than three digits is not a price, which keeps a quantity
+badge (`1`, `2`, `3` in their own column) out; requiring the line to be wordless keeps
+`500g`, `2 x 125g` and `10er Pack` out. OCR noise inside the price no longer costs the
+row its amount: `3% 178` reads 1,78 and `11:6 1060` reads 10,60.
+
+Where two prices share a band — the struck-through original above the price that
+replaced it — the **bottom-most** wins, the rightmost breaks a tie. Picking by x alone
+was a coin flip because `List.sort` is not stable. The losing line contributes no
 description text and survives in `rawOcrText` only.
 
-**Raised cents (045).** When no line carries a whole money token, the price is
-reassembled: fragments in the price column are banded by baseline, the bottom-most
-band is read left to right and its last two digits are the cents. Picnic prints `3`
-and `79` on baselines 7 units apart, so neither half was a money token and the row was
-dropped — a photographed receipt yielded nothing at all. The price column is derived
-per document from the leftmost line that is *nothing but* a price fragment, falling
-back to 60 % of the page width; without it a `Kundennr 4711` row reassembles into an
-amount. The row tolerance itself is unchanged — widening it would regroup every layout.
+**Raised cents: removed (055).** Until 055 a price was reassembled from fragments
+banded by baseline, on the assumption that Picnic prints `3` and `79` on baselines 7
+units apart. The dump of that very receipt shows the opposite — every price arrives as
+one token — so the reassembly, its per-document price column and the synthetic test
+that covered it are gone. It was never observed on real data; keeping a second price
+path that only fires on unknown geometry means keeping a path nothing can verify.
 
 **Unread rows (045).** Rows with text but no usable amount go to
 `ReceiptParseResult.unreadRows` and reach the review screen through the flow state.
-Both parsers fill it.
+Both parsers fill it. Since 055 an unpaired line is its own entry rather than being
+grouped with its neighbours — the page header of the dumped receipt yields ten lines.
 
 **Money tokens.** The parser searches for price patterns: one to three digits per
 group, groups separated by `,`, `.`, or space (e.g., `1,23`, `1.23`, `1.234,56`,
@@ -252,9 +276,9 @@ implements all of these; the OCR parser (`HeuristicReceiptLineItemParser`, above
 
 | Trait | Consequence | In OCR parser | In PDF parser |
 |-------|-------------|---------------|--------------| 
-| Columns: quantity far left (x≈149), description (x≈212), price right (x≈430) | A lone number in its own column is the quantity | no — OCR reads a leading `2x` instead | yes |
-| A price is three words on three baselines: large integer, raised cents, period | Digits of a band are read left to right, last two are cents | no — an OCR row is one string | yes |
-| Two prices per row: struck-through original **above**, real price **below** | The **bottom-most** band of a block wins | **no — OCR parser takes rightmost token, struck-through can win** | yes |
+| Columns: quantity far left (x≈149), description (x≈212), price right (x≈430) | A lone number in its own column is the quantity | no — the badge joins the description as a leading digit, `_quantityPrefix` needs a unit to consume it | yes |
+| A price is three words on three baselines: large integer, raised cents, period | Digits of a band are read left to right, last two are cents | not on the photo path — ML Kit merges the raised cents into one token (`129`), proven by the 055 dump; the wordless line is read as digits with the last two as cents | yes |
+| Two prices per row: struck-through original **above**, real price **below** | The **bottom-most** band of a block wins | ticket **043**, kept by 055's anchor merge; on the photo both prices arrive in **one** line (`649 479`), where the rightmost group wins | yes |
 | `Eingereichtes Pfand` is a credit the printed total already accounts for | Subtracted in checksum, never a position | ticket **043** (OCR mismatch report) | yes |
 | Page furniture (mail header, register number, URLs) reassembles into amounts | Nothing may cost more than the printed total | no | yes |
 | `Pfand` total is a real position; `Tüten` / `Flaschen` breakdown is not | Skip breakdown, keep total | partly — `pfand` not in OCR skip list | yes |
@@ -415,7 +439,7 @@ re-scan of the same photo warns.
 | `scan_test_support.dart` | `test/features/drilldown/scan/domain/` | Shared fakes: `FakeReceiptImageSource`, `FakeReceiptPdfSource`, `FakeOcrService`, `FakeReceiptLineItemParser`, `FakePdfReader`, synthetic bytes, test container |
 | `receipt_skew_test.dart` | `test/features/drilldown/scan/data/` | Tilt sign (positive/negative), straightening, same instance when straight, blank image |
 | `mlkit_ocr_service_test.dart` | `test/features/drilldown/scan/data/` | OCR mapping (blocks, lines, boxes, confidence), temp file lifecycle, empty result, engine failure wrapped, cleanup on throw |
-| `heuristic_receipt_line_item_parser_test.dart` | `test/features/drilldown/scan/data/` | Row grouping across blocks, skip list, money tokens, printed total, `zwischensumme` excluded, credit rows, quantity/unit parsing, rows without money dropped |
+| `heuristic_receipt_line_item_parser_test.dart` | `test/features/drilldown/scan/data/` | Row grouping across blocks, skip list, money tokens, printed total, `zwischensumme` excluded, credit rows, quantity/unit parsing, rows without money dropped, and the 91-line Picnic dump transcribed from real coordinates (055): 19 positions, 67,49 € against a printed 62,12 € plus 4,95 € credit, header lines unread |
 | `pdf_receipt_parser_test.dart` | `test/features/drilldown/scan/data/` | Item clustering, price column detection, amount reassembly, bottom-most band wins, quantity parsing, word gluing, printed total, credits, plausibility bound, synthetic words |
 | `receipt_pdf_dump_test.dart` (env-gated `RECEIPT_PDF`) | `test/tool/` | Real PDF parsing, decision reporting via test output |
 | `scan_review_screen_test.dart` | `test/features/drilldown/scan/presentation/` | UI: row states, include-checkbox disabled rule, edit/add/delete/categorize, footer, return contract |

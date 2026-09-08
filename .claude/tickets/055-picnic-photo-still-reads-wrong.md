@@ -118,11 +118,42 @@ sums the column to 67,49 € against the printed `Betrag 67,07` — the differen
 Recorded so a later reader does not have to re-derive it: the replay was a throwaway Python mirror of the Dart, deliberately
 not kept as a helper — a second implementation of parser logic drifts. The durable artifact is the fixture below.
 
+## The fix (2026-09-08)
+**The price anchors the row.** The prices are found first and each one opens a row; every other line joins the first price
+whose bottom edge sits at or below its centre, within `_rowReach` — the median distance between consecutive prices, read per
+document (87 px here). Grouping no longer scales off the text height at all, which is the part 045 got structurally wrong:
+scaling that tolerance would only have moved the number, not the reference. A line that reaches no price stays a diagnostic,
+which is what keeps the ten header lines out of the first article instead of gluing `Dein Bon` to a Bratwurst.
+
+**Which of 045's assumptions was wrong.** Its premise, not its arithmetic: 045 assumed a price arrives split across baselines
+(`3` over `79`, 7 units apart) and built banding plus a per-document price column to reassemble it. The dump of the very
+receipt that motivated it shows every price arriving as **one** token with the cents already merged and only the separator
+missing (`129`, `1060`), and a promotional row carrying **both** prices inside one line (`649 479`). So the reassembly,
+`_priceColumnLeft`, `_priceBand`, `_bandToCents`, `_priceFragment` and the synthetic test that covered them are gone; a
+wordless line now reads its rightmost digit group as the price, last two digits as cents. Three digits minimum keeps the
+quantity badge out, wordlessness keeps `500g`, `2 x 125g` and `10er Pack` out.
+
+**Two defects the dump exposed, both fixed.** The skip vocabulary now also matches at one edit's distance for words of six
+characters or more, so the misspelled `Bestelung` and `Gespat` are caught — before, `Gespat -5,73` entered as a 5,73 € item
+while an AC claimed those labels were handled. And OCR noise inside a price no longer costs the row its amount: `3% 178`
+reads 1,78, `11:6 1060` reads 10,60, because the rightmost group decides rather than a charset over the whole line.
+
+**What the fixture yields.** 19 positions, every one with a description (`parseState == ok`, the reported
+`Ohne Beschreibung` is gone), summing to 67,49 € against a printed `Endsumme 62,12` plus a 4,95 € credit — a budget of
+67,07 €, so the checksum warning fires over the remaining 0,42 €, which is OCR misreading digits and not a pairing defect.
+The 24 € that used to vanish silently are back: those were the promo rows whose two prices concatenated past the budget.
+
+**Kept, not lost:** 043's rule that the bottom-most of two stacked prices wins survives as the anchor merge, so a
+struck-through original still loses to the price that replaced it.
+
 ## Evidence to collect before any fix
-- [ ] The photo itself, handed over out of band (never committed — `decisions.md`, 2026-08-10: raw documents are not persisted)
-- [ ] The dump of its `OcrResult` from the app
-- [ ] What the review screen showed: how many positions, and what `N nicht erkannte Zeilen` contains when expanded
-- [ ] Whether the sum warning fired, and with which two figures
+- [x] The photo itself, handed over out of band (never committed — `decisions.md`, 2026-08-10: raw documents are not persisted)
+- [x] The dump of its `OcrResult` from the app — `.claude/tmp/ocr_dump.json`, gitignored; the transcribed fixture is the
+      artifact that stays
+- [ ] What the review screen showed: how many positions, and what `N nicht erkannte Zeilen` contains when expanded — reported
+      qualitatively on 2026-08-25 (every row `Ohne Beschreibung`), never counted. Superseded: the dump answers it exactly
+- [ ] Whether the sum warning fired, and with which two figures — reported as ~2400 € against ~62 €, no exact pair recorded.
+      Superseded by the dump for the same reason
 
 ## Resolved during refinement
 - **The dump is a dev-only entry in the review screen** that writes the whole `OcrResult` — blocks, lines and their `Rect`s —
@@ -136,11 +167,15 @@ not kept as a helper — a second implementation of parser logic drifts. The dur
 ## Acceptance Criteria
 - [x] A debug-only action in the scan review writes the full `OcrResult` as JSON to the app cache and names the file; it is
       absent from a release build
-- [ ] The dump of the failing Picnic photo is fetched, and the fixture in `heuristic_receipt_line_item_parser_test.dart` is
-      built from its **real** coordinates
-- [ ] That fixture reproduces the defect before the fix and passes after it
-- [ ] For the real receipt: the positions the review offers match the paper — around 30 rows rather than four summary lines —
-      and the printed total is recognised so the checksum can judge them
+- [x] The dump of the failing Picnic photo is fetched, and the fixture in `heuristic_receipt_line_item_parser_test.dart` is
+      built from its **real** coordinates — all 91 lines, generated from the JSON rather than typed
+- [ ] That fixture reproduces the defect before the fix and passes after it — passes after (33 tests green, 2026-09-08). The
+      "before" half is **not** run in Dart: the replay that produced 14 candidates / 37,71 € / 50 unread rows was a Python
+      mirror of the old algorithm, not the old code. Open check: stash the parser change and run the fixture against the
+      pre-055 parser
+- [ ] For the real receipt: the positions the review offers match the paper — **19** rows rather than four summary lines — and
+      the printed total is recognised so the checksum can judge them. 19, not the ~30 first estimated: the dump holds 19
+      article rows plus five summary lines, and the fixture pins that number
 - [x] **No line of the summary block becomes a position**: `Bestellung`, `Gespart` and `Betrag` are handled, while `Endsumme`
       stays the total and `Eingereichtes Pfand` the credit
 - [x] The plausibility bound drops a row that equals the budget as well, not only one that exceeds it — `Betrag` is exactly the
@@ -148,17 +183,21 @@ not kept as a helper — a second implementation of parser logic drifts. The dur
       receipt with a single article legitimately equals its own total
 - [x] A discounted row yields **one** position at the real price: neither the struck-through original nor the `Rabatt` badge
       becomes a row of its own
-- [ ] Whatever the cause turns out to be, the finding is written into this ticket, including which of 045's synthetic
-      assumptions was wrong
-- [ ] The synthetic cases of 045 stay green, or their removal is argued in this ticket rather than done quietly
-- [ ] `make check` green
+- [x] Whatever the cause turns out to be, the finding is written into this ticket, including which of 045's synthetic
+      assumptions was wrong — see *The fix*: the premise that a price arrives split across baselines
+- [x] The synthetic cases of 045 stay green, or their removal is argued in this ticket rather than done quietly — the raised-cents
+      case is **removed**, argued above and in `decisions.md` (2026-09-08); every other synthetic case stays and stays green
+- [x] `make check` green — 596 passed, 6 skipped (2026-09-08)
 
 ## Device check
 - [ ] The same photo, on a release APK, yields the same positions as the fixture predicts
 
 ## Affected Tests
 - A fixture built from the real dump, in `heuristic_receipt_line_item_parser_test.dart`, is the regression test this ticket
-  owes. The synthetic cases of 045 stay, but they clearly did not describe reality and must not be trusted as the only proof
+  owes — four tests in the group `the real Picnic dump (ticket 055)`: amounts, descriptions, summary block, header rows
+- Removed from the same file: `raised cents are reassembled into one price (ticket 045)`. Its premise is refuted by the dump
+- Every other synthetic case stays and stays green; they described a layout nobody scanned and must not be trusted as the only
+  proof again
 
 ## Fixtures Needed
 No committed image. Real coordinates, transcribed from the dump into an inline fixture.

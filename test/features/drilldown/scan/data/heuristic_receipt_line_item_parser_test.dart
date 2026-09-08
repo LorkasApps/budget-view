@@ -24,6 +24,16 @@ OcrResult _blocks(List<List<OcrLine>> blocks) => OcrResult(
 /// A single OCR row, as one line in one block.
 OcrResult _row(String text) => _blocks([[_line(text, top: 0)]]);
 
+/// One line of a transcribed dump, with its real rectangle.
+OcrLine _at(
+  String text,
+  double left,
+  double top,
+  double width,
+  double height,
+) =>
+    OcrLine(text: text, boundingBox: Rect.fromLTWH(left, top, width, height));
+
 const _parser = HeuristicReceiptLineItemParser();
 
 void main() {
@@ -241,23 +251,6 @@ void main() {
       expect(result.candidates.map((c) => c.amountCents), [119, 9999]);
     });
 
-    test('raised cents are reassembled into one price (ticket 045)', () {
-      // Picnic prints the cents raised: `3` and `79` sit on their own baselines in
-      // the price column, so neither half is a money token on its own.
-      final result = _parser.parse(
-        _blocks([
-          [_line('H-Milch 1,5%', top: 100, left: 0)],
-          [_line('3', top: 100, left: 300)],
-          [_line('79', top: 96, left: 316)],
-          [_line('Endsumme 3,79', top: 200, left: 0)],
-        ]),
-      );
-
-      final candidate = result.candidates.single;
-      expect(candidate.amountCents, 379);
-      expect(candidate.description, 'H-Milch 1,5%');
-    });
-
     test('Endsumme is read as the total, not as a position', () {
       // German puts the keyword at the end of a compound, which a prefix rule
       // misses — and without a total there is no checksum and no bound.
@@ -358,4 +351,160 @@ void main() {
       expect(result.expectedPositionSumCents, isNull);
     });
   });
+
+  group('the real Picnic dump (ticket 055)', () {
+    // Every rectangle below was transcribed from the `OcrResult` the app dumped
+    // for the failing photo. The block structure is not rebuilt: the parser
+    // flattens blocks into lines and never reads a block rectangle.
+    final result = _parser.parse(_blocks([_picnicDump]));
+
+    test('every article is paired with its own price', () {
+      expect(
+        result.candidates.map((c) => c.amountCents),
+        [
+          479, 375, 1156, 178, 129, 104, 229, 399, 499, 99, //
+          1060, 169, 129, 109, 119, 199, 349, 290, 678,
+        ],
+      );
+      // A promotional row prints both prices inside one line (`649 479`), and
+      // OCR noise sits inside others (`3% 178`, `11:6 1060`) — the rightmost
+      // group decides in all three cases.
+      expect(
+        result.candidates.fold(0, (sum, c) => sum + c.amountCents!),
+        6749,
+      );
+    });
+
+    test('no position arrives without a description', () {
+      // The device reported every row as `Ohne Beschreibung`: the price never
+      // shared a band with its article name, so each one parsed as ambiguous.
+      expect(
+        result.candidates.map((c) => c.parseState),
+        everyElement(LineItemParseState.ok),
+      );
+      expect(result.candidates.first.description, contains('Bratwurst'));
+      expect(result.candidates[4].description, contains('Salatgurke'));
+    });
+
+    test('the summary block gives the total and the credit, nothing else', () {
+      expect(result.printedTotalCents, 6212);
+      expect(result.creditCents, 495);
+      // OCR misspells the labels — `Bestelung`, `Gespat` — so the skip
+      // vocabulary has to match them despite the missing letter.
+      expect(
+        result.candidates.map((c) => c.description).join(' '),
+        allOf(
+          isNot(contains('Bestelung')),
+          isNot(contains('Gespat')),
+          isNot(contains('Betrag')),
+        ),
+      );
+    });
+
+    test('the page header is kept as a diagnostic, not folded into a row', () {
+      expect(result.unreadRows, contains('Dein Bon'));
+      expect(result.unreadRows, contains('Kantakt'));
+      expect(
+        result.candidates.map((c) => c.description).join(' '),
+        isNot(contains('Dein Bon')),
+      );
+    });
+  });
 }
+
+/// The `OcrResult` of the failing Picnic photo, 91 lines, transcribed from the
+/// dump the app wrote (ticket 055). The photo itself is never committed.
+final _picnicDump = [
+
+  _at('Dein Bon', 15, 6, 94, 17),
+  _at('Freitag 17 Juli', 14, 40, 81, 15),
+  _at('Alles erneut', 23, 133, 57, 7),
+  _at('Ein Problem', 113, 133, 55, 7),
+  _at('Bon per Mail', 200, 133, 58, 9),
+  _at('Kantakt', 300, 133, 35, 7),
+  _at('hinzufügen', 25, 145, 53, 10),
+  _at('melden', 123, 145, 34, 8),
+  _at('erhalten', 210, 145, 38, 8),
+  _at('aufnehme', 291, 145, 47, 8),
+  _at('Edeka Regional Bratwurst fein', 94, 201, 183, 12),
+  _at('5 Stuck', 96, 218, 32, 7),
+  _at('jetzt 4.79E', 98, 235, 51, 9),
+  _at('1', 28, 237, 4, 12),
+  _at('649 479', 275, 240, 52, 15),
+  _at('Edeka Apfel Direktsaft naturtrüb', 94, 288, 197, 12),
+  _at('10% Rabatt', 98, 321, 54, 8),
+  _at('3', 26, 323, 8, 11),
+  _at('47 375', 278, 327, 49, 14),
+  _at('Alpro Kokos-Drink Barista', 94, 371, 156, 13),
+  _at('Bündel-Bonus', 98, 406, 65, 11),
+  _at('1196 1156', 268, 414, 59, 14),
+  _at('Delverde Farfalle', 94, 461, 103, 10),
+  _at('500g', 94, 478, 24, 10),
+  _at('1€ Rabatt', 98, 495, 44, 8),
+  _at('2', 26, 497, 8, 11),
+  _at('3% 178', 281, 501, 46, 14),
+  _at('Salatgurke', 94, 557, 64, 12),
+  _at('1stuck mind. 300g', 92, 570, 91, 12),
+  _at('129', 305, 587, 22, 15),
+  _at('Gut&Günstig Skyr Heidelbeere', 94, 624, 186, 14),
+  _at('Holunder', 94, 643, 56, 10),
+  _at('SKYR', 35, 655, 23, 8),
+  _at('500a', 94, 659, 24, 8),
+  _at('1', 28, 670, 5, 12),
+  _at('149 104', 281, 674, 46, 13),
+  _at('30% Rabatt', 99, 676, 54, 8),
+  _at('Gut&Günstig Sahnejoghurt', 94, 722, 162, 11),
+  _at('Griechischer Art 10%', 94, 734, 126, 15),
+  _at('1ko', 93, 755, 14, 7),
+  _at('229', 302, 761, 25, 14),
+  _at('Gut&Günstig Hähnchen-Unterkeulen', 94, 817, 224, 11),
+  _at('600g', 94, 834, 24, 8),
+  _at('399', 301, 847, 26, 13),
+  _at('Edeka Regional Premium', 94, 896, 151, 12),
+  _at('Rinder-Burger', 93, 909, 85, 16),
+  _at('2 x 125g', 96, 929, 36, 9),
+  _at('499', 301, 934, 26, 14),
+  _at('Gut&Günstig feiner Zucker Raffinade', 94, 990, 224, 11),
+  _at('lkg', 94, 1007, 14, 9),
+  _at('099', 301, 1021, 26, 14),
+  _at('Funny-frisch Chipsfrisch ungarisch', 94, 1068, 215, 12),
+  _at('Bündel-Bonus', 97, 1100, 67, 10),
+  _at('11:6 1060', 266, 1107, 60, 15),
+  _at('Edeka Herzstücke Brioche Burger', 94, 1156, 207, 12),
+  _at('Buns', 94, 1172, 30, 10),
+  _at('4 Stück', 94, 1188, 35, 8),
+  _at('169', 305, 1191, 20, 17),
+  _at('Gut&Günstig Bacon', 94, 1250, 118, 11),
+  _at('100g', 93, 1267, 23, 9),
+  _at('129', 305, 1281, 22, 14),
+  _at('Rucola', 94, 1338, 40, 9),
+  _at('125q', 93, 1354, 22, 8),
+  _at('109', 305, 1368, 22, 14),
+  _at('Gut&Günstig Delikatess Jagdwurst', 94, 1424, 212, 12),
+  _at('200g', 94, 1440, 24, 9),
+  _at('119', 308, 1454, 19, 14),
+  _at('Gut&Günstig Kalbsleberwurst', 93, 1507, 181, 14),
+  _at('125q', 93, 1527, 22, 8),
+  _at('199', 305, 1541, 22, 14),
+  _at('Hennes Eier Freilandhaltung', 93, 1594, 172, 14),
+  _at('10er Pack', 93, 1614, 45, 7),
+  _at('349', 301, 1628, 26, 14),
+  _at('Tollettenpapier 3-laglg', 93, 1681, 138, 14),
+  _at('8x 200 Blatt', 94, 1701, 60, 7),
+  _at('1', 28, 1711, 5, 12),
+  _at('290', 302, 1712, 23, 16),
+  _at('Dr. Oetker Ristorante Spinaci', 94, 1762, 175, 12),
+  _at('390c', 94, 1779, 23, 7),
+  _at('Bündel-Bonus', 98, 1793, 67, 12),
+  _at('698 678', 276, 1799, 49, 17),
+  _at('72.80', 295, 1852, 29, 9),
+  _at('Bestelung', 15, 1853, 55, 11),
+  _at('Gespat', 14, 1880, 43, 10),
+  _at('-5.73', 300, 1880, 26, 9),
+  _at('Betrag', 14, 1908, 36, 12),
+  _at('67.07', 297, 1908, 30, 9),
+  _at('Eingereichtes Pfand v', 15, 1931, 121, 15),
+  _at('-4.95', 298, 1936, 28, 9),
+  _at('6212', 293, 1968, 33, 15),
+  _at('Endsumme', 15, 1970, 78, 11),
+];

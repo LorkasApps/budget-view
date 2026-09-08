@@ -41,6 +41,10 @@ const _skipPrefixes = {
   'rabatt',
 };
 
+/// Shortest word whose misspelling the skip vocabulary will forgive. Below six
+/// characters one edit turns a word into an unrelated one.
+const _fuzzyMinLength = 6;
+
 /// A money token: `1,23`, `1.23`, `1234,56`, `1.234,56`, `1 234,56`, each with
 /// an optional `€` / `EUR` on either side.
 final _amountToken = RegExp(
@@ -56,15 +60,16 @@ final _quantityPrefix = RegExp(
 
 const _countUnits = {'x', 'stk', 'stk.', 'stück'};
 
-/// A line that is nothing but digits and separators — half of a price whose cents
-/// are printed raised, so neither half is a money token on its own.
-final _priceFragment = RegExp(r'^[€]?[\d.,\s]+[€]?$');
+/// A line carrying no word: digits, separators and OCR noise only. ML Kit reads
+/// a price column as `129`, `649 479`, `3% 178`, `11:6 1060` — a separator is
+/// missing but there is nothing else on the line either.
+final _priceOnly = RegExp(r'^[€\d.,:%\s-]+$');
 
-final _digits = RegExp(r'^\d+$');
+final _digit = RegExp(r'\d');
 
-/// Fraction of the page width from which a fragment counts as the price column.
-/// Same rule as the PDF parser: receipts right-align prices.
-const double _priceColumnFraction = 0.6;
+final _nonDigit = RegExp(r'[^0-9]');
+
+final _whitespace = RegExp(r'\s+');
 
 /// A row after grouping: its full text for the vocabulary checks, the description
 /// left once the price is taken out, and the price itself.
@@ -72,10 +77,10 @@ typedef _Row = ({String text, String label, int? amountCents});
 
 /// Turns OCR text into candidate positions.
 ///
-/// Layout does the heavy lifting: lines are grouped into rows by vertical
-/// overlap, and the rightmost money token of a row is the price — receipts
-/// right-align it, and the ING parser derives its columns the same way rather
-/// than trusting text patterns.
+/// Layout does the heavy lifting: the prices are found first and each one
+/// anchors a row, then every remaining line joins the price above which it
+/// sits. Receipts right-align the price, and the ING parser derives its columns
+/// from geometry the same way rather than trusting text patterns.
 class HeuristicReceiptLineItemParser implements ReceiptLineItemParser {
   const HeuristicReceiptLineItemParser();
 
@@ -125,163 +130,174 @@ class HeuristicReceiptLineItemParser implements ReceiptLineItemParser {
     );
   }
 
-  /// Groups every line of every block into visual rows, top to bottom, and
-  /// joins each row left to right. Blocks are ignored on purpose: ML Kit often
-  /// splits a receipt's description column and price column into separate
-  /// blocks, which is exactly the pairing we are after.
+  /// Pairs every line of every block with a price. Blocks are ignored on
+  /// purpose: ML Kit splits a receipt's description column and price column into
+  /// separate blocks, which is exactly the pairing we are after.
+  ///
+  /// The price anchors the row, not the text: on a delivery receipt a product
+  /// thumbnail pushes the article name 14 to 30 px above its price, while a
+  /// tolerance read off the text height spans 8 px. Every line that is not a
+  /// price goes to the first price at or below it, within one row pitch.
+  /// Whatever finds no price stays a diagnostic instead of joining a row it does
+  /// not belong to — that is what kept the page header out (ticket 055).
   List<_Row> _rows(OcrResult result) {
     final lines = [
       for (final block in result.blocks) ...block.lines,
-    ]..sort(
-        (a, b) => a.boundingBox.center.dy.compareTo(b.boundingBox.center.dy),
-      );
+    ]..sort((a, b) => a.boundingBox.top.compareTo(b.boundingBox.top));
 
-    final rows = <List<OcrLine>>[];
-    for (final line in lines) {
-      final current = rows.isEmpty ? null : rows.last;
-      if (current != null && _belongsToRow(current, line)) {
-        current.add(line);
+    final anchors = _anchorIndexes(lines);
+    final reach = _rowReach(lines, anchors);
+    final grouped = [for (final _ in anchors) <OcrLine>[]];
+    final unpaired = <OcrLine>[];
+    for (var i = 0; i < lines.length; i++) {
+      if (lines[i].text.trim().isEmpty) continue;
+      final slot = _slotFor(lines, anchors, i, reach);
+      if (slot == null) {
+        unpaired.add(lines[i]);
       } else {
-        rows.add([line]);
+        grouped[slot].add(lines[i]);
       }
     }
 
-    final priceColumnLeft = _priceColumnLeft(lines);
     return [
-      for (final row in rows)
-        if (_rowOf(row, priceColumnLeft) case final parsed
-            when parsed.text.isNotEmpty)
-          parsed,
+      for (var i = 0; i < anchors.length; i++)
+        _rowOf(grouped[i], lines[anchors[i]]),
+      for (final line in unpaired)
+        (text: line.text.trim(), label: '', amountCents: null),
     ];
   }
 
-  /// Where the price column starts, taken from the leftmost line that is nothing
-  /// but a price fragment. Falls back to a fraction of the page when every price
-  /// shares its line with a description, which is the layout where the column is
-  /// not needed anyway.
-  double _priceColumnLeft(List<OcrLine> lines) {
-    if (lines.isEmpty) return 0;
-    var minLeft = lines.first.boundingBox.left;
-    var maxRight = lines.first.boundingBox.right;
-    for (final line in lines) {
-      if (line.boundingBox.left < minLeft) minLeft = line.boundingBox.left;
-      if (line.boundingBox.right > maxRight) maxRight = line.boundingBox.right;
-    }
-    final fallback = minLeft + (maxRight - minLeft) * _priceColumnFraction;
-
-    double? leftmostFragment;
-    for (final line in lines) {
-      if (line.boundingBox.left < fallback) continue;
-      if (!_priceFragment.hasMatch(line.text.trim())) continue;
-      if (leftmostFragment == null ||
-          line.boundingBox.left < leftmostFragment) {
-        leftmostFragment = line.boundingBox.left;
-      }
-    }
-    return leftmostFragment ?? fallback;
-  }
-
-  /// Splits a grouped row into its text, its description and its price.
-  ///
-  /// The price comes from the **bottom-most** line that carries a money token: a
-  /// promotional row prints the struck-through original above the price that
-  /// replaced it, both right-aligned, so picking by x would be a coin flip — and
-  /// `List.sort` is not stable, which is what made the winner arbitrary. Same rule
-  /// as the PDF parser's bottom-most band. Within one line the rightmost token
-  /// still wins, because that is where a receipt puts the price.
-  _Row _rowOf(List<OcrLine> lines, double priceColumnLeft) {
-    final ordered = [...lines]
-      ..sort((a, b) => a.boundingBox.left.compareTo(b.boundingBox.left));
-    final text = _join(ordered.map((line) => line.text));
-
-    OcrLine? priceLine;
-    for (final line in lines) {
-      if (_amountToken.firstMatch(line.text) == null) continue;
-      final lower = line.boundingBox.center.dy;
-      if (priceLine == null || lower > priceLine.boundingBox.center.dy) {
-        priceLine = line;
-      }
-    }
-
-    if (priceLine != null) {
-      final match = _amountToken.allMatches(priceLine.text).last;
-      final cents = _toCents(match.group(1)!, match.group(2)!);
-      return (
-        text: text,
-        // On the price line, only what stands before the price is description —
-        // the same cut the single-line case has always made. A line that is
-        // nothing but a price is no description either: that is the
-        // struck-through original, which stays visible in `rawOcrText` only.
-        label: _labelOf(
-          lines,
-          (line) => line == priceLine
-              ? line.text.substring(0, match.start)
-              : _isOnlyPrice(line.text)
-                  ? ''
-                  : line.text,
-        ),
-        amountCents: cents == 0 ? null : cents,
-      );
-    }
-
-    // Raised cents: `3` and `79` sit on different baselines in the price
-    // column, so neither half is a money token. The digits of the bottom-most
-    // band are read as one price, the last two as cents — the PDF parser's
-    // rule, and the reason a Picnic receipt used to yield nothing at all.
-    final band = _priceBand(lines, priceColumnLeft);
-    return (
-      text: text,
-      label: _labelOf(lines, (line) => band.contains(line) ? '' : line.text),
-      amountCents: band.isEmpty ? null : _bandToCents(band),
-    );
-  }
-
-  String _labelOf(List<OcrLine> lines, String Function(OcrLine) textOf) {
-    final pieces = [
-      for (final line in lines)
-        (left: line.boundingBox.left, text: textOf(line)),
-    ]..sort((a, b) => a.left.compareTo(b.left));
-    return _join(pieces.map((piece) => piece.text));
-  }
-
-  /// The bottom-most band of price-column fragments in a row: a promotional row
-  /// stacks the struck-through original above the price that replaced it, and
-  /// each of them can itself be split into integer and raised cents.
-  List<OcrLine> _priceBand(List<OcrLine> lines, double priceColumnLeft) {
-    final fragments = [
-      for (final line in lines)
-        if (line.boundingBox.left >= priceColumnLeft &&
-            _priceFragment.hasMatch(line.text.trim()))
-          line,
-    ]..sort((a, b) => a.boundingBox.top.compareTo(b.boundingBox.top));
-    if (fragments.isEmpty) return const [];
-
-    final bands = <List<OcrLine>>[];
-    for (final fragment in fragments) {
-      final current = bands.isEmpty ? null : bands.last;
-      final apart = current == null
+  /// The lines carrying a price, in document order. Where two prices share a
+  /// band — a promotional row prints the struck-through original above the price
+  /// that replaced it, both right-aligned — the bottom-most wins and the
+  /// rightmost breaks a tie. Same rule as the PDF parser's bottom-most band, and
+  /// the reason picking by x alone was a coin flip (ticket 043).
+  List<int> _anchorIndexes(List<OcrLine> lines) {
+    final indexes = <int>[];
+    for (var i = 0; i < lines.length; i++) {
+      if (_anchorCents(lines[i].text) == null) continue;
+      final box = lines[i].boundingBox;
+      final previous = indexes.isEmpty
           ? null
-          : fragment.boundingBox.top - current.first.boundingBox.top;
-      if (current != null && apart! <= fragment.boundingBox.height) {
-        current.add(fragment);
-      } else {
-        bands.add([fragment]);
+          : lines[indexes.last].boundingBox;
+      if (previous != null && box.top < previous.bottom) {
+        final wins = box.bottom > previous.bottom ||
+            (box.bottom == previous.bottom && box.right > previous.right);
+        if (wins) indexes[indexes.length - 1] = i;
+        continue;
       }
+      indexes.add(i);
     }
-    return bands.last;
+    return indexes;
   }
 
-  int? _bandToCents(List<OcrLine> band) {
-    final ordered = [...band]
-      ..sort((a, b) => a.boundingBox.left.compareTo(b.boundingBox.left));
-    final digits = ordered
-        .map((line) => line.text.replaceAll(RegExp(r'[^0-9]'), ''))
-        .where(_digits.hasMatch)
-        .join();
+  /// The price a line carries, or null when it carries none.
+  ///
+  /// The rightmost money token still wins, because that is where a receipt puts
+  /// the price. When the line holds no token at all, and holds no word either,
+  /// its rightmost group of digits is the price with the last two as cents: ML
+  /// Kit returns a price as **one** token with the raised cents already merged
+  /// but no separator, `129` for 1,29 (ticket 055 dump). Requiring the line to
+  /// be wordless is what keeps `500g`, `2 x 125g` and `10er Pack` out.
+  int? _anchorCents(String text) {
+    final trimmed = text.trim();
+    final tokens = _amountToken.allMatches(trimmed);
+    if (tokens.isNotEmpty) {
+      final match = tokens.last;
+      return _toCents(match.group(1)!, match.group(2)!);
+    }
+    if (!_priceOnly.hasMatch(trimmed)) return null;
+
+    final groups = trimmed.split(_whitespace);
+    final index = groups.lastIndexWhere((group) => group.contains(_digit));
+    if (index < 0) return null;
+    final digits = groups[index].replaceAll(_nonDigit, '');
+    // Two digits cannot be a price with cents, which is what keeps a quantity
+    // badge — Picnic prints `1`, `2`, `3` in its own column — out.
     if (digits.length < 3) return null;
 
     final cents = int.tryParse(digits);
-    return cents == null || cents == 0 ? null : cents;
+    return cents == 0 ? null : cents;
+  }
+
+  /// How far above its price a row may reach: the median distance between
+  /// consecutive prices, derived per document. A receipt's row pitch is what
+  /// separates one item from the next — the Picnic dump has a pitch of 87 px
+  /// while its text is 7 to 17 px tall, so a tolerance taken from the text
+  /// height cannot bridge the gap no matter how it is scaled (ticket 045 tried).
+  double _rowReach(List<OcrLine> lines, List<int> anchors) {
+    if (anchors.isEmpty) return 0;
+    if (anchors.length == 1) {
+      // One price says nothing about the pitch, so its own height has to do.
+      return lines[anchors.single].boundingBox.height * 3;
+    }
+    final gaps = [
+      for (var i = 1; i < anchors.length; i++)
+        lines[anchors[i]].boundingBox.bottom -
+            lines[anchors[i - 1]].boundingBox.bottom,
+    ]..sort();
+    return gaps[gaps.length ~/ 2];
+  }
+
+  /// The row a line belongs to: the first price whose bottom edge is at or below
+  /// the line's centre, as long as it is within [reach].
+  int? _slotFor(
+    List<OcrLine> lines,
+    List<int> anchors,
+    int index,
+    double reach,
+  ) {
+    final own = anchors.indexOf(index);
+    if (own >= 0) return own;
+
+    final centre = lines[index].boundingBox.center.dy;
+    for (var slot = 0; slot < anchors.length; slot++) {
+      final bottom = lines[anchors[slot]].boundingBox.bottom;
+      if (bottom < centre) continue;
+      return bottom - centre > reach ? null : slot;
+    }
+    return null;
+  }
+
+  /// Joins a row left to right and cuts its description out of it.
+  ///
+  /// Left first, then top: the label has to lead the row for the skip vocabulary
+  /// to see it — on the real receipt the price of `Bestelung 72.80` starts one
+  /// pixel higher than its label.
+  _Row _rowOf(List<OcrLine> lines, OcrLine anchor) {
+    final ordered = [...lines]..sort((a, b) {
+      final byLeft = a.boundingBox.left.compareTo(b.boundingBox.left);
+      return byLeft != 0
+          ? byLeft
+          : a.boundingBox.top.compareTo(b.boundingBox.top);
+    });
+
+    return (
+      text: _join(ordered.map((line) => line.text)),
+      // Of the price line only what stands before the price is description. A
+      // line that is nothing but a price is no description either: that is the
+      // struck-through original, which stays visible in `rawOcrText` only.
+      label: _labelOf(
+        ordered,
+        (line) => line == anchor
+            ? _withoutPrice(line.text)
+            : _isOnlyPrice(line.text)
+                ? ''
+                : line.text,
+      ),
+      amountCents: _anchorCents(anchor.text),
+    );
+  }
+
+  String _labelOf(List<OcrLine> ordered, String Function(OcrLine) textOf) =>
+      _join(ordered.map(textOf));
+
+  /// The price line without its price. A wordless line is nothing but the price,
+  /// so nothing is left of it.
+  String _withoutPrice(String text) {
+    final match = _amountToken.allMatches(text);
+    if (match.isEmpty) return '';
+    return text.substring(0, match.last.start);
   }
 
   bool _isOnlyPrice(String text) {
@@ -295,19 +311,41 @@ class HeuristicReceiptLineItemParser implements ReceiptLineItemParser {
       .where((part) => part.isNotEmpty)
       .join(' ');
 
-  bool _belongsToRow(List<OcrLine> row, OcrLine line) {
-    final centers = row.map((entry) => entry.boundingBox.center.dy);
-    final rowCenter = centers.reduce((a, b) => a + b) / row.length;
-    final rowHeight = row
-        .map((entry) => entry.boundingBox.height)
-        .reduce((a, b) => a > b ? a : b);
-    final tolerance = (line.boundingBox.height + rowHeight) / 4;
-    return (line.boundingBox.center.dy - rowCenter).abs() <= tolerance;
-  }
-
+  /// The row start against the skip vocabulary, allowing one wrong character in
+  /// a word of six or more. OCR returns the summary block of a delivery receipt
+  /// misspelled — `Bestelung`, `Gespat` — and an exact list cannot be kept in
+  /// step with however the next scan misreads it (ticket 055). The PDF parser
+  /// keeps exact matching: a text layer has no noise to forgive.
   bool _isSkippable(String text) {
     final normalized = text.toLowerCase().trimLeft();
-    return _skipPrefixes.any(normalized.startsWith);
+    if (_skipPrefixes.any(normalized.startsWith)) return true;
+
+    final first = normalized.split(_whitespace).first;
+    if (first.length < _fuzzyMinLength) return false;
+    return _skipPrefixes.any(
+      (prefix) =>
+          prefix.length >= _fuzzyMinLength && _isOneEditApart(first, prefix),
+    );
+  }
+
+  /// One missing, extra or wrong character apart — no more.
+  bool _isOneEditApart(String word, String target) {
+    if ((word.length - target.length).abs() > 1) return false;
+
+    var i = 0;
+    var j = 0;
+    var edits = 0;
+    while (i < word.length && j < target.length) {
+      if (word[i] == target[j]) {
+        i++;
+        j++;
+        continue;
+      }
+      if (++edits > 1) return false;
+      if (word.length >= target.length) i++;
+      if (word.length <= target.length) j++;
+    }
+    return edits + (word.length - i) + (target.length - j) <= 1;
   }
 
   LineItemCandidate _candidate(_Row row, int amountCents) {
