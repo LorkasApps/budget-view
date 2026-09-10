@@ -50,7 +50,10 @@ Section parsing is dropped. `Hinzugefügt am` stays interesting only as the visu
 - [ ] `make check` green
 
 ## Out of Scope
-- Parsing `Hinzugefügt am` sections out of one document; dropped with the reframe
+- Parsing `Hinzugefügt am` sections out of one document; dropped with the reframe — **for the photo path only**, as
+  2026-09-08 showed: a PDF arrives whole and its headings are parseable, which is now ticket 062. This ticket's subject, the
+  booking as the bound when no total is printed, holds on both paths and is unaffected — the dump proves it, since a PDF
+  section carries no printed subtotal either
 - Cropping inside the app: the user crops before picking the image
 
 ## Affected Tests
