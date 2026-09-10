@@ -110,6 +110,11 @@ void _reconciliationTest() {
 /// merchant read out of it. The pattern behind `extractMerchant` was derived from
 /// exactly this output (ticket 047): the statement wraps a purpose text mid-word,
 /// so the merchant arrives in two spellings and only one of them is unbroken.
+/// Deliberately a second copy of the production set in `merchant_extraction.dart`,
+/// not an import of it: the dump has to stay able to show a payer that production
+/// fails to read, which is exactly the case an import would hide.
+const _probedPayers = {'adyen', 'nexi'};
+
 void _merchantTest() {
   test('dump the merchant behind every collective payer row', () async {
     final source = Platform.environment['ING_PDF'];
@@ -120,16 +125,29 @@ void _merchantTest() {
 
     final result = await const IngGiroParser()
         .parse(await File(source).readAsBytes());
-    var found = 0;
+    var withMerchant = 0;
+    var probedWithoutMerchant = 0;
     for (final candidate in result.transactions) {
-      final merchant = extractMerchant(candidate.description);
-      if (merchant == null) continue;
-      found++;
+      final merchant = extractMerchant(
+        candidate.description,
+        counterparty: candidate.counterparty,
+      );
+      final counterparty = candidate.counterparty?.toLowerCase() ?? '';
+      final probed = _probedPayers.any(counterparty.startsWith);
+      // A probed payer prints even with a null merchant: that null is the finding,
+      // and its purpose text is the only place the acquirer shape can be read.
+      if (merchant == null && !probed) continue;
+      if (merchant == null) {
+        probedWithoutMerchant++;
+      } else {
+        withMerchant++;
+      }
       stdout.writeln('  ${candidate.counterparty}');
       stdout.writeln('    purpose : ${candidate.description}');
       stdout.writeln('    merchant: $merchant');
     }
-    stdout.writeln('=== rows with a merchant: $found');
+    stdout.writeln('=== rows with a merchant: $withMerchant');
+    stdout.writeln('=== probed payers with no merchant: $probedWithoutMerchant');
     stdout.writeln('=== rows total: ${result.transactions.length}');
   });
 }

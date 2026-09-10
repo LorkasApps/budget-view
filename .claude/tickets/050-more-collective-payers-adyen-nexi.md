@@ -6,7 +6,7 @@
 | **Epic** | Auto-Tagging |
 | **Domain** | Transaction |
 | **Blocked By** | None (047 shipped the seam) |
-| **Status** | Ready |
+| **Status** | In Progress |
 
 ## Description
 Ticket 047 reads the merchant behind PayPal and left other collective payers out until one appeared. Two have:
@@ -34,6 +34,40 @@ Lastschrift KAUFLAND
 No Nexi line has been read yet. Its shape is **unknown** and must be dumped before any pattern is written — the same rule
 047 followed, which is what turned up that PayPal prints its merchant twice.
 
+## Dump finding, 2026-09-10
+The harness case now prints a probed payer even when `extractMerchant` returns null — that null is the finding. Run against
+the September 2026 statement: 74 rows, 13 with a merchant, **5 probed payers without one**.
+
+**Adyen prints the shape the ticket assumed.** Four rows over three merchants, with two dents in the text layer:
+
+| Purpose text, leading part | Leading segment | Dent |
+|---|---|---|
+| `Salon Pia Bruchmann/An der Hardt 1b /Knigswinter/DE …` | `Salon Pia Bruchmann` | none |
+| `BootshausRadolfzell/Schlossstrae 12 /Gaienhofen/DE …` | `BootshausRadolfzell` | space swallowed between the two words |
+| `LS Akropolis Grill Loh/Hauptstrae 8 9/Lohmar/DE …` | `LS Akropolis Grill Loh` | **`LS ` prefix**, and the name is cut mid-word |
+
+The `LS ` prefix is new information — it is on none of the rows the ticket was filed with, so the leading segment needs it
+stripped before it becomes a key.
+
+**Nexi prints a third shape**, which answers the question AC 1 asked. One row:
+
+```
+BAECKEREI SCHMIDT E K INHA 301 Refr GIR 79998979//BERGISCH GLADBAC/DE 2026-08-12T09:37:33 Folgenr.001 Verfalld.2029-12
+```
+
+The leading segment is the merchant *plus noise*: legal form (`E K INHA`), what looks like a terminal number (`301`), and a
+reference (`Refr GIR 79998979`). The street segment is empty, hence the `//` — not Nexi-specific, the `KAUFLAND` row in the
+section above prints `//` too. So the plain leading-segment rule of AC 4 holds for Adyen and **fails for Nexi**.
+
+**Decision, 2026-09-10: cut the segment at `Refr`.** The reference number is assumed to vary per booking, which would make
+the raw segment a per-purchase key and reproduce exactly the rule-explosion the whitelist was chosen to avoid. Only one Nexi
+row exists, so the assumption cannot be verified — cutting is correct whether it varies or not, which is why it beats waiting
+for a second statement.
+
+The cut yields `BAECKEREI SCHMIDT E K INHA 301`. Legal form and the `301` stay in: unlike the reference, a terminal number
+plausibly belongs to the store rather than the booking, and dropping it would need a second assumption on top of the first.
+Accepted — a key does not need to be presentable, only stable.
+
 ## Resolved during refinement
 - **A whitelist of payer names, not a shape rule** — and this reverses the lean the ticket was filed with. The card-terminal
   shape is also printed by **ordinary** card payments, where the counterparty already names the shop (`Lastschrift KAUFLAND` with
@@ -52,17 +86,21 @@ No Nexi line has been read yet. Its shape is **unknown** and must be dumped befo
   It stays a stable *key* regardless, which is what tagging needs
 
 ## Acceptance Criteria
-- [ ] **First step:** the env-gated harness prints the purpose text of every row whose counterparty is a listed payer, whether or
+- [x] **First step:** the env-gated harness prints the purpose text of every row whose counterparty is a listed payer, whether or
       not a merchant was extracted, and the rule is derived from the real Adyen and Nexi rows
-- [ ] The finding is written into this ticket, including whether Nexi shares Adyen's shape or prints a third one
-- [ ] A `const` set of collective payers lives beside `extractMerchant`, compared through `normalizeForMatching` with a
+- [x] The finding is written into this ticket, including whether Nexi shares Adyen's shape or prints a third one
+- [x] A `const` set of collective payers lives beside `extractMerchant`, compared through `normalizeForMatching` with a
       `startsWith`, so casing and spacing variants of a name still hit
-- [ ] For a listed payer, the merchant is the leading segment before the first `/`
-- [ ] For an **unlisted** counterparty nothing changes — a `KAUFLAND` row keeps its single rule, with no branch in the key
-- [ ] A listed payer whose purpose text yields nothing falls back to the counterparty, as PayPal's empty row already does
-- [ ] PayPal rows behave exactly as they do today; the 047 test cases stay green
-- [ ] Nothing about the dedupe hash changes
-- [ ] `make check` green
+- [x] For a listed payer, the merchant is the leading segment before the first `/`
+- [x] A leading `LS ` is stripped from that segment — the Akropolis row prints it, so without the strip the same shop keys
+      differently depending on which prefix the statement happened to print
+- [x] The segment is cut at `Refr` and re-trimmed, so Nexi's per-booking reference cannot leak into the key. `BAECKEREI
+      SCHMIDT E K INHA 301 Refr GIR 79998979` becomes `BAECKEREI SCHMIDT E K INHA 301`
+- [x] For an **unlisted** counterparty nothing changes — a `KAUFLAND` row keeps its single rule, with no branch in the key
+- [x] A listed payer whose purpose text yields nothing falls back to the counterparty, as PayPal's empty row already does
+- [x] PayPal rows behave exactly as they do today; the 047 test cases stay green
+- [x] Nothing about the dedupe hash changes
+- [x] `make check` green
 
 ## Out of Scope (proposed, to confirm)
 - Any change to the dedupe hash, as in 047

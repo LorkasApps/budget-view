@@ -101,12 +101,19 @@ Typedef: `PdfParserRanking = ({PdfParser parser, double confidence})`
 
 - `pdfParserRegistryProvider` (`pdf/pdf_parser_providers.dart`) — registers parsers in order: `const IngGiroParser()` (id `ing-giro-v1`) then `const TradeRepublicParser()` (id `trade-republic-cash-v1`)
 
-## Merchant extraction (`domain/merchant_extraction.dart`, ticket 047)
+## Merchant extraction (`domain/merchant_extraction.dart`, tickets 047, 050)
 
-`extractMerchant(description)` reads the shop hidden behind a collective payer, or
-null. Run **after** parsing over every candidate (in `ImportFlowController.parse`,
-not inside a parser): a purpose text has the same shape whatever bank printed it,
-the column it came from does not, so a second parser inherits it for free.
+`extractMerchant(description, {counterparty})` reads the shop hidden behind a
+collective payer, or null. Run **after** parsing over every candidate (in
+`ImportFlowController.parse`, not inside a parser): a purpose text has the same
+shape whatever bank printed it, the column it came from does not, so a second parser
+inherits it for free.
+
+Two payer shapes, recognised differently. PayPal is recognised by the marker in its
+own purpose text, so `counterparty` is optional and omitting it leaves only the
+PayPal path. The card acquirers are recognised **by name**, against the `_acquirers`
+list — `{'adyen', 'nexi'}`, compared through `normalizeForMatching` with a
+`startsWith` so casing and spacing variants still hit.
 
 PayPal's shape: `<reference>/PP.4163.PP/. <merchant>, Ihr Einkauf bei <merchant>`.
 The merchant appears **twice**, and ING wraps the purpose text mid-word, so on a
@@ -115,9 +122,27 @@ Both are read and the one with fewer whitespace runs wins — `normalizeForMatch
 keeps single spaces, so `picnic g mbh` and `picnic gmbh` would otherwise be two
 rule keys for one shop. Missing merchant → null → the row keys on its counterparty.
 
-Verified against a real January statement: 13 of 60 rows carried a merchant, every
-one unbroken. Harness: `_merchantTest` in `test/tool/ing_geometry_dump_test.dart`,
-env-gated on `ING_PDF`.
+The acquirer shape is the card terminal's:
+`<merchant>/<street>/<city>/<country> <timestamp> Folgenr… Verfalld…`. The merchant
+is the leading segment before the first `/`, with a leading `LS ` stripped and the
+segment cut at `Refr` — Nexi appends a booking reference there, and leaving it in
+would make the key change per purchase. Empty segment → null → keys on counterparty.
+
+A name list and not a shape rule, because an **ordinary** card payment prints the
+same shape and there the counterparty already names the shop: a shape rule would set
+a merchant on `KAUFLAND` too and split one rule into one per branch. The shape does
+not say that a counterparty is a proxy; only the name does.
+
+The text layer drops characters and glues words, so an acquirer merchant is
+occasionally incomplete — `Knigswinter` for Königswinter, `BootshausRadolfzell` for
+two words. It stays a stable key, which is all tagging needs.
+
+Verified against real statements: January 2026 for PayPal, 13 of 60 rows with a
+merchant, every one unbroken; September 2026 for the acquirers, 4 Adyen rows over 3
+merchants plus 1 Nexi row out of 74. Harness: `_merchantTest` in
+`test/tool/ing_geometry_dump_test.dart`, env-gated on `ING_PDF`. It keeps its own
+copy of the payer list on purpose, so it can still show a payer production fails to
+read.
 
 ## Conversion
 

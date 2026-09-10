@@ -307,7 +307,12 @@ class ImportFlowController extends AutoDisposeNotifier<ImportFlowState> {
         rows: [
           for (final candidate in result.transactions)
             ImportRow.fromCandidate(
-              candidate.withMerchant(extractMerchant(candidate.description)),
+              candidate.withMerchant(
+                extractMerchant(
+                  candidate.description,
+                  counterparty: candidate.counterparty,
+                ),
+              ),
             ),
         ],
         warnings: result.warnings,
