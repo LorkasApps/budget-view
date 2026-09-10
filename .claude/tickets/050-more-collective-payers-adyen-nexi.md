@@ -6,7 +6,7 @@
 | **Epic** | Auto-Tagging |
 | **Domain** | Transaction |
 | **Blocked By** | None (047 shipped the seam) |
-| **Status** | In Progress |
+| **Status** | Done |
 
 ## Description
 Ticket 047 reads the merchant behind PayPal and left other collective payers out until one appeared. Two have:
@@ -33,6 +33,9 @@ Lastschrift KAUFLAND
 
 No Nexi line has been read yet. Its shape is **unknown** and must be dumped before any pattern is written — the same rule
 047 followed, which is what turned up that PayPal prints its merchant twice.
+
+_Superseded by the next section: the dump ran on 2026-09-10 and Nexi's shape turned out to be a third one. The paragraph above
+is kept because it is the reason the pattern was not written from the Adyen row alone._
 
 ## Dump finding, 2026-09-10
 The harness case now prints a probed payer even when `extractMerchant` returns null — that null is the finding. Run against
@@ -102,9 +105,15 @@ Accepted — a key does not need to be presentable, only stable.
 - [x] Nothing about the dedupe hash changes
 - [x] `make check` green
 
-## Out of Scope (proposed, to confirm)
-- Any change to the dedupe hash, as in 047
+## Out of Scope
+- Any change to the dedupe hash, as in 047. Verified rather than assumed: `dedupe_hash.dart` hashes amount, booking day and
+  the normalised **counterparty**, never the merchant, and the file was not touched
 - Klarna, credit-card settlements and collective direct debits until one appears
+
+## Open, deliberately not a ticket
+The `Refr` cut rests on **one** Nexi row. Should a second statement with a Nexi booking ever turn up, the assumption becomes
+checkable in one run of the harness: a different number in `Refr GIR …` proves the cut right, an identical one means the key
+could have been longer. Not worth a ticket — the cut is correct either way, this is only the cheaper key left on the table.
 
 ## Affected Tests
 - `merchant_extraction_test.dart` gains the acquirer shapes; its PayPal cases must stay green
@@ -117,5 +126,10 @@ No. Purpose strings inline, taken from real statement lines, as in 047.
 - Input: ~11k tokens
 - Output: ~2k tokens
 
-### Implementation Tokens (estimate)
-_Filled after Done._
+### Implementation Tokens (measured)
+- Source: `/usage`, shared session — the baseline re-run and the 057/061/062 index commit ran in the same session before this
+  ticket, so the figures are an upper bound for 050 alone. The bulk is this ticket: the dump run, the pattern and the docs
+- Opus: 142 input, 44.9k output, 7.0m cache read, 133.7k cache write — $5.44
+- Haiku 4.5: 4.4k input, 3.7k output — $0.12
+- Session total $5.56, 11m53s API time. Cache read dominates by three orders of magnitude, which is the ticket's own lesson:
+  the two evidence round-trips were cheap, re-reading the accumulated context on every turn was not

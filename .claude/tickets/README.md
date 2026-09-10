@@ -51,7 +51,7 @@
 | 047-merchant-behind-a-collective-payer.md | Feature | Auto-Tagging | Transaction | Done | None | PayPal hides the real merchant in the purpose text; needs a `merchant` field, pattern to be read off real lines first |
 | 048-import-meets-a-booked-counter-leg.md | Feature | Import | Transaction | Ready | 042 | Split from 042: an import meets the mirror booking; dedupe cannot catch it, and only ING Giro ↔ TR Cash can collide |
 | 049-transfers-in-the-uncategorized-filter.md | Bug | None | Transaction | Done | 053 | Closed by 053: the toggle is gone and the rule lives in its `Ohne Kategorie` option, so transfers no longer clog it |
-| 050-more-collective-payers-adyen-nexi.md | Feature | Auto-Tagging | Transaction | In Progress | None | Adyen and Nexi hide the shop too, but in the card-terminal shape; Nexi still unseen, so dump before pattern |
+| 050-more-collective-payers-adyen-nexi.md | Feature | Auto-Tagging | Transaction | Done | None | Adyen and Nexi hide the shop too, but in the card-terminal shape; Nexi still unseen, so dump before pattern |
 | 051-one-subcategory-level-only.md | Feature | Categories | Category | Ready | None | Cap the tree at roots plus one child level; parent picker shrinks to the roots, and depth-only helpers can go |
 | 052-net-result-per-month-and-year.md | Feature | Analytics | Analytics | In Progress | None | Signed `Ergebnis` line plus a `Jahr` mode with twelve tappable month rows; two `computeSeries` calls, no second aggregation. Gate green (614), device check on the four-column width open |
 | 053-search-and-category-filter-in-the-account-list.md | Feature | None | Transaction | Done | None | Word search plus a category filter in the per-account list; overlaps 049, follows the 038 search semantics |
