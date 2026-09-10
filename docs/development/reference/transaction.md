@@ -1,3 +1,9 @@
+---
+title: Transaction (Transaction domain)
+date: 2026-09-10
+description: Transaction entity, repository (+sumForAccount), providers, validation, list/form UI, balance integration
+---
+
 # Transaction (Transaction domain)
 
 Manual bank-transaction entry. `lib/features/transaction/`.

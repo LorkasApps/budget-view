@@ -1,3 +1,9 @@
+---
+title: Tagging (Tagging domain)
+date: 2026-09-10
+description: TaggingRule entity, repository (upsert/hit-count, hard delete, remap), learn service + its three UI call sites, suggest service + shared suggestion sheet, TaggingRulesScreen, providers
+---
+
 # Tagging (Tagging domain)
 
 Learns which category the user assigns to a counterparty; the suggest service consumes rules to rank candidate categories. `lib/features/tagging/`. Rules are curated via `TaggingRulesScreen` (ticket 025).

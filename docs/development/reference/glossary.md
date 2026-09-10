@@ -1,3 +1,9 @@
+---
+title: Glossary
+date: 2026-09-10
+description: Project vocabulary and abbreviations used in specs and reference pages.
+---
+
 # Glossary
 
 | Short | Meaning |

@@ -1,3 +1,9 @@
+---
+title: Infrastructure (Infra domain)
+date: 2026-09-10
+description: Stack, feature-first layout, entry point (AppShell, MenuScreen, SettingsScreen), dev commands (Makefile)
+---
+
 # Infrastructure (Infra domain)
 
 Current state of the project foundation. Updated as Setup-epic tickets complete.

@@ -1,3 +1,9 @@
+---
+title: Analytics (Analytics domain)
+date: 2026-09-10
+description: Monthly category report: rollup service, donut + tree table, month/account/direction filters, subtree drilldown; linear-regression forecast on the same rollup; item price trends with search + chart UI
+---
+
 # Analytics (Analytics domain)
 
 Positions/bookings of a month aggregated into the category tree. `lib/features/analytics/`.

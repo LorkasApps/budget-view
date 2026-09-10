@@ -1,21 +1,48 @@
+---
+title: Domain Dependencies
+date: 2026-09-10
+description: Which domain may depend on which, and the reason each edge exists. Check before any cross-domain change.
+---
+
 # Domain Dependencies
 
-```
-Infra              (base: Flutter, Isar, Supabase-stub)
-Import             → Infra, Transaction (dedupe queries)
-Account            → Infra, Transaction (balance needs transaction sums)
-Transaction        → Account, Category
-Category           → Infra
-Drilldown          → Transaction, Import (doc-hash + ImportedSource on scans),
-                     Analytics (navigation only)
-Tagging            → Transaction, Category
-Analytics          → Transaction, Category, Drilldown, Account
+```mermaid
+graph TD
+    Infra["Infra<br/><small>Flutter · Isar · Supabase stub</small>"]
+
+    Import --> Infra
+    Import -->|dedupe queries| Transaction
+    Account --> Infra
+    Account -->|balance needs sums| Transaction
+    Account -->|navigation only| Category
+    Transaction --> Account
+    Transaction --> Category
+    Transaction -->|dedupe + import flow| Import
+    Category --> Infra
+    Category -->|countByCategory| Transaction
+    Drilldown --> Transaction
+    Drilldown -->|doc-hash + ImportedSource| Import
+    Drilldown -->|navigation only| Analytics
+    Tagging --> Transaction
+    Tagging --> Category
+    Analytics -->|read-only| Transaction
+    Analytics -->|read-only| Category
+    Analytics -->|read-only| Drilldown
+    Analytics -->|read-only| Account
 ```
 
-Note the Account↔Transaction cycle is intentional and narrow: `LocalBalanceService`
-(account/data) injects `TransactionRepository` for `sumForAccount`, while
-transactions reference accounts by `accountUuid`. No other account code depends
-on the transaction feature.
+The diagram carries two edges the previous arrow list left out although the notes
+below already described them: `Account → Category` and `Transaction → Import`.
+
+## Intentional cycles
+
+Two cycles exist on purpose and both are narrow. Neither is a boundary violation, and
+neither may be widened without a new decision record.
+
+| Cycle | What crosses it | What must not |
+|-------|-----------------|---------------|
+| Account ↔ Transaction | `LocalBalanceService` (account/data) injects `TransactionRepository` for `sumForAccount`; transactions reference accounts by `accountUuid` | Any other account code depending on the transaction feature |
+| Category ↔ Transaction | `CategoryRepository` injects `TransactionRepository` for `countByCategory` only, so `delete` can refuse to archive a category still in use | Anything else in the category feature touching transactions |
 
 ## Notes
 - Category assignment is on Transaction (1 category per entry, tree-aware).

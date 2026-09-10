@@ -1,3 +1,9 @@
+---
+title: Drilldown (Drilldown domain)
+date: 2026-09-10
+description: LineItem entity, repository (sign follows parent, reorder), validation + mismatch warning, section/sheet inside the booking form
+---
+
 # Drilldown (Drilldown domain)
 
 Positions of a booking (Kassenbon items). `lib/features/drilldown/`.

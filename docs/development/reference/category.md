@@ -1,3 +1,9 @@
+---
+title: Category (Category domain)
+date: 2026-09-10
+description: Category tree entity, repository (sync-wired, exceptions), tree helpers, providers, validation, tree/form/picker UI (expandable, drag-reorder, icon/color pickers, quick-create in picker)
+---
+
 # Category (Category domain)
 
 User-defined free category tree (parent-child, arbitrary depth). Feature-first under `lib/features/category/`.

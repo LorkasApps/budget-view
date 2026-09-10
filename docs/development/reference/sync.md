@@ -1,3 +1,9 @@
+---
+title: Sync (Infra)
+date: 2026-09-10
+description: Sync stub: SyncableEntity, ChangeQueueEntry, LocalSyncAdapter, repo-layer contract
+---
+
 # Sync (Infra)
 
 Local-first change capture, prepared for a future Supabase backend. No network today.

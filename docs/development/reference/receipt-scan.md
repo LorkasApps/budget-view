@@ -1,3 +1,9 @@
+---
+title: Receipt capture (Drilldown domain)
+date: 2026-09-10
+description: Ephemeral receipt capture: photo/PDF/gallery source picker, deskew, doc-hash check, OCR or PDF reading, parser seams, confirm to line-items + ImportedSource, printed total checksum banner
+---
+
 # Receipt capture (Drilldown domain)
 
 Ephemeral one-shot capture workflow: camera / gallery / PDF source picker → optional

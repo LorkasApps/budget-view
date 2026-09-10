@@ -1,3 +1,9 @@
+---
+title: Account (Account domain)
+date: 2026-09-10
+description: Account entity, repository (sync-wired), providers, validation, list/form UI, money helpers
+---
+
 # Account (Account domain)
 
 Multi-account management. Feature-first under `lib/features/account/`.

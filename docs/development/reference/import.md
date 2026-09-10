@@ -1,3 +1,9 @@
+---
+title: Import
+date: 2026-09-10
+description: PDF import layer: PdfParser interface, registry (IngGiroParser), ING layout parsing, import flow (preview, edit, persist via controller), import history screen + provider, merchant extraction
+---
+
 # Import
 
 ## Shared Import Domain (`lib/features/import/`)
