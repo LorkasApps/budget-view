@@ -8,7 +8,7 @@
 | **Blocked By** | None |
 | **Severity** | Low |
 | **Effort** | XL |
-| **Status** | In Progress |
+| **Status** | Done |
 
 ## Description
 `.claude/` currently holds both tooling and documentation. The MDBunker hierarchy separates the two: documentation moves to
@@ -54,31 +54,33 @@ Answered by the user on 2026-09-10, in the scoping round:
 - **`CLAUDE.md` stays at the repo root.** It is the agent-facing index, reloaded every message, and not MDBunker documentation
 
 ## Acceptance Criteria
-- [ ] `docs/` exists with `index.md` in every non-asset directory, and every index links only to pages that exist
-- [ ] The 11 feature docs plus `glossary.md` and `dependencies.md` live under `docs/development/reference/`, each with YAML
+- [x] `docs/` exists with `index.md` in every non-asset directory, and every index links only to pages that exist
+- [x] The 10 feature docs plus `glossary.md` and `dependencies.md` live under `docs/development/reference/` — 12 pages.
+      This ticket claimed 13 before anyone counted; the figure was wrong, not the work. Each with YAML
       frontmatter carrying at least `title`, `date` and `description`; the `description` is specific enough to decide against
       opening the page
-- [ ] `dependencies.md` states the domain graph as a Mermaid diagram rather than an arrow list
-- [ ] 149 ADRs under `docs/development/adr/`, named `NNNN-<english-kebab-slug>.md`, numbered oldest-first by the date in
+- [x] `dependencies.md` states the domain graph as a Mermaid diagram rather than an arrow list
+- [x] 149 ADRs under `docs/development/adr/`, named `NNNN-<english-kebab-slug>.md`, numbered oldest-first by the date in
       `decisions.md`, each with Status, Context, Decision, Consequences and a gap-marked Evidence section
-- [ ] The ADR `index.md` carries one row per decision with its date, so the table answers "was this decided already" without
+- [x] The ADR `index.md` carries one row per decision with its date, so the table answers "was this decided already" without
       opening a file
-- [ ] 16 troubleshooting pages under `docs/operations/troubleshooting/`, each titled after the user-visible symptom plus the
+- [x] 16 troubleshooting pages under `docs/operations/troubleshooting/`, each titled after the user-visible symptom plus the
       system term, each in the 7-section shape. Where the source row has no Diagnosis or Prevention, the section says so
       instead of inventing one
-- [ ] The 62 tickets live under `docs/specs/features/` (48 Feature + 2 TechDebt) and `docs/specs/bugs/` (12 Bug), with the
-      shared `NNN` sequence intact and no renumbering
-- [ ] Both spec indexes use the contract column names — `File`, `Type`, `Epic`, `Domain`, `Status`, `Blocked By`, `Summary`
-- [ ] `docs/development/HANDBOOK.md` exists and holds the contributor loop: the Makefile targets, the gate before a commit,
+- [x] The 63 specs live under `docs/specs/features/` (48 Feature + 3 TechDebt) and `docs/specs/bugs/` (12 Bug), with the
+      shared `NNN` sequence intact and no renumbering. 63 rather than 62 because this ticket counts itself, and the third
+      TechDebt is this one
+- [x] Both spec indexes use the contract column names — `File`, `Type`, `Epic`, `Domain`, `Status`, `Blocked By`, `Summary`
+- [x] `docs/development/HANDBOOK.md` exists and holds the contributor loop: the Makefile targets, the gate before a commit,
       and the fact that Flutter does not run in the agent sandbox. `CLAUDE.md` points at it instead of restating it
-- [ ] `doc_section.py`, `ticket_status_count.py` and `guard_paths.py` operate on the new paths, and their self-tests pass —
-      `guard_paths.py` has 21 cases that must stay green
-- [ ] `.claude/docs/` and `.claude/tickets/` are gone, not left as stubs. No file lives in both layouts at any commit that
+- [x] `doc_section.py`, `ticket_status_count.py` and `guard_paths.py` operate on the new paths, and their self-tests pass —
+      `guard_paths.py` had 21 cases and now has 22, the added one covering a spec path
+- [x] `.claude/docs/` and `.claude/tickets/` are gone, not left as stubs. No file lives in both layouts at any commit that
       ends a step
-- [ ] `CLAUDE.md` names the new paths, is still under 200 lines, and its edit is the **last** commit of the migration —
+- [x] `CLAUDE.md` names the new paths, is still under 200 lines, and its edit is the **last** commit of the migration —
       editing it earlier busts the cached prefix for every following step
-- [ ] `make check` green after every commit that touches a helper or `CLAUDE.md`
-- [ ] No source file under `lib/` or `test/` is modified by this ticket
+- [x] `make check` green after every commit that touches a helper or `CLAUDE.md`
+- [x] No source file under `lib/` or `test/` is modified by this ticket
 
 ## Refactor strategy
 Seven commits, in this order, because each one leaves the repo consistent:
@@ -107,5 +109,23 @@ No.
 The scoping round of 2026-09-10 served as the refinement: six questions, all forks closed, ACs concrete before any
 file moved. No separate Draft walk. Figures are inside the implementation block below, the same session.
 
-### Implementation Tokens
-_Filled after Done._
+### Implementation Tokens (measured)
+- Source: `/usage`. Shared session with ticket 050, which stood at $5.56 when it closed, so the migration is the
+  **$30.89** difference to the $36.45 session total. 1h03m API time, 2h12m wall
+- Opus: 660 input, 138.6k output, 34.5m cache read, 961.7k cache write — $26.72
+- Sonnet: 2.9k input, 166.5k output, 5.9m cache read, 298.7k cache write — $8.99
+- Haiku: 7.9k input, 12.3k output, 202.5k cache read, 45.7k cache write — $0.73
+
+**What the numbers say, which is not what was planned.**
+
+Sonnet earned its place: it produced **more output than Opus** — 166.5k against 138.6k tokens, the 149 ADRs and the 16
+troubleshooting pages — for a quarter of the cost. That delegation was the right call and would be again.
+
+Haiku produced nothing. Both Haiku agents died before touching a file, because the briefs told them to use `mv` and
+sub-agents have no Bash access here; they cannot ask for a permission either, so they simply give up. The $0.73 bought two
+failure reports. Steps 2 and 5 were then done with throwaway Python scripts, which was **cheaper than either model** and
+also caught two things an LLM would likely have smoothed over: spec 029's escaped pipes, and the 028/029 row order.
+
+The dominant cost is none of that. It is Opus **cache read: 34.5m tokens**, from driving 30-odd turns of migration on top of
+a conversation that already carried all of ticket 050. The baseline's own rule — one session, one logical task, `/clear`
+between them — was broken by continuing here, and that single decision outweighs every model-routing choice in this ticket.
