@@ -1,13 +1,35 @@
 #!/usr/bin/env python3
-"""Extract a single section from a doc under .claude/docs/ by heading."""
+"""Extract a single section from a doc under docs/ by heading."""
 
 import argparse
 import re
 import sys
 from pathlib import Path
 
-DOCS_DIR = Path(__file__).resolve().parent.parent / "docs"
+REPO = Path(__file__).resolve().parent.parent.parent
+# Searched in order, so a bare filename resolves without naming its directory.
+# Specs come last: a spec is usually read whole, a reference page rarely is.
+SEARCH_ROOTS = [
+    REPO / "docs" / "development" / "reference",
+    REPO / "docs" / "development" / "adr",
+    REPO / "docs" / "operations" / "troubleshooting",
+    REPO / "docs" / "specs" / "features",
+    REPO / "docs" / "specs" / "bugs",
+    REPO / "docs",
+]
 HEADING = re.compile(r"^(#{1,6})\s+(.*?)\s*$")
+
+
+def resolve(name):
+    """A full path wins; otherwise the first search root that holds the name."""
+    direct = Path(name)
+    if direct.is_file():
+        return direct
+    for root in SEARCH_ROOTS:
+        candidate = root / name
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 def find_sections(lines, needle):
@@ -23,9 +45,12 @@ def main():
     p = argparse.ArgumentParser(
         description="Print one section of a doc (heading + body up to the next "
         "same-or-higher-level heading). Cheaper than reading the whole file.",
-        epilog="Example: ./.claude/helper/doc_section.py import.md 'ImportedSource'",
+        epilog="Example: ./.claude/helper/doc_section.py import.md 'Merchant extraction'",
     )
-    p.add_argument("file", help="path relative to .claude/docs/ (or a full path)")
+    p.add_argument(
+        "file",
+        help="bare filename, resolved against the docs/ subdirectories, or a full path",
+    )
     p.add_argument(
         "heading",
         nargs="?",
@@ -44,11 +69,10 @@ def main():
     )
     args = p.parse_args()
 
-    path = Path(args.file)
-    if not path.is_file():
-        path = DOCS_DIR / args.file
-    if not path.is_file():
-        print(f"file not found: {args.file}", file=sys.stderr)
+    path = resolve(args.file)
+    if path is None:
+        roots = ", ".join(str(r.relative_to(REPO)) for r in SEARCH_ROOTS)
+        print(f"file not found: {args.file} (searched {roots})", file=sys.stderr)
         return 1
 
     lines = path.read_text(encoding="utf-8").splitlines()

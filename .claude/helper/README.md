@@ -81,14 +81,14 @@ Lists Dart lines over a width limit. A diagnostic, not a gate: nothing in `analy
 
 ## `ticket_status_count.py`
 
-Ticket progress from `.claude/tickets/README.md` — counts per epic/domain/type, or lists the tickets behind one status.
+Spec progress from the two index tables under `docs/specs/` — counts per epic/domain/type, or lists the specs behind one status. Both indexes are read and merged, because features and bugs sit in separate directories but share one number sequence. A number appearing in both is an error and aborts with exit 2.
 
-**Usage:** `./.claude/helper/ticket_status_count.py [--by {epic,domain,type}] [--status STATUS] [--file PATH]`
+**Usage:** `./.claude/helper/ticket_status_count.py [--by {epic,domain,type}] [--status STATUS] [--index PATH ...]`
 
 **Args:**
 - `--by` (optional, default `epic`) — grouping for the count matrix
-- `--status` (optional) — list matching tickets instead of counting: `Draft`, `Ready`, `In Progress`, `Done`. `Draft (post-V1)` is normalised to `Draft`
-- `--file` (optional, default `.claude/tickets/README.md`) — alternative table path
+- `--status` (optional) — list matching specs instead of counting: `Draft`, `Ready`, `In Progress`, `Done`. `Draft (post-V1)` is normalised to `Draft`
+- `--index` (optional, default the features and bugs indexes) — one or more index files to read instead
 
 **Output:** matrix mode is tab-separated `<group>\ttotal\t<one column per status present>` with a trailing `TOTAL` row. List mode is tab-separated `<id>\t<epic>\t<domain>\t<blocked by>\t<summary>`, ascending by id.
 
@@ -104,16 +104,18 @@ Ticket progress from `.claude/tickets/README.md` — counts per epic/domain/type
     $ ./.claude/helper/ticket_status_count.py --status Ready
     009     Import  Transaction     006, 008        Duplicate detection (tx-level + doc-level SHA-256)
 
-**Exit codes:** `0` OK, `1` tickets README not found, `2` table malformed or no ticket rows, `3` no ticket matched `--status`.
+**Exit codes:** `0` OK, `1` an index file not found, `2` table malformed, no spec rows, or a duplicate id across the two indexes, `3` no spec matched `--status`.
 
 ## `doc_section.py`
 
-Extract one section from a doc under `.claude/docs/` instead of reading the whole file — the cheap path once a doc passes ~150 lines (`receipt-scan.md`, `import.md`).
+Extract one section from a doc under `docs/` instead of reading the whole file — the cheap path once a doc passes ~150 lines (`receipt-scan.md`, `import.md`).
+
+A bare filename is resolved against the `docs/` subdirectories in this order: `development/reference`, `development/adr`, `operations/troubleshooting`, `specs/features`, `specs/bugs`, then `docs/` itself. So `import.md` and `0149-merchant-segment-cut-at-refr.md` both work without naming a directory.
 
 **Usage:** `./.claude/helper/doc_section.py <file> <heading> [--depth N]` or `./.claude/helper/doc_section.py <file> --list`
 
 **Args:**
-- `file` (required) — name relative to `.claude/docs/`, or any path
+- `file` (required) — bare filename resolved as above, or any path
 - `heading` (required unless `--list`) — case-insensitive substring of the heading text
 - `--depth N` (optional, default 6) — deeper nested headings end the section instead of being included
 - `--list` (optional) — print every heading instead of extracting: `<line>\t<level>\t<text>`

@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Progress overview from `.claude/tickets/README.md`.
+"""Progress overview from the spec indexes under `docs/specs/`.
 
-Counts tickets per epic, domain or status, or lists the tickets behind one
-status. Source of truth is the README table, not the individual ticket files.
+Counts specs per epic, domain or status, or lists the specs behind one status.
+Source of truth is the index tables, not the individual spec files. Features and
+bugs live in two directories but share one number sequence, so both indexes are
+read and merged.
 """
 
 import argparse
@@ -10,12 +12,18 @@ import re
 import sys
 from pathlib import Path
 
-TICKETS_README = Path('.claude/tickets/README.md')
+SPEC_INDEXES = [
+    Path('docs/specs/features/index.md'),
+    Path('docs/specs/bugs/index.md'),
+]
 
 # Display order; anything unrecognised is appended so a typo stays visible.
 STATUS_ORDER = ['Draft', 'Ready', 'In Progress', 'Done']
 
 ROW_RE = re.compile(r'^\|(?P<cells>.+)\|\s*$')
+
+# The File cell is a markdown link, `[042-slug.md](042-slug.md)`.
+LINK_RE = re.compile(r'\[(?P<name>[^\]]+\.md)\]')
 
 
 def canonical_status(raw):
@@ -26,40 +34,54 @@ def canonical_status(raw):
     return raw
 
 
-def read_tickets(path):
-    """Parse the tickets README table into dicts. Raises ValueError if malformed."""
-    if not path.is_file():
-        raise FileNotFoundError(path)
-
+def read_tickets(paths):
+    """Parse the spec index tables into dicts. Raises ValueError if malformed."""
     tickets = []
-    for line in path.read_text(encoding='utf-8').splitlines():
-        match = ROW_RE.match(line.strip())
-        if not match:
-            continue
+    for path in paths:
+        if not path.is_file():
+            raise FileNotFoundError(path)
 
-        cells = [cell.strip() for cell in match.group('cells').split('|')]
-        if len(cells) < 7:
-            continue
-        if not cells[0].endswith('.md'):
-            continue  # header or separator row
+        for line in path.read_text(encoding='utf-8').splitlines():
+            match = ROW_RE.match(line.strip())
+            if not match:
+                continue
 
-        identifier = cells[0].split('-', 1)[0]
-        tickets.append(
-            {
-                'id': identifier,
-                'file': cells[0],
-                'type': cells[1],
-                'epic': cells[2],
-                'domain': cells[3],
-                'status': canonical_status(cells[4]),
-                'raw_status': cells[4],
-                'blocked_by': cells[5],
-                'summary': cells[6],
-            }
-        )
+            # maxsplit: spec 029's Summary contains escaped pipes, so only the
+            # first six delimiters are structural.
+            cells = [c.strip() for c in match.group('cells').split('|', 6)]
+            if len(cells) < 7:
+                continue
+
+            link = LINK_RE.match(cells[0])
+            if link is None:
+                continue  # header, separator, or prose row
+
+            name = link.group('name')
+            tickets.append(
+                {
+                    'id': name.split('-', 1)[0],
+                    'file': name,
+                    'path': path.parent / name,
+                    'type': cells[1],
+                    'epic': cells[2],
+                    'domain': cells[3],
+                    'status': canonical_status(cells[4]),
+                    'raw_status': cells[4],
+                    'blocked_by': cells[5],
+                    'summary': cells[6],
+                }
+            )
 
     if not tickets:
-        raise ValueError('no ticket rows found')
+        raise ValueError('no spec rows found')
+
+    seen = {}
+    for ticket in tickets:
+        if ticket['id'] in seen:
+            raise ValueError(
+                f"id {ticket['id']} appears twice: {seen[ticket['id']]} and {ticket['file']}"
+            )
+        seen[ticket['id']] = ticket['file']
     return tickets
 
 
@@ -108,9 +130,9 @@ def main(argv=None):
     parser = argparse.ArgumentParser(
         prog='ticket_status_count.py',
         description=(
-            'Ticket progress from .claude/tickets/README.md. Without --status '
-            'it prints a group x status matrix; with --status it lists the '
-            'matching tickets.'
+            'Spec progress from the docs/specs indexes. Without --status it '
+            'prints a group x status matrix; with --status it lists the '
+            'matching specs.'
         ),
     )
     parser.add_argument(
@@ -125,13 +147,13 @@ def main(argv=None):
         ),
     )
     parser.add_argument(
-        '--file', default=str(TICKETS_README),
-        help='path to the tickets README (default: .claude/tickets/README.md)',
+        '--index', nargs='+', default=[str(p) for p in SPEC_INDEXES],
+        help='spec index files to read (default: the features and bugs indexes)',
     )
     args = parser.parse_args(argv)
 
     try:
-        tickets = read_tickets(Path(args.file))
+        tickets = read_tickets([Path(p) for p in args.index])
     except FileNotFoundError as error:
         print(f'ticket_status_count: not found: {error}', file=sys.stderr)
         return 1

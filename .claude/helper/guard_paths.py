@@ -160,10 +160,11 @@ CASES: list[tuple[dict, str | None]] = [
     ({"tool_name": "Bash", "tool_input": {"command": "ls -la && head -5 secrets/k"}}, DENY),
     (read_case("auszug_januar.pdf"), ASK),
     (read_case("lib/main.dart"), None),
-    (read_case(".claude/docs/README.md"), None),
+    (read_case("docs/development/reference/import.md"), None),
+    (read_case("docs/specs/features/050-more-collective-payers-adyen-nexi.md"), None),
     ({"tool_name": "Bash", "tool_input": {"command": "find . -name '*.pdf'"}}, None),
     ({"tool_name": "Bash", "tool_input": {"command": "flutter build apk"}}, None),
-    ({"tool_name": "Bash", "tool_input": {"command": "grep -m 5 x .claude/docs/*.md"}}, None),
+    ({"tool_name": "Bash", "tool_input": {"command": "grep -m 5 x docs/development/adr/*.md"}}, None),
     ({"tool_name": "Edit", "tool_input": {"file_path": "lib/main.dart"}}, None),
 ]
 
