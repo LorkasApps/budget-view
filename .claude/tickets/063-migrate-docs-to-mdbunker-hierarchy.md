@@ -8,7 +8,7 @@
 | **Blocked By** | None |
 | **Severity** | Low |
 | **Effort** | XL |
-| **Status** | Draft |
+| **Status** | In Progress |
 
 ## Description
 `.claude/` currently holds both tooling and documentation. The MDBunker hierarchy separates the two: documentation moves to
@@ -85,7 +85,7 @@ Seven commits, in this order, because each one leaves the repo consistent:
 
 | # | Commit | Model | Content |
 |---|--------|-------|---------|
-| 1 | `chore:` | Haiku | `docs/` skeleton, every `index.md` as a stub with frontmatter |
+| 1 | `chore:` | Opus | `docs/` skeleton, every `index.md` as a stub with frontmatter. Kept on the main model against the user's routing preference: these nine stubs fix the frontmatter and column contract that the 227 later files and three helpers build on, so an error here is an error 227 times |
 | 2 | `docs:` | Haiku | 13 reference pages moved via `git mv`, frontmatter added, Mermaid for `dependencies.md` |
 | 3 | `docs:` | **Sonnet** | 149 ADRs, translated. The judgment step |
 | 4 | `docs:` | **Sonnet** | 16 troubleshooting pages in the 7-section shape |
@@ -104,7 +104,8 @@ patterns name `.claude/` paths that change.
 No.
 
 ### Refinement Tokens
-_Filled when the ticket reaches Ready._
+The scoping round of 2026-09-10 served as the refinement: six questions, all forks closed, ACs concrete before any
+file moved. No separate Draft walk. Figures are inside the implementation block below, the same session.
 
 ### Implementation Tokens
 _Filled after Done._
