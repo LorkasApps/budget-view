@@ -34,37 +34,44 @@ Feature-first layout under `lib/features/<domain>/{data,domain,presentation}`.
 
 ## Read docs before code
 
-1. `.claude/docs/README.md` — index of every feature doc
-2. the relevant feature doc, plus `dependencies.md` for domain boundaries
-3. `decisions.md` before proposing architecture — it says why, so you do not re-litigate
+Documentation lives in `docs/`, in the MDBunker hierarchy. `.claude/` is tooling only.
+
+1. `docs/index.md` — landing page, points at every section
+2. `docs/development/reference/index.md` — one row per feature page; the row decides
+   whether the page is worth opening. `dependencies.md` for domain boundaries
+3. `docs/development/adr/index.md` — 149 records, one per decision. Check it before
+   proposing architecture, so a settled question is not reopened
+4. `docs/operations/troubleshooting/index.md` — a symptom already diagnosed once
 
 Ask for specific paths before reading source. Docs are cheap, code is not.
 
-## Tickets
+## Specs
 
-`.claude/tickets/README.md` is the index. Every request becomes a ticket first:
-`Draft → Ready → In Progress → Done`. Never start implementing a `Draft`, and
-never mark `Done` with an unchecked AC.
+`docs/specs/features/index.md` and `docs/specs/bugs/index.md` are the indexes; both
+share one `NNN` sequence. Every request becomes a spec first:
+`Draft → Ready → In Progress → Done`. Never start implementing a `Draft`, and never
+mark `Done` with an unchecked AC.
 
 ## Commands
+
+`docs/development/HANDBOOK.md` has the full loop. The four that come up constantly:
 
 | Command | Does |
 |---------|------|
 | `make check` | analyze + test — the gate before any commit |
 | `make test-name NAME="..."` | tests whose **name** matches — not a path |
 | `make test-file FILE=...` | one test file, by path |
-| `make gen` | code generation (Isar `*.g.dart`) |
-| `make run` / `make run-release` | debug / release on the device |
-| `make release-check` | check + APK; R8 runs nowhere else |
+| `make gen` | code generation (Isar `*.g.dart`), also after any enum change |
 | `make help` | everything else |
 
 ## Helpers before any read
 
 `.claude/helper/README.md` is the index. `doc_section.py` for a slice of a long
-doc, `ticket_status_count.py` for backlog state, `check.py` for the gate. A
-question that needs three files read is a helper, not three reads. The generic
-ladder above this — LSP for symbols, `Explore` past three locator queries, slices
-before whole files — applies on top.
+doc — a bare filename resolves against the `docs/` subdirectories, so an ADR needs
+no path. `ticket_status_count.py` for backlog state, reading both spec indexes.
+`check.py` for the gate. A question that needs three files read is a helper, not
+three reads. The generic ladder above this — LSP for symbols, `Explore` past three
+locator queries, slices before whole files — applies on top.
 
 Grep is for strings and phrases here: German UI text, error messages, config
 keys. Symbols go to LSP.
@@ -77,7 +84,7 @@ keys. Symbols go to LSP.
 - **Flutter does not run in the agent sandbox.** The user runs every check and
   pastes the output. Never claim a suite is green without it.
 - **ML Kit has no test-VM binding**, so real OCR is unverifiable offline;
-  layout rules are tested against dumped coordinates (`decisions.md`, 2026-08-17).
+  layout rules are tested against dumped coordinates (ADR 0069).
 - **Isar never completes inside `testWidgets`** — cross-cutting services are an
   interface plus a `Local` implementation so widget tests can fake them.
 - **Raw documents are never persisted.** Statements and receipt photos are read

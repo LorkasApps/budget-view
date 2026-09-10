@@ -25,8 +25,7 @@ shape, not for hosting — this is a private repository.
 - Working on a request → [specs/index.md](specs/index.md), the ticket comes before the code
 - Planning a change → [development/reference/index.md](development/reference/index.md), then
   [development/adr/index.md](development/adr/index.md) so a settled decision is not reopened
-- Setting up or running the app → `make help`, until `development/HANDBOOK.md` lands in the last
-  step of this migration
+- Setting up or running the app → [development/HANDBOOK.md](development/HANDBOOK.md)
 
 ## Reading Order That Keeps Costs Down
 
