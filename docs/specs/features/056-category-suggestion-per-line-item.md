@@ -55,9 +55,10 @@ and the only tools are one category for all of them (`alle kategorisieren`) or n
   only kept rows
 - **PDF positions behave identically** — both parsers hand over the same candidate shape
 - **The line-item sheet outside the scan flow suggests too**; it is the same question about the same article
-- **The rules screen keeps one list with a switch by kind** (`Empfänger` / `Artikel`). Both kinds need the same curating, a
-  second settings entry would bloat the menu, and doing nothing would drown the handful of counterparty rules under hundreds of
-  article rules — devaluing the surface 025 just built
+- **The rules screen keeps one list with a switch by kind** (`Empfänger` / `Artikel`) — decided here, **built in 064**. Both
+  kinds need the same curating, a second settings entry would bloat the menu, and doing nothing would drown the handful of
+  counterparty rules under hundreds of article rules, devaluing the surface 025 just built. Split off so the switch can be built
+  against real article rules rather than imagined ones
 
 ## Acceptance Criteria
 - [ ] Setting a position's category by hand writes a rule with `matchField = description` and
@@ -72,7 +73,8 @@ and the only tools are one category for all of them (`alle kategorisieren`) or n
 - [ ] `alle kategorisieren` overrides suggested and hand-set rows alike
 - [ ] Positions from a PDF receipt behave the same as from a photo
 - [ ] The line-item sheet suggests outside the scan flow as well
-- [ ] `TaggingRulesScreen` switches between `Empfänger` and `Artikel` rules, and curating either still works
+- [ ] `TaggingRulesScreen` is left untouched: article rules may be written and read, but nothing changes about how the screen
+      lists or curates them — that is 064
 - [ ] No schema change, no `kDbSchemaVersion` bump, nothing about the dedupe hash or price-trend grouping
 - [ ] `make check` green
 
@@ -84,6 +86,7 @@ and the only tools are one category for all of them (`alle kategorisieren`) or n
 - The tagging learn and suggest suites gain the description field, including that a counterparty rule and an article rule with
   the same text stay apart
 - Review-screen tests for the suggestion, and the line-item sheet tests if it is included
+- **Not** the `TaggingRulesScreen` tests — the curating surface is 064
 
 ## Fixtures Needed
 **No.** The suggest path needs real article names and the 055 fixture in `heuristic_receipt_line_item_parser_test.dart` already
