@@ -6,6 +6,7 @@ import 'package:budget_view/features/account/domain/account_providers.dart';
 import 'package:budget_view/features/import/data/imported_source.dart';
 import 'package:budget_view/features/import/domain/duplicate_checker.dart';
 import 'package:budget_view/features/import/domain/import_providers.dart';
+import 'package:budget_view/features/tagging/data/tagging_rule.dart';
 import 'package:budget_view/features/tagging/domain/tagging_providers.dart';
 import 'package:budget_view/features/tagging/domain/tagging_suggest_service.dart';
 import 'package:budget_view/features/transaction/data/transaction.dart';
@@ -132,7 +133,10 @@ class _NoSuggestions implements TaggingSuggestService {
   const _NoSuggestions();
 
   @override
-  Future<List<CategorySuggestion>> suggest(String counterparty) async =>
+  Future<List<CategorySuggestion>> suggest(
+    String matchValue, {
+    required TaggingMatchField matchField,
+  }) async =>
       const [];
 }
 

@@ -5,6 +5,7 @@ import '../../../import/data/imported_source.dart';
 import '../../../import/data/imported_source_kind.dart';
 import '../../../import/domain/content_hash.dart';
 import '../../../import/domain/import_providers.dart';
+import '../../../tagging/data/tagging_rule.dart';
 import '../../../tagging/domain/tagging_providers.dart';
 import '../../../tagging/domain/tagging_suggest_service.dart';
 import '../../data/transaction.dart';
@@ -512,8 +513,10 @@ class ImportFlowController extends AutoDisposeNotifier<ImportFlowState> {
 
     for (var index = 0; index < rows.length; index++) {
       final row = rows[index];
-      final found =
-          cache[row.taggingKey] ??= await service.suggest(row.taggingKey);
+      final found = cache[row.taggingKey] ??= await service.suggest(
+        row.taggingKey,
+        matchField: TaggingMatchField.counterparty,
+      );
       if (found.isNotEmpty) suggestions[index] = found;
 
       if (row.categoryUuid != null && !row.categorySuggested) continue;

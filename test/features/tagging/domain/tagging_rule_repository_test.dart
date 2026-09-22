@@ -81,7 +81,7 @@ void main() {
   );
 
   test(
-    'findByCounterparty returns the strongest rule first and ignores a '
+    'findByMatch returns the strongest rule first and ignores a '
     'different counterparty',
     () async {
       await repo.upsert('rewe berlin', 'cat-drugstore');
@@ -89,7 +89,7 @@ void main() {
       await repo.upsert('rewe berlin', 'cat-groceries');
       await repo.upsert('aldi hamburg', 'cat-groceries');
 
-      final matches = await repo.findByCounterparty('rewe berlin');
+      final matches = await repo.findByMatch('rewe berlin', matchField: TaggingMatchField.counterparty);
 
       expect(matches.map((rule) => rule.categoryUuid).toList(), [
         'cat-groceries',
@@ -99,7 +99,7 @@ void main() {
   );
 
   test(
-    'findByCounterparty ignores rules whose matchField is description',
+    'findByMatch ignores rules whose matchField is description',
     () async {
       await repo.upsert('rewe berlin', 'cat-groceries');
       await repo.upsert(
@@ -108,7 +108,7 @@ void main() {
         matchField: TaggingMatchField.description,
       );
 
-      final matches = await repo.findByCounterparty('rewe berlin');
+      final matches = await repo.findByMatch('rewe berlin', matchField: TaggingMatchField.counterparty);
 
       expect(matches, hasLength(1));
       expect(matches.single.categoryUuid, 'cat-groceries');
@@ -144,5 +144,70 @@ void main() {
         second.lastAssignedAt.isAtSameMomentAs(firstAssignedAt) ||
             second.lastAssignedAt.isAfter(firstAssignedAt);
     expect(movedForward, isTrue);
+  });
+
+  group('the two kinds share one value space (ticket 056)', () {
+    test('the same text in both kinds stays two separate rules', () async {
+      await repo.upsert('milch', 'cat-groceries');
+      await repo.upsert(
+        'milch',
+        'cat-groceries',
+        matchField: TaggingMatchField.description,
+      );
+
+      expect(await repo.findAll(), hasLength(2));
+    });
+
+    test('a description lookup does not answer with a counterparty rule',
+        () async {
+      await repo.upsert('milch', 'cat-shop');
+
+      expect(
+        await repo.findByMatch(
+          'milch',
+          matchField: TaggingMatchField.description,
+        ),
+        isEmpty,
+      );
+    });
+
+    test('a counterparty lookup does not answer with an article rule',
+        () async {
+      await repo.upsert(
+        'milch',
+        'cat-groceries',
+        matchField: TaggingMatchField.description,
+      );
+
+      expect(
+        await repo.findByMatch(
+          'milch',
+          matchField: TaggingMatchField.counterparty,
+        ),
+        isEmpty,
+      );
+    });
+
+    test('each kind counts its own hits', () async {
+      await repo.upsert('milch', 'cat-shop');
+      await repo.upsert('milch', 'cat-shop');
+      await repo.upsert(
+        'milch',
+        'cat-groceries',
+        matchField: TaggingMatchField.description,
+      );
+
+      final asCounterparty = await repo.findByMatch(
+        'milch',
+        matchField: TaggingMatchField.counterparty,
+      );
+      final asArticle = await repo.findByMatch(
+        'milch',
+        matchField: TaggingMatchField.description,
+      );
+
+      expect(asCounterparty.single.hitCount, 2);
+      expect(asArticle.single.hitCount, 1);
+    });
   });
 }

@@ -8,6 +8,7 @@ import 'package:budget_view/features/drilldown/domain/restposten_reconciler.dart
 import 'package:budget_view/features/import/data/imported_source.dart';
 import 'package:budget_view/features/import/domain/duplicate_checker.dart';
 import 'package:budget_view/features/import/domain/import_providers.dart';
+import 'package:budget_view/features/tagging/data/tagging_rule.dart';
 import 'package:budget_view/features/tagging/domain/tagging_learn_service.dart';
 import 'package:budget_view/features/tagging/domain/tagging_providers.dart';
 import 'package:budget_view/features/tagging/domain/tagging_suggest_service.dart';
@@ -58,8 +59,11 @@ class _FakeSuggestService implements TaggingSuggestService {
   final Map<String, List<CategorySuggestion>> _byCounterparty;
 
   @override
-  Future<List<CategorySuggestion>> suggest(String counterparty) async =>
-      _byCounterparty[counterparty] ?? const [];
+  Future<List<CategorySuggestion>> suggest(
+    String matchValue, {
+    required TaggingMatchField matchField,
+  }) async =>
+      _byCounterparty[matchValue] ?? const [];
 }
 
 class _NoopReconciler implements RestpostenReconciler {
@@ -97,6 +101,13 @@ class _RecordingLearnService implements TaggingLearnService {
   Future<void> learnFrom(Transaction transaction) async {
     calls.add(transaction);
   }
+
+  @override
+  Future<void> learnFromPosition({
+    required String description,
+    required String? categoryUuid,
+    required bool wasSuggested,
+  }) async {}
 }
 
 /// Records what the form saves. `implements` (not `extends`) means the real

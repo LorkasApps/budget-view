@@ -74,6 +74,13 @@ class _RecordingTransactionRepository implements TransactionRepository {
 class _NoopLearnService implements TaggingLearnService {
   @override
   Future<void> learnFrom(Transaction transaction) async {}
+
+  @override
+  Future<void> learnFromPosition({
+    required String description,
+    required String? categoryUuid,
+    required bool wasSuggested,
+  }) async {}
 }
 
 /// Records what the swipe-delete confirmation hands to the pairing service,

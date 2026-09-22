@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:budget_view/core/persistence/isar_db.dart';
 import 'package:budget_view/core/sync/local_sync_adapter.dart';
+import 'package:budget_view/features/tagging/data/tagging_rule.dart';
 import 'package:budget_view/features/tagging/domain/tagging_learn_service.dart';
 import 'package:budget_view/features/tagging/domain/tagging_rule_repository.dart';
 import 'package:budget_view/features/transaction/data/transaction.dart';
@@ -55,7 +56,7 @@ void main() {
     () async {
       await service.learnFrom(_booking(counterparty: '  REWE   Berlin '));
 
-      final matches = await rules.findByCounterparty('rewe berlin');
+      final matches = await rules.findByMatch('rewe berlin', matchField: TaggingMatchField.counterparty);
       expect(matches, hasLength(1));
       expect(matches.single.matchValueNorm, 'rewe berlin');
       expect(matches.single.categoryUuid, 'cat-groceries');
@@ -96,7 +97,7 @@ void main() {
       await service.learnFrom(_booking());
       await service.learnFrom(_booking());
 
-      final matches = await rules.findByCounterparty('rewe berlin');
+      final matches = await rules.findByMatch('rewe berlin', matchField: TaggingMatchField.counterparty);
       expect(matches, hasLength(1));
       expect(matches.single.hitCount, 2);
     },
@@ -128,7 +129,7 @@ void main() {
     await service.learnFrom(_booking());
     await service.learnFrom(_booking(kind: TransactionKind.transfer));
 
-    final matches = await rules.findByCounterparty('rewe berlin');
+    final matches = await rules.findByMatch('rewe berlin', matchField: TaggingMatchField.counterparty);
     expect(matches, hasLength(1));
     expect(matches.single.hitCount, 1);
   });
@@ -142,7 +143,7 @@ void main() {
         ),
       );
 
-      expect(await rules.findByCounterparty('picnic gmbh'), hasLength(1));
+      expect(await rules.findByMatch('picnic gmbh', matchField: TaggingMatchField.counterparty), hasLength(1));
       // Exactly one rule per booking: a parallel PayPal rule would keep growing
       // its hitCount across every shop and suggest a lottery.
       expect(await rules.findAll(), hasLength(1));
@@ -165,11 +166,11 @@ void main() {
       );
 
       expect(
-        (await rules.findByCounterparty('picnic gmbh')).single.categoryUuid,
+        (await rules.findByMatch('picnic gmbh', matchField: TaggingMatchField.counterparty)).single.categoryUuid,
         'cat-groceries',
       );
       expect(
-        (await rules.findByCounterparty('homevision')).single.categoryUuid,
+        (await rules.findByMatch('homevision', matchField: TaggingMatchField.counterparty)).single.categoryUuid,
         'cat-hobby',
       );
     });
@@ -180,9 +181,103 @@ void main() {
       );
 
       expect(
-        await rules.findByCounterparty('paypal europe s.a.r.l. et cie s.c.a'),
+        await rules.findByMatch('paypal europe s.a.r.l. et cie s.c.a', matchField: TaggingMatchField.counterparty),
         hasLength(1),
       );
+    });
+  });
+
+  group('learning from a position (ticket 056)', () {
+    Future<List<TaggingRule>> articleRules(String key) =>
+        rules.findByMatch(key, matchField: TaggingMatchField.description);
+
+    test('a hand-set category writes a rule on the normalized description',
+        () async {
+      await service.learnFromPosition(
+        description: '  H-Milch   1,5 % ',
+        categoryUuid: 'cat-groceries',
+        wasSuggested: false,
+      );
+
+      final found = await articleRules('h-milch 1,5 %');
+      expect(found.single.categoryUuid, 'cat-groceries');
+      expect(found.single.matchField, TaggingMatchField.description);
+    });
+
+    test('the rule lands in the description space, not the counterparty one',
+        () async {
+      await service.learnFromPosition(
+        description: 'Milch',
+        categoryUuid: 'cat-groceries',
+        wasSuggested: false,
+      );
+
+      expect(
+        await rules.findByMatch(
+          'milch',
+          matchField: TaggingMatchField.counterparty,
+        ),
+        isEmpty,
+      );
+    });
+
+    test('an uncategorized position teaches nothing', () async {
+      await service.learnFromPosition(
+        description: 'Milch',
+        categoryUuid: null,
+        wasSuggested: false,
+      );
+
+      expect(await rules.findAll(), isEmpty);
+    });
+
+    test('an accepted suggestion teaches nothing', () async {
+      await service.learnFromPosition(
+        description: 'Milch',
+        categoryUuid: 'cat-groceries',
+        wasSuggested: true,
+      );
+
+      expect(await rules.findAll(), isEmpty);
+    });
+
+    test('a blank description teaches nothing', () async {
+      await service.learnFromPosition(
+        description: '   ',
+        categoryUuid: 'cat-groceries',
+        wasSuggested: false,
+      );
+
+      expect(await rules.findAll(), isEmpty);
+    });
+
+    test('the same article twice raises its count instead of duplicating',
+        () async {
+      for (var i = 0; i < 2; i++) {
+        await service.learnFromPosition(
+          description: 'Milch',
+          categoryUuid: 'cat-groceries',
+          wasSuggested: false,
+        );
+      }
+
+      expect((await articleRules('milch')).single.hitCount, 2);
+    });
+
+    test('an override on the same article keeps both candidates apart',
+        () async {
+      await service.learnFromPosition(
+        description: 'Milch',
+        categoryUuid: 'cat-groceries',
+        wasSuggested: false,
+      );
+      await service.learnFromPosition(
+        description: 'Milch',
+        categoryUuid: 'cat-drinks',
+        wasSuggested: false,
+      );
+
+      expect(await articleRules('milch'), hasLength(2));
     });
   });
 }

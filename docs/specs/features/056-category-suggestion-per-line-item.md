@@ -6,7 +6,7 @@
 | **Epic** | Auto-Tagging |
 | **Domain** | Tagging |
 | **Blocked By** | 055 (article names must read correctly first) |
-| **Status** | Ready |
+| **Status** | In Progress |
 
 Secondary domain: Drilldown — the suggestion is shown in the scan review screen and the line-item sheet, both of which live
 there.

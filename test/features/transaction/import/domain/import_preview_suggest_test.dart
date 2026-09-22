@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:budget_view/core/persistence/isar_db.dart';
 import 'package:budget_view/core/persistence/isar_provider.dart';
+import 'package:budget_view/features/tagging/data/tagging_rule.dart';
 import 'package:budget_view/features/tagging/domain/tagging_providers.dart';
 import 'package:budget_view/features/tagging/domain/tagging_suggest_service.dart';
 import 'package:budget_view/features/transaction/domain/transaction_providers.dart';
@@ -45,8 +46,11 @@ class _FakeSuggestService implements TaggingSuggestService {
   final Map<String, List<CategorySuggestion>> _byCounterparty;
 
   @override
-  Future<List<CategorySuggestion>> suggest(String counterparty) async =>
-      _byCounterparty[counterparty] ?? const [];
+  Future<List<CategorySuggestion>> suggest(
+    String matchValue, {
+    required TaggingMatchField matchField,
+  }) async =>
+      _byCounterparty[matchValue] ?? const [];
 }
 
 void main() {

@@ -1,5 +1,6 @@
 import '../../../core/text/normalize.dart';
 import '../../transaction/data/transaction.dart';
+import '../data/tagging_rule.dart';
 import 'tagging_rule_repository.dart';
 
 /// Turns the user's own category assignments into tagging rules.
@@ -26,9 +27,42 @@ class TaggingLearnService {
 
     // The merchant when the purpose text named one, the counterparty otherwise:
     // one PayPal rule for every shop would suggest a lottery (ticket 047).
-    final matchValue = normalizeForMatching(transaction.taggingKey);
+    await _learn(
+      transaction.taggingKey,
+      categoryUuid,
+      TaggingMatchField.counterparty,
+    );
+  }
+
+  /// The same for one scanned or hand-entered position, keyed on the article
+  /// description instead of the counterparty (ticket 056).
+  ///
+  /// Takes the description as a plain string rather than a `LineItem`: Tagging
+  /// holds a category only by uuid and imports no other feature's entity, and
+  /// the new `Drilldown → Tagging` edge should not drag one in either.
+  ///
+  /// [wasSuggested] carries the same meaning as `categoryAutoSuggested` on a
+  /// booking — a category this service proposed itself teaches nothing. Unlike
+  /// `learnFrom` there is no transfer case: a position is never one.
+  Future<void> learnFromPosition({
+    required String description,
+    required String? categoryUuid,
+    required bool wasSuggested,
+  }) async {
+    if (categoryUuid == null) return;
+    if (wasSuggested) return;
+
+    await _learn(description, categoryUuid, TaggingMatchField.description);
+  }
+
+  Future<void> _learn(
+    String rawKey,
+    String categoryUuid,
+    TaggingMatchField matchField,
+  ) async {
+    final matchValue = normalizeForMatching(rawKey);
     if (matchValue.isEmpty) return;
 
-    await _rules.upsert(matchValue, categoryUuid);
+    await _rules.upsert(matchValue, categoryUuid, matchField: matchField);
   }
 }

@@ -8,6 +8,7 @@ import 'package:budget_view/features/drilldown/domain/restposten_reconciler.dart
 import 'package:budget_view/features/import/data/imported_source.dart';
 import 'package:budget_view/features/import/domain/duplicate_checker.dart';
 import 'package:budget_view/features/import/domain/import_providers.dart';
+import 'package:budget_view/features/tagging/data/tagging_rule.dart';
 import 'package:budget_view/features/tagging/domain/tagging_learn_service.dart';
 import 'package:budget_view/features/tagging/domain/tagging_providers.dart';
 import 'package:budget_view/features/tagging/domain/tagging_suggest_service.dart';
@@ -62,13 +63,23 @@ class _NoopLearnService implements TaggingLearnService {
 
   @override
   Future<void> learnFrom(Transaction transaction) async {}
+
+  @override
+  Future<void> learnFromPosition({
+    required String description,
+    required String? categoryUuid,
+    required bool wasSuggested,
+  }) async {}
 }
 
 class _NoSuggestions implements TaggingSuggestService {
   const _NoSuggestions();
 
   @override
-  Future<List<CategorySuggestion>> suggest(String counterparty) async =>
+  Future<List<CategorySuggestion>> suggest(
+    String matchValue, {
+    required TaggingMatchField matchField,
+  }) async =>
       const [];
 }
 

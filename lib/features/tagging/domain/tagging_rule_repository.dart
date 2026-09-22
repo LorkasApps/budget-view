@@ -51,13 +51,21 @@ class TaggingRuleRepository {
     return rule;
   }
 
-  /// Rules for one normalized counterparty, strongest first. Ticket 014 takes
-  /// the head of this list as its suggestion.
-  Future<List<TaggingRule>> findByCounterparty(String matchValueNorm) async {
+  /// Rules for one normalized match value **of one kind**, strongest first.
+  /// Ticket 014 takes the head of this list as its suggestion.
+  ///
+  /// [matchField] is required rather than defaulted: counterparty rules and
+  /// article rules share this value space, so `Milch` the shop and `Milch` the
+  /// article would answer each other's lookups (ticket 056). A default is
+  /// exactly the silence in which that goes unnoticed.
+  Future<List<TaggingRule>> findByMatch(
+    String matchValueNorm, {
+    required TaggingMatchField matchField,
+  }) async {
     final rules = await _isar.taggingRules
         .filter()
         .matchValueNormEqualTo(matchValueNorm)
-        .matchFieldEqualTo(TaggingMatchField.counterparty)
+        .matchFieldEqualTo(matchField)
         .findAll();
     return rules..sort(_strongestFirst);
   }

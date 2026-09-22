@@ -4,6 +4,7 @@ import 'package:budget_view/core/persistence/isar_db.dart';
 import 'package:budget_view/core/sync/local_sync_adapter.dart';
 import 'package:budget_view/features/category/data/category.dart';
 import 'package:budget_view/features/category/domain/category_repository.dart';
+import 'package:budget_view/features/tagging/data/tagging_rule.dart';
 import 'package:budget_view/features/tagging/domain/tagging_learn_service.dart';
 import 'package:budget_view/features/tagging/domain/tagging_rule_repository.dart';
 import 'package:budget_view/features/tagging/domain/tagging_suggest_service.dart';
@@ -66,7 +67,7 @@ void main() {
 
     await learn.learnFrom(booking(categoryUuid: groceries.uuid));
 
-    final suggestions = await suggest.suggest('REWE Berlin');
+    final suggestions = await suggest.suggest('REWE Berlin', matchField: TaggingMatchField.counterparty);
     expect(suggestions, hasLength(1));
     expect(suggestions.single.categoryUuid, groceries.uuid);
     expect(suggestions.single.hitCount, 1);
@@ -78,7 +79,7 @@ void main() {
     await learn.learnFrom(booking(categoryUuid: groceries.uuid));
     await learn.learnFrom(booking(categoryUuid: groceries.uuid));
 
-    final suggestions = await suggest.suggest('REWE Berlin');
+    final suggestions = await suggest.suggest('REWE Berlin', matchField: TaggingMatchField.counterparty);
     expect(suggestions.single.hitCount, 2);
   });
 
@@ -92,7 +93,7 @@ void main() {
       booking(categoryUuid: groceries.uuid, categoryAutoSuggested: true),
     );
 
-    final suggestions = await suggest.suggest('REWE Berlin');
+    final suggestions = await suggest.suggest('REWE Berlin', matchField: TaggingMatchField.counterparty);
     expect(suggestions.single.hitCount, 1);
   });
 
@@ -107,7 +108,10 @@ void main() {
       }
       await learn.learnFrom(booking(categoryUuid: leisure.uuid));
 
-      var suggestions = await suggest.suggest('REWE Berlin');
+      var suggestions = await suggest.suggest(
+        'REWE Berlin',
+        matchField: TaggingMatchField.counterparty,
+      );
       expect(suggestions.first.categoryUuid, groceries.uuid);
       expect(suggestions.first.hitCount, 3);
       expect(suggestions.last.categoryUuid, leisure.uuid);
@@ -119,7 +123,10 @@ void main() {
         await learn.learnFrom(booking(categoryUuid: leisure.uuid));
       }
 
-      suggestions = await suggest.suggest('REWE Berlin');
+      suggestions = await suggest.suggest(
+        'REWE Berlin',
+        matchField: TaggingMatchField.counterparty,
+      );
       expect(suggestions.first.categoryUuid, leisure.uuid);
       expect(suggestions.first.hitCount, 4);
       expect(suggestions.last.categoryUuid, groceries.uuid);

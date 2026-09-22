@@ -8,6 +8,7 @@ import 'package:budget_view/features/category/domain/category_providers.dart';
 import 'package:budget_view/features/import/data/imported_source.dart';
 import 'package:budget_view/features/import/domain/duplicate_checker.dart';
 import 'package:budget_view/features/import/domain/import_providers.dart';
+import 'package:budget_view/features/tagging/data/tagging_rule.dart';
 import 'package:budget_view/features/tagging/domain/tagging_providers.dart';
 import 'package:budget_view/features/tagging/domain/tagging_suggest_service.dart';
 import 'package:budget_view/features/transaction/data/transaction.dart';
@@ -82,8 +83,11 @@ class _FakeSuggestService implements TaggingSuggestService {
   const _FakeSuggestService();
 
   @override
-  Future<List<CategorySuggestion>> suggest(String counterparty) async {
-    if (counterparty != 'REWE Berlin') return const [];
+  Future<List<CategorySuggestion>> suggest(
+    String matchValue, {
+    required TaggingMatchField matchField,
+  }) async {
+    if (matchValue != 'REWE Berlin') return const [];
     return const [
       CategorySuggestion(
         categoryUuid: 'cat-1',

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import '../../../core/text/normalize.dart';
 import '../../category/domain/category_repository.dart';
+import '../data/tagging_rule.dart';
 import 'tagging_rule_repository.dart';
 
 /// One category a counterparty was assigned to before, with its confidence.
@@ -23,9 +24,26 @@ class CategorySuggestion {
   final int hitCount;
 }
 
+/// The one suggestion a row may be filled with unattended, or null when the
+/// rules do not agree well enough to act without being asked.
+///
+/// Unambiguous means: a single candidate category, or a strongest one whose
+/// `hitCount` is **strictly** greater than the runner-up's. A tie is the case
+/// where filling a row silently would teach the loser away (ticket 056).
+CategorySuggestion? unambiguousSuggestion(List<CategorySuggestion> ordered) {
+  if (ordered.isEmpty) return null;
+  if (ordered.length == 1) return ordered.first;
+  return ordered.first.hitCount > ordered[1].hitCount ? ordered.first : null;
+}
+
 abstract interface class TaggingSuggestService {
-  /// Categories learned for [counterparty], strongest first.
-  Future<List<CategorySuggestion>> suggest(String counterparty);
+  /// Categories learned for [matchValue] within one kind of rule, strongest
+  /// first. [matchField] is required on purpose — see
+  /// `TaggingRuleRepository.findByMatch`.
+  Future<List<CategorySuggestion>> suggest(
+    String matchValue, {
+    required TaggingMatchField matchField,
+  });
 }
 
 class LocalTaggingSuggestService implements TaggingSuggestService {
@@ -35,11 +53,14 @@ class LocalTaggingSuggestService implements TaggingSuggestService {
   final CategoryRepository _categories;
 
   @override
-  Future<List<CategorySuggestion>> suggest(String counterparty) async {
-    final normalized = normalizeForMatching(counterparty);
+  Future<List<CategorySuggestion>> suggest(
+    String matchValue, {
+    required TaggingMatchField matchField,
+  }) async {
+    final normalized = normalizeForMatching(matchValue);
     if (normalized.isEmpty) return const [];
 
-    final rules = await _rules.findByCounterparty(normalized);
+    final rules = await _rules.findByMatch(normalized, matchField: matchField);
     if (rules.isEmpty) return const [];
 
     // Archived and deleted categories are dropped: a rule may legally point at

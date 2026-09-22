@@ -10,6 +10,7 @@ import '../../category/presentation/category_picker.dart';
 import '../../drilldown/domain/line_item_providers.dart';
 import '../../drilldown/presentation/line_items_section.dart';
 import '../../import/domain/import_providers.dart';
+import '../../tagging/data/tagging_rule.dart';
 import '../../tagging/domain/tagging_providers.dart';
 import '../../tagging/domain/tagging_suggest_service.dart';
 import '../../tagging/presentation/suggestion_sheet.dart';
@@ -128,7 +129,10 @@ class _TransactionFormScreenState extends ConsumerState<TransactionFormScreen> {
   Future<void> _suggestCategory() async {
     final suggestions = await ref
         .read(taggingSuggestServiceProvider)
-        .suggest(_counterpartyController.text.trim());
+        .suggest(
+          _counterpartyController.text.trim(),
+          matchField: TaggingMatchField.counterparty,
+        );
     if (!mounted) return;
 
     setState(() {

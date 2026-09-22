@@ -36,7 +36,10 @@ class _RecordingTaggingRuleRepository implements TaggingRuleRepository {
   }
 
   @override
-  Future<List<TaggingRule>> findByCounterparty(String matchValueNorm) async {
+  Future<List<TaggingRule>> findByMatch(
+    String matchValueNorm, {
+    required TaggingMatchField matchField,
+  }) async {
     return const [];
   }
 
