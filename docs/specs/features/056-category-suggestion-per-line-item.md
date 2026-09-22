@@ -76,7 +76,7 @@ and the only tools are one category for all of them (`alle kategorisieren`) or n
 - [ ] No schema change, no `kDbSchemaVersion` bump, nothing about the dedupe hash or price-trend grouping
 - [ ] `make check` green
 
-## Out of Scope (proposed, to confirm)
+## Out of Scope
 - Learning from the booking's own category onto its positions; that is inheritance and already exists
 - Any change to the dedupe hash or to price-trend grouping
 
@@ -86,7 +86,9 @@ and the only tools are one category for all of them (`alle kategorisieren`) or n
 - Review-screen tests for the suggestion, and the line-item sheet tests if it is included
 
 ## Fixtures Needed
-Ask during refinement.
+**No.** The suggest path needs real article names and the 055 fixture in `heuristic_receipt_line_item_parser_test.dart` already
+carries them — 19 positions from the real dump. The tagging suites run against a real Isar and build their rules inline, and the
+field-aware lookup needs exactly two rules with the same text and different `matchField`, which is three lines in the test.
 
 ### Refinement Tokens (estimate)
 - Input: ~16k tokens
