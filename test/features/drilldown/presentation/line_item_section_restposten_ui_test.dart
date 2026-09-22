@@ -4,6 +4,10 @@ import 'package:budget_view/features/drilldown/data/line_item.dart';
 import 'package:budget_view/features/drilldown/domain/line_item_providers.dart';
 import 'package:budget_view/features/drilldown/presentation/line_item_edit_sheet.dart';
 import 'package:budget_view/features/drilldown/presentation/line_items_section.dart';
+import 'package:budget_view/features/tagging/data/tagging_rule.dart';
+import 'package:budget_view/features/tagging/domain/tagging_learn_service.dart';
+import 'package:budget_view/features/tagging/domain/tagging_providers.dart';
+import 'package:budget_view/features/tagging/domain/tagging_suggest_service.dart';
 import 'package:budget_view/features/transaction/data/transaction.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -49,6 +53,34 @@ Transaction _transaction({int amountCents = -5000}) {
     ..updatedAt = now;
 }
 
+/// The sheet asks for article rules when the description field loses focus, and
+/// teaches on a completed save (ticket 056). Both reach Isar, which never
+/// completes in the widget zone, so both seams are pure Dart here.
+class _NoSuggestions implements TaggingSuggestService {
+  const _NoSuggestions();
+
+  @override
+  Future<List<CategorySuggestion>> suggest(
+    String matchValue, {
+    required TaggingMatchField matchField,
+  }) async =>
+      const [];
+}
+
+class _NoopLearnService implements TaggingLearnService {
+  const _NoopLearnService();
+
+  @override
+  Future<void> learnFrom(Transaction transaction) async {}
+
+  @override
+  Future<void> learnFromPosition({
+    required String description,
+    required String? categoryUuid,
+    required bool wasSuggested,
+  }) async {}
+}
+
 void main() {
   ProviderContainer containerWith(List<LineItem> items) {
     final container = ProviderContainer(
@@ -56,6 +88,10 @@ void main() {
         lineItemsProvider('tx-1').overrideWith((ref) => Stream.value(items)),
         categoriesProvider(true)
             .overrideWith((ref) => Stream.value(const <Category>[])),
+        taggingSuggestServiceProvider
+            .overrideWithValue(const _NoSuggestions()),
+        taggingLearnServiceProvider
+            .overrideWithValue(const _NoopLearnService()),
       ],
     );
     addTearDown(container.dispose);
@@ -171,6 +207,10 @@ void main() {
               .overrideWith((ref) => Stream.value(const <Category>[])),
           categoriesProvider(true)
               .overrideWith((ref) => Stream.value(const <Category>[])),
+        taggingSuggestServiceProvider
+            .overrideWithValue(const _NoSuggestions()),
+        taggingLearnServiceProvider
+            .overrideWithValue(const _NoopLearnService()),
         ],
       );
       addTearDown(container.dispose);

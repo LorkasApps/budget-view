@@ -6,6 +6,10 @@ import '../../category/data/category.dart';
 import '../../category/domain/category_providers.dart';
 import '../../category/presentation/category_chip.dart';
 import '../../category/presentation/category_picker.dart';
+import '../../tagging/data/tagging_rule.dart';
+import '../../tagging/domain/tagging_providers.dart';
+import '../../tagging/domain/tagging_suggest_service.dart';
+import '../../tagging/presentation/suggestion_sheet.dart';
 import '../../transaction/data/transaction.dart';
 import '../data/line_item.dart';
 import '../domain/line_item_providers.dart';
@@ -49,8 +53,27 @@ class _LineItemSheetState extends ConsumerState<_LineItemSheet> {
   late final TextEditingController _amountController;
   late final TextEditingController _quantityController;
   late final TextEditingController _unitPriceController;
+  final _descriptionFocus = FocusNode();
   String? _categoryUuid;
   bool _saving = false;
+
+  /// Article rules for what is currently typed in the description field.
+  List<CategorySuggestion> _suggestions = const [];
+
+  /// The category a suggestion filled in, kept apart from [_categoryUuid] so a
+  /// hand-picked category of the same value still counts as hand-picked — the
+  /// same split the booking form makes for counterparty rules (ticket 014).
+  String? _suggestedCategoryUuid;
+
+  bool get _isSuggested =>
+      _suggestedCategoryUuid != null && _categoryUuid == _suggestedCategoryUuid;
+
+  int get _suggestedHitCount {
+    for (final suggestion in _suggestions) {
+      if (suggestion.categoryUuid == _categoryUuid) return suggestion.hitCount;
+    }
+    return 0;
+  }
 
   bool get _isEdit => widget.existing != null;
 
@@ -79,6 +102,7 @@ class _LineItemSheetState extends ConsumerState<_LineItemSheet> {
           : formatCentsPlain(existing!.unitPriceCents!),
     );
     _categoryUuid = existing?.categoryUuid;
+    _descriptionFocus.addListener(_onDescriptionFocusChange);
   }
 
   @override
@@ -87,7 +111,61 @@ class _LineItemSheetState extends ConsumerState<_LineItemSheet> {
     _amountController.dispose();
     _quantityController.dispose();
     _unitPriceController.dispose();
+    _descriptionFocus.dispose();
     super.dispose();
+  }
+
+  void _onDescriptionFocusChange() {
+    if (!_descriptionFocus.hasFocus) _suggestCategory();
+  }
+
+  /// Suggests on blur rather than per keystroke: every lookup hits Isar, and a
+  /// half-typed article matches nothing anyway (same call shape as the booking
+  /// form's counterparty suggestion).
+  ///
+  /// Never for the managed Restposten row: it is not an article, which is also
+  /// why it has no price history behind a long-press.
+  Future<void> _suggestCategory() async {
+    if (_isManaged) return;
+
+    final found = await ref.read(taggingSuggestServiceProvider).suggest(
+          _descriptionController.text.trim(),
+          matchField: TaggingMatchField.description,
+        );
+    if (!mounted) return;
+
+    setState(() {
+      _suggestions = found;
+      // A hand-picked category outranks a suggestion; only an inheriting row or
+      // an untouched earlier suggestion may be overwritten.
+      final replaceable = _categoryUuid == null || _isSuggested;
+      final pick = unambiguousSuggestion(found);
+      if (pick == null) {
+        if (_isSuggested) {
+          _categoryUuid = null;
+          _suggestedCategoryUuid = null;
+        }
+        return;
+      }
+      if (!replaceable) return;
+      _categoryUuid = pick.categoryUuid;
+      _suggestedCategoryUuid = pick.categoryUuid;
+    });
+  }
+
+  /// Alternatives are overrides, not acceptances: picking the runner-up must let
+  /// the learn hook raise its count, or it could never overtake the leader.
+  Future<void> _chooseAlternative() async {
+    final picked = await pickSuggestion(
+      context,
+      _suggestions,
+      selectedCategoryUuid: _categoryUuid,
+    );
+    if (picked == null) return;
+    setState(() {
+      _categoryUuid = picked.categoryUuid;
+      _suggestedCategoryUuid = null;
+    });
   }
 
   double? get _parsedQuantity =>
@@ -156,7 +234,12 @@ class _LineItemSheetState extends ConsumerState<_LineItemSheet> {
       noneLabel: _inheritLabel(categories),
     );
     if (pick == null) return;
-    setState(() => _categoryUuid = pick.uuid);
+    // Straight through the picker is a hand-pick, whatever it lands on, so the
+    // suggestion provenance is dropped.
+    setState(() {
+      _categoryUuid = pick.uuid;
+      _suggestedCategoryUuid = null;
+    });
   }
 
   Future<void> _save() async {
@@ -189,6 +272,13 @@ class _LineItemSheetState extends ConsumerState<_LineItemSheet> {
     }
     // The gap moved, so the managed row has to follow.
     await ref.read(restpostenReconcilerProvider).reconcile(widget.parent.uuid);
+    // Every change here is by hand, so this path teaches — except where the
+    // category is still this sheet's own guess (ticket 056).
+    await ref.read(taggingLearnServiceProvider).learnFromPosition(
+          description: item.description,
+          categoryUuid: item.categoryUuid,
+          wasSuggested: _isSuggested,
+        );
     if (mounted) Navigator.of(context).pop();
   }
 
@@ -234,6 +324,7 @@ class _LineItemSheetState extends ConsumerState<_LineItemSheet> {
           const SizedBox(height: 16),
           TextFormField(
             controller: _descriptionController,
+            focusNode: _descriptionFocus,
             decoration: const InputDecoration(labelText: 'Beschreibung'),
             validator: LineItemValidation.description,
           ),
@@ -316,7 +407,43 @@ class _LineItemSheetState extends ConsumerState<_LineItemSheet> {
                 _categoryUuid == null ? Text(_inheritLabel(categories)) : null,
             trailing: _categoryUuid == null
                 ? const Icon(Icons.chevron_right)
-                : CategoryChip(categoryUuid: _categoryUuid),
+                : Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CategoryChip(categoryUuid: _categoryUuid),
+                      // Marks the category as the machine's guess and opens the
+                      // runners-up; the row itself stays the way to the full tree.
+                      if (_isSuggested) ...[
+                        const SizedBox(width: 4),
+                        InkWell(
+                          onTap: _suggestions.length > 1
+                              ? _chooseAlternative
+                              : null,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.auto_awesome_outlined,
+                                size: 14,
+                                color: Theme.of(context).colorScheme.tertiary,
+                              ),
+                              Text(
+                                '$_suggestedHitCount×',
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .bodySmall
+                                    ?.copyWith(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .tertiary,
+                                    ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
             onTap: _saving ? null : _chooseCategory,
           ),
           const SizedBox(height: 16),
