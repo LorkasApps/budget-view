@@ -13,8 +13,9 @@ there.
 
 ## Description
 Tagging learns from bookings only (`tagging.md`: "Learning from line-item level assignments — MVP learns from bookings only").
-A scanned receipt therefore arrives with thirty uncategorised positions, and the only tools are one category for all of them
-(`alle kategorisieren`) or thirty taps. Wanted: a suggestion **per position**, shown while the scan result is on screen.
+A scanned receipt therefore arrives with nineteen uncategorised positions — the count 055 measured on the real Picnic bon —
+and the only tools are one category for all of them (`alle kategorisieren`) or nineteen taps. Wanted: a suggestion
+**per position**, shown while the scan result is on screen.
 
 ## What already fits
 - **The key exists.** `normalizeForMatching(description)` is what ticket 022 groups price trends by, so `h-milch 1,5 %` is
@@ -22,7 +23,7 @@ A scanned receipt therefore arrives with thirty uncategorised positions, and the
   (dedupe, tagging, trends)
 - **The field exists.** `TaggingMatchField.description` sits in the rule entity and is read nowhere. This is what it was for
 - **The call-site rule exists.** Learning is triggered by the UI paths that assign a category, never by a repository hook
-  (`decisions.md`, 2026-08-13) — so the review screen's confirm and the line-item sheet's save are the natural places
+  (ADR 0053) — so the review screen's confirm and the line-item sheet's save are the natural places
 
 ## The traps to resolve
 - **`matchField` must enter the lookup.** Rules for counterparties and rules for article descriptions would otherwise share one
@@ -42,8 +43,8 @@ A scanned receipt therefore arrives with thirty uncategorised positions, and the
 - **Blocked by 055.** The key is the article description, and the photo path currently reads descriptions badly. What that
   produces is not merely poor suggestions but **stored rules on wrong names**, and 025 deliberately has no bulk cleanup — the
   mistake would write itself into data instead of passing
-- **Rows are filled automatically**, with the marker and hit count of the import preview — at thirty positions a suggestion one
-  has to tap per row halves the work instead of doing it. But **only when the rule is unambiguous**: exactly one candidate
+- **Rows are filled automatically**, with the marker and hit count of the import preview — at nineteen positions a suggestion
+  one has to tap per row halves the work instead of doing it. But **only when the rule is unambiguous**: exactly one candidate
   category, or a strongest one with a strictly higher `hitCount` than the next. Otherwise the row stays empty and the marker
   only offers the alternatives
 - **No persisted flag on `LineItem`.** Learning happens at `Übernehmen`, from the candidates, which are still in memory — a
@@ -64,6 +65,9 @@ A scanned receipt therefore arrives with thirty uncategorised positions, and the
 - [ ] The rule lookup is field-aware: a counterparty rule and an article rule with the same text never match each other
 - [ ] On arrival in the review, a position with an unambiguous rule is pre-filled and marked with its hit count
 - [ ] A position whose rules tie (equal `hitCount` at the top) is **not** pre-filled; the marker offers the alternatives
+- [ ] An `ambiguous` position (`Beschreibung fehlt`) neither receives a suggestion nor teaches a rule. `confirm()` already
+      filters to `includeInSave && isSavable`, and `isSavable` demands a non-empty trimmed description — this pins it,
+      because a rule learned on an empty key is exactly the wrong-name data 025 has no bulk cure for
 - [ ] A pre-filled row that the user leaves alone teaches nothing on confirm; overriding it raises the chosen category
 - [ ] `alle kategorisieren` overrides suggested and hand-set rows alike
 - [ ] Positions from a PDF receipt behave the same as from a photo
