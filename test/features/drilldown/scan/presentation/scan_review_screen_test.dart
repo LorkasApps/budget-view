@@ -2,6 +2,7 @@ import 'package:budget_view/features/category/data/category.dart';
 import 'package:budget_view/features/category/domain/category_providers.dart';
 import 'package:budget_view/features/drilldown/scan/domain/receipt_line_item_parser.dart';
 import 'package:budget_view/features/drilldown/scan/presentation/scan_review_screen.dart';
+import 'package:budget_view/features/tagging/domain/tagging_suggest_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,13 +13,11 @@ import '../domain/scan_test_support.dart';
 /// `.claude/docs/errors.md`); the category providers this screen touches read
 /// Isar, so they are overridden the same way `line_item_edit_sheet_test.dart`
 /// does it — resolved to an empty list instead of left pending.
-ProviderContainer _buildContainer() {
+ProviderContainer _buildContainer([List<Category> categories = const []]) {
   final container = ProviderContainer(
     overrides: [
-      categoriesProvider(false)
-          .overrideWith((ref) => Stream.value(const <Category>[])),
-      categoriesProvider(true)
-          .overrideWith((ref) => Stream.value(const <Category>[])),
+      categoriesProvider(false).overrideWith((ref) => Stream.value(categories)),
+      categoriesProvider(true).overrideWith((ref) => Stream.value(categories)),
     ],
   );
   addTearDown(container.dispose);
@@ -38,10 +37,12 @@ Future<void> _openReview(
   required List<LineItemCandidate> candidates,
   ValueChanged<List<LineItemCandidate>?>? onResult,
   List<String> unreadRows = const [],
+  Map<int, List<CategorySuggestion>> suggestions = const {},
+  List<Category> categories = const [],
 }) async {
   await tester.pumpWidget(
     UncontrolledProviderScope(
-      container: _buildContainer(),
+      container: _buildContainer(categories),
       child: MaterialApp(
         home: Scaffold(
           body: Builder(
@@ -51,6 +52,7 @@ Future<void> _openReview(
                   context,
                   transaction: expenseTransaction(),
                   candidates: candidates,
+                  suggestions: suggestions,
                   unreadRows: unreadRows,
                 );
                 onResult?.call(result);
@@ -182,6 +184,143 @@ void main() {
       await _openReview(tester, candidates: defaultCandidates());
 
       expect(find.textContaining('nicht erkannte'), findsNothing);
+    });
+  });
+
+  group('the suggestion marker (ticket 056)', () {
+    final groceries = Category()
+      ..uuid = 'cat-groceries'
+      ..name = 'Einkauf'
+      ..iconName = 'shopping_cart'
+      ..colorHex = '#43A047';
+    final drinks = Category()
+      ..uuid = 'cat-drinks'
+      ..name = 'Getränke'
+      ..iconName = 'local_cafe'
+      ..colorHex = '#1E88E5';
+
+    LineItemCandidate milch({
+      String? categoryUuid = 'cat-groceries',
+      bool suggested = true,
+    }) =>
+        LineItemCandidate(description: 'Milch', amountCents: 119)
+            .withCategory(categoryUuid, suggested: suggested);
+
+    const oneRule = {
+      0: [
+        CategorySuggestion(
+          categoryUuid: 'cat-groceries',
+          categoryName: 'Einkauf',
+          hitCount: 3,
+        ),
+      ],
+    };
+
+    const twoRules = {
+      0: [
+        CategorySuggestion(
+          categoryUuid: 'cat-groceries',
+          categoryName: 'Einkauf',
+          hitCount: 3,
+        ),
+        CategorySuggestion(
+          categoryUuid: 'cat-drinks',
+          categoryName: 'Getränke',
+          hitCount: 2,
+        ),
+      ],
+    };
+
+    testWidgets('a suggested row shows the marker and its hit count',
+        (tester) async {
+      await _openReview(
+        tester,
+        candidates: [milch()],
+        suggestions: oneRule,
+        categories: [groceries],
+      );
+
+      expect(find.byIcon(Icons.auto_awesome_outlined), findsOneWidget);
+      expect(find.text('3×'), findsOneWidget);
+    });
+
+    testWidgets('a hand-set category of the same value wears no marker',
+        (tester) async {
+      await _openReview(
+        tester,
+        candidates: [milch(suggested: false)],
+        suggestions: oneRule,
+        categories: [groceries],
+      );
+
+      expect(find.byIcon(Icons.auto_awesome_outlined), findsNothing);
+    });
+
+    testWidgets('picking the runner-up counts as an override', (tester) async {
+      List<LineItemCandidate>? result;
+      await _openReview(
+        tester,
+        candidates: [milch()],
+        suggestions: twoRules,
+        categories: [groceries, drinks],
+        onResult: (value) => result = value,
+      );
+
+      await tester.tap(find.byIcon(Icons.auto_awesome_outlined));
+      await _settle(tester);
+      expect(find.text('Vorschläge'), findsOneWidget);
+
+      await tester.tap(find.text('Getränke'));
+      await _settle(tester);
+
+      // The marker is gone because the row is no longer a guess, which is what
+      // lets the learn hook raise the runner-up at confirm.
+      expect(find.byIcon(Icons.auto_awesome_outlined), findsNothing);
+
+      await tester.tap(find.text('1 übernehmen'));
+      await _settle(tester);
+
+      expect(result!.single.categoryUuid, 'cat-drinks');
+      expect(result!.single.categorySuggested, isFalse);
+    });
+
+    testWidgets('a single rule offers no alternatives to open', (tester) async {
+      await _openReview(
+        tester,
+        candidates: [milch()],
+        suggestions: oneRule,
+        categories: [groceries],
+      );
+
+      await tester.tap(find.byIcon(Icons.auto_awesome_outlined));
+      await _settle(tester);
+
+      expect(find.text('Vorschläge'), findsNothing);
+    });
+
+    testWidgets('alle kategorisieren overrides a suggested row',
+        (tester) async {
+      List<LineItemCandidate>? result;
+      await _openReview(
+        tester,
+        candidates: [milch()],
+        suggestions: oneRule,
+        categories: [groceries, drinks],
+        onResult: (value) => result = value,
+      );
+
+      await tester.tap(find.byTooltip('Alle kategorisieren'));
+      await _settle(tester);
+      await tester.tap(find.text('Getränke'));
+      await _settle(tester);
+
+      expect(find.byIcon(Icons.auto_awesome_outlined), findsNothing);
+
+      await tester.tap(find.text('1 übernehmen'));
+      await _settle(tester);
+
+      expect(result!.single.categoryUuid, 'cat-drinks');
+      expect(result!.single.categorySuggested, isFalse);
     });
   });
 }

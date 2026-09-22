@@ -10,6 +10,11 @@ import '../../../import/data/imported_source.dart';
 import '../../../import/data/imported_source_kind.dart';
 import '../../../import/domain/content_hash.dart';
 import '../../../import/domain/import_providers.dart';
+// The new `Drilldown → Tagging` edge (ticket 056). It carries primitives only —
+// Tagging never learns what a `LineItem` is.
+import '../../../tagging/data/tagging_rule.dart';
+import '../../../tagging/domain/tagging_providers.dart';
+import '../../../tagging/domain/tagging_suggest_service.dart';
 import '../../../transaction/data/transaction.dart';
 import '../../data/line_item.dart';
 import '../../domain/line_item_providers.dart';
@@ -54,6 +59,7 @@ class ReceiptScanFlowState {
     this.phase = ReceiptScanPhase.idle,
     this.documentMatches = const [],
     this.candidates = const [],
+    this.candidateSuggestions = const {},
     this.expectedSumCents,
     this.unreadRows = const [],
     this.pageCount = 0,
@@ -72,6 +78,11 @@ class ReceiptScanFlowState {
   final List<ImportedSource> documentMatches;
 
   final List<LineItemCandidate> candidates;
+
+  /// Candidate index → categories learned for that article description,
+  /// strongest first (ticket 056). Derived display data, so it sits beside the
+  /// candidates rather than on one, which stays a description of the position.
+  final Map<int, List<CategorySuggestion>> candidateSuggestions;
 
   /// What the kept positions have to add up to: the receipt's printed total plus
   /// the credit rows it already accounted for (tickets 035, 033).
@@ -120,6 +131,7 @@ class ReceiptScanFlowState {
     ReceiptScanPhase? phase,
     List<ImportedSource>? documentMatches,
     List<LineItemCandidate>? candidates,
+    Map<int, List<CategorySuggestion>>? candidateSuggestions,
     int? expectedSumCents,
     List<String>? unreadRows,
     int? pageCount,
@@ -135,6 +147,8 @@ class ReceiptScanFlowState {
         phase: phase ?? this.phase,
         documentMatches: documentMatches ?? this.documentMatches,
         candidates: candidates ?? this.candidates,
+        candidateSuggestions:
+            candidateSuggestions ?? this.candidateSuggestions,
         expectedSumCents: expectedSumCents ?? this.expectedSumCents,
         unreadRows: unreadRows ?? this.unreadRows,
         pageCount: pageCount ?? this.pageCount,
@@ -283,9 +297,11 @@ class ReceiptScanFlowController extends AutoDisposeNotifier<ReceiptScanFlowState
       return;
     }
 
+    final suggested = await _withSuggestions(parsed.candidates);
     state = state.copyWith(
       phase: ReceiptScanPhase.awaitingConfirm,
-      candidates: parsed.candidates,
+      candidates: suggested.candidates,
+      candidateSuggestions: suggested.suggestions,
       expectedSumCents: parsed.expectedPositionSumCents,
       unreadRows: parsed.unreadRows,
     );
@@ -350,9 +366,11 @@ class ReceiptScanFlowController extends AutoDisposeNotifier<ReceiptScanFlowState
     _lastRecognition = stacked;
     final parsed = ref.read(receiptLineItemParserProvider).parse(stacked);
 
+    final suggested = await _withSuggestions(parsed.candidates);
     state = state.copyWith(
       phase: ReceiptScanPhase.awaitingConfirm,
-      candidates: parsed.candidates,
+      candidates: suggested.candidates,
+      candidateSuggestions: suggested.suggestions,
       expectedSumCents: parsed.expectedPositionSumCents,
       unreadRows: parsed.unreadRows,
     );
@@ -374,12 +392,65 @@ class ReceiptScanFlowController extends AutoDisposeNotifier<ReceiptScanFlowState
     _lastRecognition = recognized;
     final parsed = ref.read(receiptLineItemParserProvider).parse(recognized);
 
+    final suggested = await _withSuggestions(parsed.candidates);
     state = state.copyWith(
       phase: ReceiptScanPhase.awaitingConfirm,
-      candidates: parsed.candidates,
+      candidates: suggested.candidates,
+      candidateSuggestions: suggested.suggestions,
       expectedSumCents: parsed.expectedPositionSumCents,
       unreadRows: parsed.unreadRows,
     );
+  }
+
+  /// The parsed candidates with an article rule filled in where one is
+  /// unambiguous, plus the alternatives per index for the suggestion sheet.
+  ///
+  /// Returns rather than writing state: the caller folds this into the **same**
+  /// write that flips to `awaitingConfirm`, so the review screen never renders a
+  /// frame of unsuggested rows and the phase sequence keeps one emission.
+  ///
+  /// Only an **unambiguous** rule fills a row: at nineteen positions a suggestion
+  /// one has to correct per row costs more than it saves, and a tie filled
+  /// silently would teach the loser away at confirm (ticket 056).
+  ///
+  /// An `ambiguous` candidate has no description, so `suggest` normalizes to an
+  /// empty key and returns nothing — it is skipped without a rule of its own.
+  Future<
+      ({
+        List<LineItemCandidate> candidates,
+        Map<int, List<CategorySuggestion>> suggestions,
+      })> _withSuggestions(List<LineItemCandidate> parsed) async {
+    // Returns before touching the suggest service, so an empty receipt reaches no
+    // provider that wants a database behind it.
+    if (parsed.isEmpty) {
+      return (
+        candidates: parsed,
+        suggestions: const <int, List<CategorySuggestion>>{},
+      );
+    }
+
+    final service = ref.read(taggingSuggestServiceProvider);
+    // A receipt repeats articles, and each lookup is a query; within one pass the
+    // same description is asked for once.
+    final cache = <String, List<CategorySuggestion>>{};
+    final suggestions = <int, List<CategorySuggestion>>{};
+    final updated = [...parsed];
+
+    for (var index = 0; index < parsed.length; index++) {
+      final candidate = parsed[index];
+      final found = cache[candidate.description] ??= await service.suggest(
+        candidate.description,
+        matchField: TaggingMatchField.description,
+      );
+      if (found.isNotEmpty) suggestions[index] = found;
+
+      final pick = unambiguousSuggestion(found);
+      if (pick == null) continue;
+      updated[index] =
+          candidate.withCategory(pick.categoryUuid, suggested: true);
+    }
+
+    return (candidates: updated, suggestions: suggestions);
   }
 
   /// Persists the reviewed positions, records the scan, discards the photo.
@@ -405,6 +476,7 @@ class ReceiptScanFlowController extends AutoDisposeNotifier<ReceiptScanFlowState
 
     try {
       final repository = ref.read(lineItemRepositoryProvider);
+      final learn = ref.read(taggingLearnServiceProvider);
       for (final candidate in items) {
         await repository.save(
           LineItem()
@@ -414,6 +486,14 @@ class ReceiptScanFlowController extends AutoDisposeNotifier<ReceiptScanFlowState
             ..quantity = candidate.quantity
             ..unitPriceCents = candidate.unitPriceCents
             ..categoryUuid = candidate.categoryUuid,
+        );
+        // A receipt the user categorised is a bulk teaching opportunity, the way
+        // a statement is on import. `learnFromPosition` drops the rows that only
+        // carry this flow's own guess, and the ones that inherit (null).
+        await learn.learnFromPosition(
+          description: candidate.description,
+          categoryUuid: candidate.categoryUuid,
+          wasSuggested: candidate.categorySuggested,
         );
       }
       // Fresh positions move the sum, so the managed Restposten row has to

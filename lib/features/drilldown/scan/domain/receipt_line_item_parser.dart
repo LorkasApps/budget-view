@@ -24,6 +24,7 @@ class LineItemCandidate {
     this.parseState = LineItemParseState.ok,
     bool? includeInSave,
     this.categoryUuid,
+    this.categorySuggested = false,
   }) : includeInSave =
             includeInSave ?? parseState == LineItemParseState.ok;
 
@@ -42,6 +43,14 @@ class LineItemCandidate {
   /// Null means the position inherits the booking's category (ticket 012).
   final String? categoryUuid;
 
+  /// True while [categoryUuid] came from an article rule and nobody overrode it,
+  /// so the learn hook can skip its own guess at confirm (ticket 056).
+  ///
+  /// Transient by design, mirroring `ImportRow.categorySuggested`: a candidate
+  /// never reaches the database, and the position's only other write path is the
+  /// line-item sheet, where every change is by hand and therefore teaches.
+  final bool categorySuggested;
+
   /// Whether the repository would accept this row.
   bool get isSavable =>
       description.trim().isNotEmpty &&
@@ -59,6 +68,7 @@ class LineItemCandidate {
     LineItemParseState? parseState,
     bool? includeInSave,
     Object? categoryUuid = _keep,
+    bool? categorySuggested,
   }) =>
       LineItemCandidate(
         description: description ?? this.description,
@@ -71,7 +81,14 @@ class LineItemCandidate {
         categoryUuid: categoryUuid == _keep
             ? this.categoryUuid
             : categoryUuid as String?,
+        categorySuggested: categorySuggested ?? this.categorySuggested,
       );
+
+  /// Sets the category and says where it came from in one step, so the two can
+  /// never drift apart. `copyWith` alone would let a hand-picked category keep an
+  /// inherited `categorySuggested` of true and teach nothing on confirm.
+  LineItemCandidate withCategory(String? uuid, {bool suggested = false}) =>
+      copyWith(categoryUuid: uuid, categorySuggested: suggested);
 }
 
 /// What one pass over a receipt yielded.

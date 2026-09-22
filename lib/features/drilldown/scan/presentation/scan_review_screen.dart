@@ -6,6 +6,8 @@ import '../../../category/data/category.dart';
 import '../../../category/domain/category_providers.dart';
 import '../../../category/presentation/category_chip.dart';
 import '../../../category/presentation/category_picker.dart';
+import '../../../tagging/domain/tagging_suggest_service.dart';
+import '../../../tagging/presentation/suggestion_sheet.dart';
 import '../../../transaction/data/transaction.dart';
 import '../../domain/line_item_validation.dart';
 import '../domain/receipt_line_item_parser.dart';
@@ -19,6 +21,7 @@ Future<List<LineItemCandidate>?> pushScanReview(
   BuildContext context, {
   required Transaction transaction,
   required List<LineItemCandidate> candidates,
+  Map<int, List<CategorySuggestion>> suggestions = const {},
   int? expectedSumCents,
   List<String> unreadRows = const [],
   Future<String?> Function()? onDumpRecognition,
@@ -28,6 +31,7 @@ Future<List<LineItemCandidate>?> pushScanReview(
       builder: (_) => ScanReviewScreen(
         transaction: transaction,
         candidates: candidates,
+        suggestions: suggestions,
         expectedSumCents: expectedSumCents,
         unreadRows: unreadRows,
         onDumpRecognition: onDumpRecognition,
@@ -41,6 +45,7 @@ class ScanReviewScreen extends ConsumerStatefulWidget {
     super.key,
     required this.transaction,
     required this.candidates,
+    this.suggestions = const {},
     this.expectedSumCents,
     this.unreadRows = const [],
     this.onDumpRecognition,
@@ -48,6 +53,11 @@ class ScanReviewScreen extends ConsumerStatefulWidget {
 
   final Transaction transaction;
   final List<LineItemCandidate> candidates;
+
+  /// Candidate index → article rules learned for that description, strongest
+  /// first (ticket 056). Handed in like [candidates] rather than read from the
+  /// flow provider, so this screen stays drivable without one.
+  final Map<int, List<CategorySuggestion>> suggestions;
 
   /// Rows the parser read but could not use. Shown behind a collapsed line: the
   /// OCR plugin has no test-VM binding, so this screen is the only place raw
@@ -127,6 +137,30 @@ class _ScanReviewScreenState extends ConsumerState<ScanReviewScreen> {
     setState(() => _candidates.add(created));
   }
 
+  /// The article rules for a row. Read from the widget rather than copied into
+  /// state: `_candidates` is the user's edit buffer, the suggestions never change.
+  ///
+  /// Keyed by the parser's index, so a row the user **added** or deleted shifts
+  /// the mapping. Deliberate: a hand-added row has no suggestion to lose, and the
+  /// marker only renders while `categorySuggested` is still true, which an added
+  /// row never has.
+  List<CategorySuggestion> _suggestionsFor(int index) =>
+      widget.suggestions[index] ?? const [];
+
+  /// Alternatives are overrides, not acceptances: picking the runner-up must let
+  /// the learn hook raise its count, or it could never overtake the leader.
+  Future<void> _chooseAlternative(int index) async {
+    final picked = await pickSuggestion(
+      context,
+      _suggestionsFor(index),
+      selectedCategoryUuid: _candidates[index].categoryUuid,
+    );
+    if (picked == null) return;
+    setState(() {
+      _candidates[index] = _candidates[index].withCategory(picked.categoryUuid);
+    });
+  }
+
   /// Applies one category to every row the user kept. Rows excluded from the
   /// save are left alone — they are not part of the booking.
   Future<void> _categorizeAll() async {
@@ -141,8 +175,10 @@ class _ScanReviewScreenState extends ConsumerState<ScanReviewScreen> {
     setState(() {
       _candidates = [
         for (final candidate in _candidates)
+          // `withCategory` rather than `copyWith`: this is an explicit bulk
+          // action, so it overrides a suggested row and stops being a guess.
           candidate.includeInSave && candidate.isSavable
-              ? candidate.copyWith(categoryUuid: pick.uuid)
+              ? candidate.withCategory(pick.uuid)
               : candidate,
       ];
     });
@@ -201,7 +237,9 @@ class _ScanReviewScreenState extends ConsumerState<ScanReviewScreen> {
             _CandidateRow(
               key: ValueKey(index),
               candidate: _candidates[index],
+              suggestions: _suggestionsFor(index),
               onTap: () => _edit(index),
+              onShowAlternatives: () => _chooseAlternative(index),
               onToggle: (value) => setState(() {
                 _selectionTouched = true;
                 _candidates[index] =
@@ -266,15 +304,32 @@ class _CandidateRow extends StatelessWidget {
   const _CandidateRow({
     super.key,
     required this.candidate,
+    required this.suggestions,
     required this.onTap,
     required this.onToggle,
     required this.onDelete,
+    required this.onShowAlternatives,
   });
 
   final LineItemCandidate candidate;
+
+  /// The article rules found for this description, strongest first. Empty for a
+  /// row nothing was learned for.
+  final List<CategorySuggestion> suggestions;
+
   final VoidCallback onTap;
   final ValueChanged<bool> onToggle;
   final VoidCallback onDelete;
+  final VoidCallback onShowAlternatives;
+
+  int get _hitCount {
+    for (final suggestion in suggestions) {
+      if (suggestion.categoryUuid == candidate.categoryUuid) {
+        return suggestion.hitCount;
+      }
+    }
+    return 0;
+  }
 
   String? get _quantityLine {
     final quantity = candidate.quantity;
@@ -312,8 +367,34 @@ class _CandidateRow extends StatelessWidget {
           children: [
             if (ambiguous)
               Text('Beschreibung fehlt', style: theme.textTheme.bodySmall)
-            else if (candidate.categoryUuid != null)
+            else if (candidate.categoryUuid != null) ...[
               CategoryChip(categoryUuid: candidate.categoryUuid),
+              // Marks the category as the machine's guess and opens the
+              // runners-up; the row itself stays the way to the full tree. Same
+              // shape as the import preview (ticket 014).
+              if (candidate.categorySuggested) ...[
+                const SizedBox(width: 4),
+                InkWell(
+                  onTap: suggestions.length > 1 ? onShowAlternatives : null,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.auto_awesome_outlined,
+                        size: 14,
+                        color: theme.colorScheme.tertiary,
+                      ),
+                      Text(
+                        '$_hitCount×',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.tertiary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
             if (quantityLine != null)
               Flexible(
                 child: Text(

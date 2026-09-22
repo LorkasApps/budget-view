@@ -89,6 +89,7 @@ Future<void> startReceiptScan(
         context,
         transaction: transaction,
         candidates: state.candidates,
+        suggestions: state.candidateSuggestions,
         expectedSumCents: state.expectedSumCents,
         unreadRows: state.unreadRows,
         // Debug builds only: the recognised layout is the one thing no test can

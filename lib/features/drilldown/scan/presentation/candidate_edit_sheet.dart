@@ -154,6 +154,10 @@ class _CandidateSheetState extends ConsumerState<_CandidateSheet> {
         parseState: LineItemParseState.ok,
         includeInSave: true,
         categoryUuid: _categoryUuid,
+        // Touching the category in this sheet is an override; leaving it alone
+        // keeps whatever provenance the row arrived with (ticket 056).
+        categorySuggested: _categoryUuid == widget.candidate.categoryUuid &&
+            widget.candidate.categorySuggested,
       ),
     );
   }
