@@ -7,7 +7,7 @@
 | **Domain** | Drilldown |
 | **Blocked By** | None |
 | **Severity** | High |
-| **Status** | In Progress |
+| **Status** | Done |
 
 ## Description
 Tickets 043 and 045 landed and `make check` is green, but a scan taken on the device after them still reads almost nothing
@@ -150,9 +150,9 @@ struck-through original still loses to the price that replaced it.
 - [x] The photo itself, handed over out of band (never committed — `decisions.md`, 2026-08-10: raw documents are not persisted)
 - [x] The dump of its `OcrResult` from the app — `.claude/tmp/ocr_dump.json`, gitignored; the transcribed fixture is the
       artifact that stays
-- [ ] What the review screen showed: how many positions, and what `N nicht erkannte Zeilen` contains when expanded — reported
+- [x] What the review screen showed: how many positions, and what `N nicht erkannte Zeilen` contains when expanded — reported
       qualitatively on 2026-08-25 (every row `Ohne Beschreibung`), never counted. Superseded: the dump answers it exactly
-- [ ] Whether the sum warning fired, and with which two figures — reported as ~2400 € against ~62 €, no exact pair recorded.
+- [x] Whether the sum warning fired, and with which two figures — reported as ~2400 € against ~62 €, no exact pair recorded.
       Superseded by the dump for the same reason
 
 ## Resolved during refinement
@@ -174,9 +174,10 @@ struck-through original still loses to the price that replaced it.
       documented on the same coordinates before it: the replay above yields 14 candidates summing 37,71 € with 50 unread rows
       carrying every article name. Deliberately **not** re-run against the old Dart — the replay is a mirror of the old
       algorithm, and re-checking out a deleted implementation to watch it fail buys a green tick, not knowledge
-- [ ] For the real receipt: the positions the review offers match the paper — **19** rows rather than four summary lines — and
+- [x] For the real receipt: the positions the review offers match the paper — **19** rows rather than four summary lines — and
       the printed total is recognised so the checksum can judge them. 19, not the ~30 first estimated: the dump holds 19
-      article rows plus five summary lines, and the fixture pins that number
+      article rows plus five summary lines, and the fixture pins that number. Confirmed on device 2026-09-22: 19 positions,
+      summing to 67,49 €
 - [x] **No line of the summary block becomes a position**: `Bestellung`, `Gespart` and `Betrag` are handled, while `Endsumme`
       stays the total and `Eingereichtes Pfand` the credit
 - [x] The plausibility bound drops a row that equals the budget as well, not only one that exceeds it — `Betrag` is exactly the
@@ -191,7 +192,8 @@ struck-through original still loses to the price that replaced it.
 - [x] `make check` green — 596 passed, 6 skipped (2026-09-08)
 
 ## Device check
-- [ ] The same photo, on a release APK, yields the same positions as the fixture predicts
+- [x] The same photo, on a release APK, yields the same positions as the fixture predicts — 2026-09-22, 19 positions summing
+      67,49 €, exactly what the fixture predicts
 
 ## Affected Tests
 - A fixture built from the real dump, in `heuristic_receipt_line_item_parser_test.dart`, is the regression test this ticket
