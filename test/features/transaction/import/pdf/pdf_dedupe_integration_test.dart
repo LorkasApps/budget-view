@@ -5,6 +5,7 @@ import 'package:budget_view/core/persistence/isar_db.dart';
 import 'package:budget_view/core/persistence/isar_provider.dart';
 import 'package:budget_view/features/import/data/imported_source_kind.dart';
 import 'package:budget_view/features/import/domain/import_providers.dart';
+import 'package:budget_view/features/transaction/data/transaction.dart';
 import 'package:budget_view/features/transaction/domain/transaction_providers.dart';
 import 'package:budget_view/features/transaction/import/domain/import_flow_controller.dart';
 import 'package:budget_view/features/transaction/import/pdf/parse_result.dart';
@@ -236,5 +237,179 @@ void main() {
     await run(container, source: otherBytes);
 
     expect(container.read(importFlowProvider).isSuspicious(0), isFalse);
+  });
+
+  group('mirror leg from a booked transfer (ticket 048)', () {
+    /// The pair ticket 042 writes: the source leg on one account and the mirror
+    /// the app booked on the other, linked both ways. The mirror is what a later
+    /// import of the target account's own statement can meet a second time.
+    Future<String> seedPair(
+      ProviderContainer container, {
+      DateTime? bookingDate,
+      String? categoryUuid,
+      String note = '',
+    }) async {
+      final repository = container.read(transactionRepositoryProvider);
+      final date = bookingDate ?? DateTime(2026, 8, 3);
+      final source = await repository.save(
+        Transaction()
+          ..accountUuid = 'account-2'
+          ..amountCents = -25000
+          ..bookingDate = date
+          ..description = 'Umbuchung nach Cashkonto'
+          ..counterparty = 'Cashkonto'
+          ..kind = TransactionKind.transfer,
+      );
+      final mirror = await repository.save(
+        Transaction()
+          ..accountUuid = 'account-1'
+          ..amountCents = 25000
+          ..bookingDate = date
+          ..description = 'Umbuchung von Girokonto'
+          ..counterparty = 'Girokonto'
+          ..categoryUuid = categoryUuid
+          ..note = note
+          ..kind = TransactionKind.transfer
+          ..counterpartUuid = source.uuid,
+      );
+      source.counterpartUuid = mirror.uuid;
+      await repository.save(source);
+      return mirror.uuid;
+    }
+
+    /// What the receiving bank prints for the same movement: its own wording, and
+    /// two days later than the app booked it.
+    ParsedTransactionCandidate bankRow({DateTime? bookingDate}) => _candidate(
+          amountCents: 25000,
+          bookingDate: bookingDate ?? DateTime(2026, 8, 5),
+          counterparty: 'ING-DiBa',
+          description: 'Uebertrag Girokonto',
+        );
+
+    test('a row meeting an app-written mirror leg is flagged as such', () async {
+      final container = containerFor([bankRow()]);
+      await seedPair(container);
+      await run(container);
+
+      final state = container.read(importFlowProvider);
+      expect(state.hasMirrorMatch(0), isTrue);
+      expect(state.rowMirrorMatches[0], hasLength(1));
+      // The hash layer cannot see it: the bank writes another counterparty.
+      expect(state.hasHashDuplicate(0), isFalse);
+      expect(state.isSuspicious(0), isTrue);
+    });
+
+    test('an ordinary booking with the same figures is no mirror match',
+        () async {
+      final container = containerFor([bankRow()]);
+      await container.read(transactionRepositoryProvider).save(
+            Transaction()
+              ..accountUuid = 'account-1'
+              ..amountCents = 25000
+              ..bookingDate = DateTime(2026, 8, 5)
+              ..description = 'Gehalt'
+              ..counterparty = 'Arbeitgeber',
+          );
+      await run(container);
+
+      expect(container.read(importFlowProvider).hasMirrorMatch(0), isFalse);
+    });
+
+    test('a booking date outside the window is no mirror match', () async {
+      final container = containerFor([bankRow()]);
+      // Six days before the imported row, one past the ±5 window.
+      await seedPair(container, bookingDate: DateTime(2026, 7, 30));
+      await run(container);
+
+      expect(container.read(importFlowProvider).hasMirrorMatch(0), isFalse);
+    });
+
+    test('Ersetzen takes the bank fields and keeps what the user put there',
+        () async {
+      final container = containerFor([bankRow()]);
+      final mirrorUuid = await seedPair(
+        container,
+        categoryUuid: 'cat-1',
+        note: 'Notiz bleibt',
+      );
+      final controller = await run(container);
+      await controller.persist();
+
+      final repository = container.read(transactionRepositoryProvider);
+      final onTarget = await repository.findByAccount('account-1');
+      expect(onTarget, hasLength(1), reason: 'no second booking is created');
+
+      final leg = onTarget.single;
+      expect(leg.uuid, mirrorUuid);
+      expect(leg.description, 'Uebertrag Girokonto');
+      expect(leg.counterparty, 'ING-DiBa');
+      expect(leg.amountCents, 25000);
+      expect(leg.bookingDate, DateTime(2026, 8, 5));
+      expect(leg.categoryUuid, 'cat-1');
+      expect(leg.note, 'Notiz bleibt');
+      expect(leg.kind, TransactionKind.transfer);
+      expect(leg.counterpartUuid, isNotNull);
+    });
+
+    test('Ersetzen changes nothing on the other leg', () async {
+      final container = containerFor([bankRow()]);
+      await seedPair(container);
+      await (await run(container)).persist();
+
+      final source = await container
+          .read(transactionRepositoryProvider)
+          .findByAccount('account-2');
+      expect(source.single.bookingDate, DateTime(2026, 8, 3));
+      expect(source.single.amountCents, -25000);
+      expect(source.single.description, 'Umbuchung nach Cashkonto');
+    });
+
+    test('Beide behalten imports the row and leaves both dates standing',
+        () async {
+      final container = containerFor([bankRow()]);
+      await seedPair(container);
+      final controller = await run(container);
+      controller.setKeepBothLegs(0, true);
+      await controller.persist();
+
+      final onTarget = await container
+          .read(transactionRepositoryProvider)
+          .findByAccount('account-1');
+      expect(onTarget, hasLength(2));
+      expect(
+        onTarget.map((booking) => booking.bookingDate).toSet(),
+        {DateTime(2026, 8, 3), DateTime(2026, 8, 5)},
+      );
+    });
+
+    test('a leg already replaced is a plain duplicate on the next import',
+        () async {
+      final first = containerFor([bankRow()]);
+      await seedPair(first);
+      await (await run(first)).persist();
+
+      final second = containerFor([bankRow()]);
+      await run(second, source: otherBytes);
+      final state = second.read(importFlowProvider);
+      // The replaced leg now carries the bank's fields, so it hashes like the
+      // row and the ordinary duplicate path owns it.
+      expect(state.hasMirrorMatch(0), isFalse);
+      expect(state.hasHashDuplicate(0), isTrue);
+    });
+
+    test('editing a row off its mirror leg drops the keep-both choice',
+        () async {
+      final container = containerFor([bankRow()]);
+      await seedPair(container);
+      final controller = await run(container);
+      controller.setKeepBothLegs(0, true);
+      expect(container.read(importFlowProvider).keepBothLegRows, {0});
+
+      await controller.editRow(0, amountCents: 31000);
+
+      final state = container.read(importFlowProvider);
+      expect(state.hasMirrorMatch(0), isFalse);
+      expect(state.keepBothLegRows, isEmpty);
+    });
   });
 }

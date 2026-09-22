@@ -148,6 +148,8 @@ class ImportFlowState {
     this.selectedParserId,
     this.rows = const [],
     this.rowMatches = const {},
+    this.rowMirrorMatches = const {},
+    this.keepBothLegRows = const {},
     this.rowSuggestions = const {},
     this.intraBatchDuplicates = const {},
     this.warnings = const [],
@@ -173,6 +175,17 @@ class ImportFlowState {
   /// account.
   final Map<int, List<Transaction>> rowMatches;
 
+  /// Row index → mirror legs the app booked itself that this row may be the
+  /// bank's record of (ticket 048). Only filled for rows the hash layer found
+  /// nothing for: once a leg has been replaced it carries the bank's fields and
+  /// hashes like the row, so the ordinary duplicate path owns it from then on.
+  final Map<int, List<Transaction>> rowMirrorMatches;
+
+  /// Row indexes the user chose `Beide behalten` for. A decision about how to
+  /// persist rather than a property of the booking, so it stays here instead of
+  /// on [ImportRow] — nothing of it travels into the `Transaction`.
+  final Set<int> keepBothLegRows;
+
   /// Row index → categories learned for that row's counterparty, strongest
   /// first. Derived display data, so it sits next to [rowMatches] rather than on
   /// the row, which stays a description of the booking.
@@ -192,9 +205,27 @@ class ImportFlowState {
 
   int get includedCount => rows.where((row) => row.included).length;
 
-  bool isSuspicious(int index) =>
+  /// Whether this row looks like the bank's own record of a mirror leg, and the
+  /// user therefore has a replace-or-keep decision to make.
+  bool hasMirrorMatch(int index) =>
+      (rowMirrorMatches[index] ?? const []).isNotEmpty;
+
+  /// The leg a `Ersetzen` would write onto. Null when the row has no match.
+  Transaction? mirrorLegFor(int index) {
+    final found = rowMirrorMatches[index] ?? const <Transaction>[];
+    return found.isEmpty ? null : found.first;
+  }
+
+  /// The hash layer's verdict: an already-booked row with the same hash, or a
+  /// second copy of this row inside the same document.
+  bool hasHashDuplicate(int index) =>
       (rowMatches[index] ?? const []).isNotEmpty ||
       intraBatchDuplicates.contains(index);
+
+  /// Both layers count towards the header, but they never mark the same row: a
+  /// mirror match is only looked for where the hash layer found nothing.
+  bool isSuspicious(int index) =>
+      hasHashDuplicate(index) || hasMirrorMatch(index);
 
   int get suspiciousCount =>
       List.generate(rows.length, (index) => index).where(isSuspicious).length;
@@ -208,6 +239,8 @@ class ImportFlowState {
     String? selectedParserId,
     List<ImportRow>? rows,
     Map<int, List<Transaction>>? rowMatches,
+    Map<int, List<Transaction>>? rowMirrorMatches,
+    Set<int>? keepBothLegRows,
     Map<int, List<CategorySuggestion>>? rowSuggestions,
     Set<int>? intraBatchDuplicates,
     List<String>? warnings,
@@ -224,6 +257,8 @@ class ImportFlowState {
       selectedParserId: selectedParserId ?? this.selectedParserId,
       rows: rows ?? this.rows,
       rowMatches: rowMatches ?? this.rowMatches,
+      rowMirrorMatches: rowMirrorMatches ?? this.rowMirrorMatches,
+      keepBothLegRows: keepBothLegRows ?? this.keepBothLegRows,
       rowSuggestions: rowSuggestions ?? this.rowSuggestions,
       intraBatchDuplicates: intraBatchDuplicates ?? this.intraBatchDuplicates,
       warnings: warnings ?? this.warnings,
@@ -317,6 +352,8 @@ class ImportFlowController extends AutoDisposeNotifier<ImportFlowState> {
         ],
         warnings: result.warnings,
         rowMatches: const {},
+        rowMirrorMatches: const {},
+        keepBothLegRows: const {},
         rowSuggestions: const {},
         intraBatchDuplicates: const {},
         busy: false,
@@ -362,6 +399,18 @@ class ImportFlowController extends AutoDisposeNotifier<ImportFlowState> {
     state = state.copyWith(rows: rows);
   }
 
+  /// `Ersetzen` versus `Beide behalten` for a row that met a mirror leg.
+  /// Replacing is the default, so this only ever records the exception.
+  void setKeepBothLegs(int index, bool keepBoth) {
+    final chosen = {...state.keepBothLegRows};
+    if (keepBoth) {
+      chosen.add(index);
+    } else {
+      chosen.remove(index);
+    }
+    state = state.copyWith(keepBothLegRows: chosen);
+  }
+
   void setRowCategory(int index, String? categoryUuid) {
     final rows = [...state.rows];
     rows[index] = rows[index].withCategory(categoryUuid);
@@ -380,18 +429,26 @@ class ImportFlowController extends AutoDisposeNotifier<ImportFlowState> {
 
   Future<void> persist() async {
     final accountUuid = state.targetAccountUuid;
-    final included = state.rows.where((row) => row.included).toList();
+    // Indexes rather than rows: the mirror decision is keyed on the position.
+    final included = [
+      for (var index = 0; index < state.rows.length; index++)
+        if (state.rows[index].included) index,
+    ];
     if (accountUuid == null || included.isEmpty) return;
 
     state = state.copyWith(busy: true, error: '');
     final repository = ref.read(transactionRepositoryProvider);
     final learn = ref.read(taggingLearnServiceProvider);
-    for (final row in included) {
-      final transaction =
-          candidateToTransaction(row.toCandidate(), accountUuid: accountUuid)
+    for (final index in included) {
+      final row = state.rows[index];
+      final mirror =
+          state.keepBothLegRows.contains(index) ? null : state.mirrorLegFor(index);
+      final transaction = mirror == null
+          ? (candidateToTransaction(row.toCandidate(), accountUuid: accountUuid)
             ..categoryUuid = row.categoryUuid
             ..categoryAutoSuggested = row.categorySuggested
-            ..kind = row.kind;
+            ..kind = row.kind)
+          : _takeBankFields(mirror, row);
       await repository.save(transaction);
       // A hand-picked category makes the statement a bulk teaching opportunity;
       // `learnFrom` skips the rows that only carry the machine's own guess.
@@ -419,6 +476,23 @@ class ImportFlowController extends AutoDisposeNotifier<ImportFlowState> {
         warnings: state.warnings.length,
       ),
     );
+  }
+
+  /// `Ersetzen`: the bank's facts for this account overwrite the mirror leg,
+  /// while everything the user put on it stays, as does the pair itself.
+  ///
+  /// The other leg is deliberately left alone. Mirroring amount and date is a
+  /// rule for form edits: money leaves on one day and arrives on another, and if
+  /// the legs differ by a fee the bank is the truth per leg.
+  Transaction _takeBankFields(Transaction leg, ImportRow row) {
+    return leg
+      ..description = row.description
+      ..counterparty = row.counterparty
+      // Derived from the description that just changed, so leaving the old value
+      // would describe the wrong text.
+      ..merchant = row.merchant
+      ..amountCents = row.amountCents
+      ..bookingDate = row.bookingDate;
   }
 
   /// Fills every row that carries no hand-picked category with the strongest
@@ -459,6 +533,7 @@ class ImportFlowController extends AutoDisposeNotifier<ImportFlowState> {
     if (rows.isEmpty) return;
 
     final matches = <int, List<Transaction>>{};
+    final mirrorMatches = <int, List<Transaction>>{};
     if (accountUuid != null) {
       final checker = ref.read(duplicateCheckerProvider);
       for (var index = 0; index < rows.length; index++) {
@@ -466,7 +541,19 @@ class ImportFlowController extends AutoDisposeNotifier<ImportFlowState> {
           rows[index].dedupeHash,
           accountUuid: accountUuid,
         );
-        if (found.isNotEmpty) matches[index] = found;
+        if (found.isNotEmpty) {
+          matches[index] = found;
+          // The hash layer already owns this row. A leg replaced in an earlier
+          // run now carries the bank's fields and therefore hashes like the row,
+          // so offering `Ersetzen` again would re-ask a settled question.
+          continue;
+        }
+        final mirrors = await checker.findMirrorLegMatches(
+          accountUuid: accountUuid,
+          amountCents: rows[index].amountCents,
+          bookingDate: rows[index].bookingDate,
+        );
+        if (mirrors.isNotEmpty) mirrorMatches[index] = mirrors;
       }
     }
 
@@ -486,6 +573,12 @@ class ImportFlowController extends AutoDisposeNotifier<ImportFlowState> {
 
     state = state.copyWith(
       rowMatches: matches,
+      rowMirrorMatches: mirrorMatches,
+      // An edit can move a row off its mirror leg; the choice it carried then
+      // describes nothing and must not survive into persist.
+      keepBothLegRows: state.keepBothLegRows
+          .where((index) => mirrorMatches.containsKey(index))
+          .toSet(),
       intraBatchDuplicates: intraBatch,
     );
   }

@@ -56,6 +56,15 @@ class _RecordingTransactionRepository implements TransactionRepository {
       const [];
 
   @override
+  Future<List<Transaction>> findTransferLegsNear({
+    required String accountUuid,
+    required int amountCents,
+    required DateTime bookingDate,
+    int windowDays = 5,
+  }) async =>
+      const [];
+
+  @override
   Future<int> countByCategory(String categoryUuid) async => 0;
 
   @override

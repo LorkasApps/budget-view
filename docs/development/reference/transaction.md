@@ -39,6 +39,7 @@ Not yet present: `valueDate`, line-items (ticket 015).
 | `findByUuid(uuid)` | — |
 | `findByAccount(uuid, {includeDeleted})` | — sorted `bookingDate` DESC, `createdAt` DESC |
 | `findByDedupeHash(hash, accountUuid:, includeDeleted:)` | — account-scoped; bookings with matching dedupe hash (transfers between accounts stay distinct) |
+| `findTransferLegsNear({accountUuid, amountCents, bookingDate, windowDays = 5})` | — app-written mirror legs on one account: filters `counterpartUuid != null` and `kind == transfer` **before** comparing the exact amount and a day-based ±`windowDays` date window. Backs the import's third duplicate layer (ticket 048, ADR 0150); the dedupe hash cannot serve there because it contains the counterparty |
 | `countByCategory(categoryUuid)` | — counts non-deleted transactions; backs category delete-block |
 | `sumForAccount(uuid)` | — sum of non-deleted `amountCents` |
 

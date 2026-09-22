@@ -165,3 +165,5 @@ acted on, because line numbers rot.
 | [0147](0147-skip-vocabulary-word-boundary-six-chars-ocr-only.md) | 2026-09-08 | OCR skip vocabulary tolerates one edit step for words ≥6 chars; PDF parser stays exact |
 | [0148](0148-card-acquirers-recognized-via-name-list.md) | 2026-09-10 | Card acquirers recognized via a name list, not payment-reference shape |
 | [0149](0149-merchant-segment-cut-at-refr.md) | 2026-09-10 | Merchant segment is cut at `Refr`, without proof the reference changes per transaction |
+| [0150](0150-mirror-leg-matched-by-link-plus-figures.md) | 2026-09-22 | A mirror leg is matched by `counterpartUuid` + `kind` first, then amount and a ±5-day window — never by the dedupe hash |
+| [0151](0151-hash-layer-takes-precedence-over-mirror-layer.md) | 2026-09-22 | A row the dedupe hash already matched is never offered the mirror-leg replacement |

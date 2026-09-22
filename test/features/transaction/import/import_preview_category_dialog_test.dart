@@ -64,6 +64,15 @@ class _NoDuplicates implements DuplicateChecker {
       const [];
 
   @override
+  Future<List<Transaction>> findMirrorLegMatches({
+    required String accountUuid,
+    required int amountCents,
+    required DateTime bookingDate,
+    int windowDays = 5,
+  }) async =>
+      const [];
+
+  @override
   Future<List<ImportedSource>> findDocumentMatches(String contentHash) async =>
       const [];
 }

@@ -139,6 +139,55 @@ class _PdfImportScreenState extends ConsumerState<PdfImportScreen> {
     );
   }
 
+  /// The row looks like the bank's own record of a leg the app already booked.
+  ///
+  /// `Ersetzen` is the emphasized action: the imported row is bank-confirmed
+  /// while the mirror carries only a generated `Umbuchung …` text, and counting
+  /// one movement twice is worse than losing that text. Dismissing the dialog
+  /// therefore leaves the replacement standing.
+  Future<void> _resolveMirrorLeg(int index) async {
+    final state = ref.read(importFlowProvider);
+    final leg = state.mirrorLegFor(index);
+    if (leg == null) return;
+    final row = state.rows[index];
+
+    final keepBoth = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Gegenbuchung schon vorhanden'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Diese Zeile über ${formatCentsEur(row.amountCents)} sieht aus wie '
+              'die Bankmeldung zu einer Umbuchung, die die App selbst gebucht '
+              'hat.',
+            ),
+            const SizedBox(height: 12),
+            // Full dates, not the dense list form: the whole point is the
+            // difference between them, and a ±5-day window can cross a year.
+            Text('Gebucht: ${formatDateDe(leg.bookingDate)} · ${leg.description}'),
+            Text('Import: ${formatDateDe(row.bookingDate)} · ${row.description}'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Beide behalten'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Ersetzen'),
+          ),
+        ],
+      ),
+    );
+
+    if (keepBoth == null) return;
+    ref.read(importFlowProvider.notifier).setKeepBothLegs(index, keepBoth);
+  }
+
   Future<void> _editRow(int index, ImportRow row) async {
     final suggestions =
         ref.read(importFlowProvider).rowSuggestions[index] ??
@@ -301,7 +350,9 @@ class _PdfImportScreenState extends ConsumerState<PdfImportScreen> {
                     _RowTile(
                       row: state.rows[index],
                       enabled: !state.busy,
-                      suspicious: state.isSuspicious(index),
+                      suspicious: state.hasHashDuplicate(index),
+                      mirrorMatch: state.hasMirrorMatch(index),
+                      keepBothLegs: state.keepBothLegRows.contains(index),
                       suggestions:
                           state.rowSuggestions[index] ?? const [],
                       onShowAlternatives: () => _chooseRowAlternative(index),
@@ -312,6 +363,7 @@ class _PdfImportScreenState extends ConsumerState<PdfImportScreen> {
                       onPickCategory: () =>
                           _pickRowCategory(index, state.rows[index]),
                       onShowMatches: () => _showRowMatches(index),
+                      onResolveMirror: () => _resolveMirrorLeg(index),
                     ),
                 ],
                 if (state.warnings.isNotEmpty) ...[
@@ -360,23 +412,33 @@ class _RowTile extends StatelessWidget {
     required this.row,
     required this.enabled,
     required this.suspicious,
+    required this.mirrorMatch,
+    required this.keepBothLegs,
     required this.suggestions,
     required this.onToggle,
     required this.onEdit,
     required this.onPickCategory,
     required this.onShowAlternatives,
     required this.onShowMatches,
+    required this.onResolveMirror,
   });
 
   final ImportRow row;
   final bool enabled;
   final bool suspicious;
+
+  /// The row met a leg the app booked itself, so it carries a replace-or-keep
+  /// decision instead of the plain duplicate warning (ticket 048).
+  final bool mirrorMatch;
+
+  final bool keepBothLegs;
   final List<CategorySuggestion> suggestions;
   final VoidCallback onToggle;
   final VoidCallback onEdit;
   final VoidCallback onPickCategory;
   final VoidCallback onShowAlternatives;
   final VoidCallback onShowMatches;
+  final VoidCallback onResolveMirror;
 
   int get _hitCount {
     for (final suggestion in suggestions) {
@@ -462,6 +524,21 @@ class _RowTile extends StatelessWidget {
                 color: theme.colorScheme.error,
               ),
               onPressed: onShowMatches,
+            ),
+          // Its own marker rather than the duplicate one: the decision here is an
+          // action, not an acknowledgement. The two never appear together.
+          if (mirrorMatch)
+            IconButton(
+              tooltip: keepBothLegs
+                  ? 'Gegenbuchung bleibt bestehen'
+                  : 'Gegenbuchung wird ersetzt',
+              icon: Icon(
+                Icons.swap_horiz,
+                color: keepBothLegs
+                    ? theme.colorScheme.outline
+                    : theme.colorScheme.tertiary,
+              ),
+              onPressed: enabled ? onResolveMirror : null,
             ),
           Text(
             formatCentsEur(row.amountCents),

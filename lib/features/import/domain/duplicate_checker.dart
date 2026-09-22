@@ -17,6 +17,19 @@ abstract interface class DuplicateChecker {
     bool excludeDeleted,
   });
 
+  /// Mirror legs the app itself booked on [accountUuid] that this row could be
+  /// the bank's own record of — same amount, booking date within [windowDays]
+  /// (ticket 048).
+  ///
+  /// A third layer beside the hash, because the hash keys on the counterparty
+  /// and the bank's text differs from the `Umbuchung von <Konto>` the app wrote.
+  Future<List<Transaction>> findMirrorLegMatches({
+    required String accountUuid,
+    required int amountCents,
+    required DateTime bookingDate,
+    int windowDays,
+  });
+
   /// Previous imports of the same document, newest first. Global: the same file
   /// picked from anywhere should warn.
   Future<List<ImportedSource>> findDocumentMatches(String contentHash);
@@ -38,6 +51,21 @@ class LocalDuplicateChecker implements DuplicateChecker {
       dedupeHash,
       accountUuid: accountUuid,
       includeDeleted: !excludeDeleted,
+    );
+  }
+
+  @override
+  Future<List<Transaction>> findMirrorLegMatches({
+    required String accountUuid,
+    required int amountCents,
+    required DateTime bookingDate,
+    int windowDays = 5,
+  }) {
+    return _transactions.findTransferLegsNear(
+      accountUuid: accountUuid,
+      amountCents: amountCents,
+      bookingDate: bookingDate,
+      windowDays: windowDays,
     );
   }
 

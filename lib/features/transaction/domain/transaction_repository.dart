@@ -92,6 +92,42 @@ class TransactionRepository {
         .findAll();
   }
 
+  /// Transfer legs the app wrote as a counterpart, on one account, with this
+  /// exact amount and a booking date within [windowDays] either side.
+  ///
+  /// Narrowed by `counterpartUuid` before any figure is compared, so only
+  /// app-written mirror legs can match and an ordinary booking never does.
+  /// The dedupe hash cannot serve here: it contains the counterparty, and the
+  /// bank writes a different one than the mirror carries (ticket 048).
+  Future<List<Transaction>> findTransferLegsNear({
+    required String accountUuid,
+    required int amountCents,
+    required DateTime bookingDate,
+    int windowDays = 5,
+  }) {
+    // Day-based window: a leg saved through the form carries a time, an imported
+    // row does not, so comparing the raw instants would clip a whole day.
+    final day = DateTime(
+      bookingDate.year,
+      bookingDate.month,
+      bookingDate.day,
+    );
+    final from = day.subtract(Duration(days: windowDays));
+    final to = day
+        .add(Duration(days: windowDays + 1))
+        .subtract(const Duration(microseconds: 1));
+
+    return _isar.transactions
+        .filter()
+        .accountUuidEqualTo(accountUuid)
+        .counterpartUuidIsNotNull()
+        .kindEqualTo(TransactionKind.transfer)
+        .amountCentsEqualTo(amountCents)
+        .bookingDateBetween(from, to)
+        .deletedEqualTo(false)
+        .findAll();
+  }
+
   /// Active transactions referencing one category. Backs the category
   /// delete-block, which refuses to archive a category still in use.
   Future<int> countByCategory(String categoryUuid) => _isar.transactions

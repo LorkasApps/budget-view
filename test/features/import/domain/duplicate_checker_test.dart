@@ -161,4 +161,79 @@ void main() {
   test('an unseen document has no matches', () async {
     expect(await checker.findDocumentMatches('unseen'), isEmpty);
   });
+
+  group('mirror legs (ticket 048)', () {
+    Future<Transaction> saveLeg({
+      required DateTime bookingDate,
+      String? counterpartUuid = 'other-leg',
+      TransactionKind kind = TransactionKind.transfer,
+    }) {
+      return transactions.save(
+        Transaction()
+          ..accountUuid = 'account-1'
+          ..amountCents = 25000
+          ..bookingDate = bookingDate
+          ..description = 'Umbuchung von Girokonto'
+          ..counterparty = 'Girokonto'
+          ..kind = kind
+          ..counterpartUuid = counterpartUuid,
+      );
+    }
+
+    Future<List<Transaction>> mirrorsNear(DateTime bookingDate) {
+      return checker.findMirrorLegMatches(
+        accountUuid: 'account-1',
+        amountCents: 25000,
+        bookingDate: bookingDate,
+      );
+    }
+
+    test('a leg two days off is inside the window', () async {
+      await saveLeg(bookingDate: DateTime(2026, 8, 3));
+      expect(await mirrorsNear(DateTime(2026, 8, 5)), hasLength(1));
+    });
+
+    test('a leg saved with a time still counts on the window edge', () async {
+      // The form writes whatever instant the user saved at, the import writes
+      // midnight. Comparing raw instants would drop the last day of the window.
+      await saveLeg(bookingDate: DateTime(2026, 8, 8, 21, 45));
+      expect(await mirrorsNear(DateTime(2026, 8, 3)), hasLength(1));
+    });
+
+    test('a leg six days off is outside the window', () async {
+      await saveLeg(bookingDate: DateTime(2026, 8, 9));
+      expect(await mirrorsNear(DateTime(2026, 8, 3)), isEmpty);
+    });
+
+    test('an unpaired transfer is no mirror leg', () async {
+      await saveLeg(bookingDate: DateTime(2026, 8, 3), counterpartUuid: null);
+      expect(await mirrorsNear(DateTime(2026, 8, 3)), isEmpty);
+    });
+
+    test('a regular booking is no mirror leg', () async {
+      await saveLeg(
+        bookingDate: DateTime(2026, 8, 3),
+        kind: TransactionKind.regular,
+      );
+      expect(await mirrorsNear(DateTime(2026, 8, 3)), isEmpty);
+    });
+
+    test('a differing amount is no mirror leg', () async {
+      await saveLeg(bookingDate: DateTime(2026, 8, 3));
+      expect(
+        await checker.findMirrorLegMatches(
+          accountUuid: 'account-1',
+          amountCents: 25001,
+          bookingDate: DateTime(2026, 8, 3),
+        ),
+        isEmpty,
+      );
+    });
+
+    test('a soft-deleted leg is no longer offered', () async {
+      final leg = await saveLeg(bookingDate: DateTime(2026, 8, 3));
+      await transactions.softDelete(leg.uuid);
+      expect(await mirrorsNear(DateTime(2026, 8, 3)), isEmpty);
+    });
+  });
 }

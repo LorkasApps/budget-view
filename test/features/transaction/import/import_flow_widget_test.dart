@@ -70,6 +70,57 @@ class _NoDuplicates implements DuplicateChecker {
       const [];
 
   @override
+  Future<List<Transaction>> findMirrorLegMatches({
+    required String accountUuid,
+    required int amountCents,
+    required DateTime bookingDate,
+    int windowDays = 5,
+  }) async =>
+      const [];
+
+  @override
+  Future<List<ImportedSource>> findDocumentMatches(String contentHash) async =>
+      const [];
+}
+
+/// Reports one app-written mirror leg for the income row, so the replace-or-keep
+/// dialog has two dates and two texts to name (ticket 048). The hash layer stays
+/// empty, which is the case the mirror layer exists for.
+class _OneMirrorLeg implements DuplicateChecker {
+  const _OneMirrorLeg();
+
+  @override
+  Future<List<Transaction>> findTransactionMatches(
+    String dedupeHash, {
+    required String accountUuid,
+    bool excludeDeleted = true,
+  }) async =>
+      const [];
+
+  @override
+  Future<List<Transaction>> findMirrorLegMatches({
+    required String accountUuid,
+    required int amountCents,
+    required DateTime bookingDate,
+    int windowDays = 5,
+  }) async {
+    if (amountCents != 300000) return const [];
+    return [
+      Transaction()
+        ..uuid = 'mirror-1'
+        ..accountUuid = accountUuid
+        ..amountCents = 300000
+        // Two days before what the bank printed, the way a receiving bank books
+        // later than the app wrote the mirror.
+        ..bookingDate = DateTime(2026, 7, 12)
+        ..description = 'Umbuchung von Girokonto'
+        ..counterparty = 'Girokonto'
+        ..kind = TransactionKind.transfer
+        ..counterpartUuid = 'source-1',
+    ];
+  }
+
+  @override
   Future<List<ImportedSource>> findDocumentMatches(String contentHash) async =>
       const [];
 }
@@ -95,19 +146,23 @@ void main() {
     ..openingBalanceCents = 100000
     ..openingDate = DateTime(2026, 1, 1);
 
-  setUp(() {
-    container = ProviderContainer(
+  ProviderContainer makeContainer(DuplicateChecker checker) {
+    return ProviderContainer(
       overrides: [
         pdfParserRegistryProvider.overrideWithValue(
           PdfParserRegistry()..register(_StubParser()),
         ),
         accountsProvider(false).overrideWith((ref) => Stream.value([account])),
-        duplicateCheckerProvider.overrideWithValue(const _NoDuplicates()),
+        duplicateCheckerProvider.overrideWithValue(checker),
         taggingSuggestServiceProvider.overrideWithValue(
           const _NoSuggestions(),
         ),
       ],
     );
+  }
+
+  setUp(() {
+    container = makeContainer(const _NoDuplicates());
   });
 
   tearDown(() => container.dispose());
@@ -254,5 +309,70 @@ void main() {
     expect(container.read(importFlowProvider).rows.first.description,
         'Abschlag Strom');
     expect(find.text('Verworfen'), findsNothing);
+  });
+
+  group('mirror leg (ticket 048)', () {
+    setUp(() {
+      container.dispose();
+      container = makeContainer(const _OneMirrorLeg());
+    });
+
+    testWidgets('the marker names both dates and both texts', (tester) async {
+      await pumpFlow(tester);
+      await loadAndParse(tester);
+      expect(container.read(importFlowProvider).hasMirrorMatch(1), isTrue);
+
+      await tester.tap(find.byIcon(Icons.swap_horiz));
+      await settle(tester);
+
+      expect(find.text('Gegenbuchung schon vorhanden'), findsOneWidget);
+      expect(
+        find.text('Gebucht: 12.07.2026 · Umbuchung von Girokonto'),
+        findsOneWidget,
+      );
+      expect(find.text('Import: 14.07.2026 · Gehalt'), findsOneWidget);
+      expect(find.widgetWithText(FilledButton, 'Ersetzen'), findsOneWidget);
+      expect(find.widgetWithText(TextButton, 'Beide behalten'), findsOneWidget);
+    });
+
+    testWidgets('the plain duplicate marker stays away from that row', (
+      tester,
+    ) async {
+      await pumpFlow(tester);
+      await loadAndParse(tester);
+
+      expect(find.byIcon(Icons.swap_horiz), findsOneWidget);
+      expect(find.byIcon(Icons.copy_all_outlined), findsNothing);
+    });
+
+    testWidgets('Beide behalten is recorded and shown on the marker', (
+      tester,
+    ) async {
+      await pumpFlow(tester);
+      await loadAndParse(tester);
+
+      await tester.tap(find.byIcon(Icons.swap_horiz));
+      await settle(tester);
+      await tester.tap(find.text('Beide behalten'));
+      await settle(tester);
+
+      expect(container.read(importFlowProvider).keepBothLegRows, {1});
+      expect(find.byTooltip('Gegenbuchung bleibt bestehen'), findsOneWidget);
+    });
+
+    testWidgets('dismissing the dialog leaves the replacement standing', (
+      tester,
+    ) async {
+      await pumpFlow(tester);
+      await loadAndParse(tester);
+
+      await tester.tap(find.byIcon(Icons.swap_horiz));
+      await settle(tester);
+      await tester.tap(find.widgetWithText(FilledButton, 'Ersetzen'));
+      await settle(tester);
+
+      expect(container.read(importFlowProvider).keepBothLegRows, isEmpty);
+      expect(find.byTooltip('Gegenbuchung wird ersetzt'), findsOneWidget);
+    });
   });
 }

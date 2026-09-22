@@ -44,7 +44,14 @@ An interface with `LocalDuplicateChecker` as implementation, mirroring `SyncAdap
 | Method | Scope | Behavior |
 |---|---|---|
 | `findTransactionMatches(hash, accountUuid:, excludeDeleted:)` | Account-scoped | Bookings on one account with the same dedupe hash; transfers stay distinct |
+| `findMirrorLegMatches({accountUuid, amountCents, bookingDate, windowDays = 5})` | Account-scoped | Transfer legs the app booked itself that this row may be the bank's record of (048). Delegates to `TransactionRepository.findTransferLegsNear`, which filters on `counterpartUuid != null` and `kind == transfer` **before** comparing figures |
 | `findDocumentMatches(hash)` | Global | Earlier imports of this exact file (by content hash) |
+
+Three layers, and the third exists because the first cannot see this case: the dedupe hash contains the
+counterparty, and the bank writes another one than the `Umbuchung von <Konto>` the app generated
+(ADR 0150). The hash layer takes precedence — the mirror lookup only runs for rows it found nothing for,
+which is what keeps a replacement the user already confirmed from being re-asked on the next import
+(ADR 0151).
 
 ### Content Hash (`domain/content_hash.dart`)
 
@@ -230,8 +237,13 @@ Pure function: `List<PositionedWord> → ParseResult`
 - `ImportFlowState`: extends prior with `contentHash`, `documentMatches` (re-import
   warning list), `targetAccountUuid`, `rowMatches` (row index → existing bookings on
   target account), `intraBatchDuplicates` (row indexes), `rowSuggestions` (row index →
-  `List<CategorySuggestion>`, derived display data sitting next to `rowMatches`);
-  derives `documentSeenBefore` (bool), `isSuspicious(index)`, `suspiciousCount`, `newCount`
+  `List<CategorySuggestion>`, derived display data sitting next to `rowMatches`),
+  `rowMirrorMatches` (row index → app-written transfer legs this row may replace, 048) and
+  `keepBothLegRows` (the row indexes the user chose `Beide behalten` for — a decision about
+  how to persist, not a property of the booking, hence not on `ImportRow`);
+  derives `documentSeenBefore` (bool), `hasHashDuplicate(index)`, `hasMirrorMatch(index)`,
+  `mirrorLegFor(index)`, `isSuspicious(index)` (the union of both layers), `suspiciousCount`,
+  `newCount`
 - `ImportFlowController extends AutoDisposeNotifier`: methods `loadDocument` (hashes
   bytes, checks document matches), `selectParser`, `parseDocument`, `toggleRow`,
   `editRow` (async, re-runs duplicate check), `setRowCategory(index, uuid)`,
@@ -245,9 +257,19 @@ Pure function: `List<PositionedWord> → ParseResult`
   matches nothing ends up uncategorized again. `setRowCategory` / `setCategoryForAll`
   clear the suggested flag. Raw bytes in private `_bytes` field, dropped on dispose
 - `importFlowProvider`: `NotifierProvider.autoDispose<ImportFlowController, ImportFlowState>`
-- **Persistence:** `persist` routes included rows through `candidateToTransaction` →
-  `TransactionRepository.save`, then writes one `ImportedSource` row with `kind=pdf`,
-  document hash, filename, counts, and `note` when `documentSeenBefore`
+- `setKeepBothLegs(index, keepBoth)` records the exception only — replacing is the default,
+  so a row whose dialog was dismissed is replaced. `_recheckDuplicates` prunes the set to
+  rows that still have a mirror match, so an edit that moves a row off its leg drops the
+  choice with it
+- **Persistence:** `persist` iterates **indexes**, since the mirror decision is keyed on the
+  position. A row with a mirror leg and no `Beide behalten` takes `_takeBankFields`: the
+  bank's description, counterparty, merchant, amount and date are written onto the existing
+  leg while category, note, `counterpartUuid` and `kind` stay, and no second booking is
+  created. The other leg is deliberately untouched — mirroring amount and date is a
+  form-edit rule (see `transaction.md`), and money leaves on one day and arrives on another.
+  Every other row goes through `candidateToTransaction` → `TransactionRepository.save` as
+  before. Then one `ImportedSource` row with `kind=pdf`, document hash, filename, counts, and
+  `note` when `documentSeenBefore`
 
 ## UI Flow
 
@@ -268,6 +290,12 @@ Pure function: `List<PositionedWord> → ParseResult`
      it opens `pickSuggestion` (only when more than one suggestion exists) and the
      pick goes through `setRowCategory`, i.e. as an override.
   8. Per-row duplicate marker (copy icon, red) opens modal listing existing bookings; intra-batch duplicates flag **both** copies (user decides which to keep)
+  8a. Per-row **mirror marker** (`Icons.swap_horiz`, tertiary) on a row that met a leg the app
+      booked itself (048). Its own marker rather than the duplicate one, because the decision is
+      an action: the dialog `Gegenbuchung schon vorhanden` names both dates and both texts and
+      offers `Beide behalten` beside an emphasised `Ersetzen`. Dismissing it leaves the
+      replacement standing. The icon greys out and the tooltip flips once `Beide behalten` is
+      chosen. The two markers never appear on one row (ADR 0151)
   9. Per-row edit dialog: expense/income toggle, amount, description, counterparty, date, **`Umbuchung` switch**, and the row's **category** —
      category button shows the resolved name or `Keine Kategorie`, plus the suggestion marker and `<n>×` while the category still is
      the suggested one — **not on a row marked `Umbuchung`**, where the marker would promise learning the hook skips (ticket 041);
