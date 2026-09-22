@@ -405,45 +405,46 @@ class _LineItemSheetState extends ConsumerState<_LineItemSheet> {
             title: const Text('Kategorie'),
             subtitle:
                 _categoryUuid == null ? Text(_inheritLabel(categories)) : null,
-            trailing: _categoryUuid == null
-                ? const Icon(Icons.chevron_right)
-                : Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      CategoryChip(categoryUuid: _categoryUuid),
-                      // Marks the category as the machine's guess and opens the
-                      // runners-up; the row itself stays the way to the full tree.
-                      if (_isSuggested) ...[
-                        const SizedBox(width: 4),
-                        InkWell(
-                          onTap: _suggestions.length > 1
-                              ? _chooseAlternative
-                              : null,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.auto_awesome_outlined,
-                                size: 14,
-                                color: Theme.of(context).colorScheme.tertiary,
-                              ),
-                              Text(
-                                '$_suggestedHitCount×',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .bodySmall
-                                    ?.copyWith(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .tertiary,
-                                    ),
-                              ),
-                            ],
-                          ),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_categoryUuid != null)
+                  CategoryChip(categoryUuid: _categoryUuid),
+                // Rendered whenever rules exist for this article, not only when
+                // one filled the field: a tie fills nothing (ADR 0154) and the
+                // marker is then the only way to the alternatives. The count
+                // appears only while the field wears one of them.
+                if (_suggestions.isNotEmpty) ...[
+                  const SizedBox(width: 4),
+                  InkWell(
+                    onTap:
+                        _suggestions.length > 1 ? _chooseAlternative : null,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.auto_awesome_outlined,
+                          size: 14,
+                          color: Theme.of(context).colorScheme.tertiary,
                         ),
+                        if (_isSuggested)
+                          Text(
+                            '$_suggestedHitCount×',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(
+                                  color:
+                                      Theme.of(context).colorScheme.tertiary,
+                                ),
+                          ),
                       ],
-                    ],
+                    ),
                   ),
+                ],
+                if (_categoryUuid == null) const Icon(Icons.chevron_right),
+              ],
+            ),
             onTap: _saving ? null : _chooseCategory,
           ),
           const SizedBox(height: 16),

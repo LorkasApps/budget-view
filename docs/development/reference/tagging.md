@@ -1,12 +1,12 @@
 ---
 title: Tagging (Tagging domain)
 date: 2026-09-10
-description: TaggingRule entity, repository (upsert/hit-count, hard delete, remap), learn service + its three UI call sites, suggest service + shared suggestion sheet, TaggingRulesScreen, providers
+description: TaggingRule entity, repository (upsert/hit-count, hard delete, remap), learn service for bookings and for positions + its five UI call sites, field-aware suggest service + shared suggestion sheet, TaggingRulesScreen, providers
 ---
 
 # Tagging (Tagging domain)
 
-Learns which category the user assigns to a counterparty; the suggest service consumes rules to rank candidate categories. `lib/features/tagging/`. Rules are curated via `TaggingRulesScreen` (ticket 025).
+Learns which category the user assigns to a counterparty, and since ticket 056 to an article description as well; the suggest service consumes rules of one kind to rank candidate categories. `lib/features/tagging/`. Rules are curated via `TaggingRulesScreen` (ticket 025).
 
 ## Entity — `TaggingRule` (`data/tagging_rule.dart`)
 Implements `SyncableEntity` (`entityType = 'taggingRule'`).
@@ -16,7 +16,7 @@ Implements `SyncableEntity` (`entityType = 'taggingRule'`).
 | `id` | Id | Isar auto-inc, internal |
 | `uuid` | String | UUID v4, unique index |
 | `matchValueNorm` | String | Normalized match value. **Composite unique index** with `matchField` + `categoryUuid` |
-| `matchField` | `TaggingMatchField` | `counterparty` \| `description`, stored by name. Only `counterparty` is learned today |
+| `matchField` | `TaggingMatchField` | `counterparty` \| `description`, stored by name. Both are learned since ticket 056 — counterparties from bookings, descriptions from positions |
 | `categoryUuid` | String | FK to `Category.uuid`. Never validated — a stale rule is a legal state (ticket 025 surfaces it) |
 | `hitCount` | int | Confidence: re-assigning the same pair raises it. Default 1 |
 | `lastAssignedAt` | DateTime | Set on create and on every increment |
@@ -28,7 +28,7 @@ One counterparty may hold rules for several categories — each keeps its own co
 | Method | Sync op |
 |--------|---------|
 | `upsert(matchValueNorm, categoryUuid, {matchField})` | create (new pair) / update (`hitCount += 1`, `lastAssignedAt` refreshed) |
-| `findByCounterparty(matchValueNorm)` | — strongest first: `hitCount` DESC, then `lastAssignedAt` DESC |
+| `findByMatch(matchValueNorm, {required matchField})` | — strongest first: `hitCount` DESC, then `lastAssignedAt` DESC. `matchField` is **required**, not defaulted: counterparty rules and article rules share this value space, so `Milch` the shop would otherwise answer a lookup for `Milch` the article (ticket 056, ADR 0152) |
 | `findAll()` | — same ordering |
 | `findByUuid(uuid)` | — |
 | `delete(uuid)` | delete — **hard delete**, no archive flag: a rule that lingers keeps suggesting, so removal *is* the domain operation (same reasoning as `ImportedSource`) |
@@ -54,7 +54,7 @@ mirrors it, so the import preview suggests what the booking will later learn.
 
 Normalization is `normalizeForMatching` from `lib/core/text/normalize.dart` — the same function the dedupe hash uses, deliberately shared so a rule matches exactly what dedupe considers the same counterparty.
 
-**Call sites** (`learnFrom` is called by the UI, never by a repository hook — see decisions.md):
+**Call sites** (`learnFrom` is called by the UI, never by a repository hook — ADR 0053):
 
 | Where | When |
 |-------|------|
@@ -64,17 +64,42 @@ Normalization is `normalizeForMatching` from `lib/core/text/normalize.dart` — 
 
 The first two also reset `Transaction.categoryAutoSuggested` to `false`, because a hand-picked category is no longer a suggestion.
 
+## Learning from a position — `learnFromPosition` (ticket 056)
+
+`learnFromPosition({required description, required categoryUuid, required wasSuggested})`
+writes a rule with `matchField = description`, keyed on `normalizeForMatching(description)` —
+the same function price trends group by, so "the same article" means one thing in three places.
+
+Takes **primitives, not a `LineItem`**: the `Drilldown → Tagging` edge must not drag another
+feature's entity in, the same restraint that keeps Tagging holding a category by uuid alone
+(ADR 0153).
+
+No-op unless a category is set and `wasSuggested` is false. There is no transfer condition —
+a position is never one — and nothing stored behind `wasSuggested`: a scan candidate is
+transient, and the position's only other write path is the line-item sheet, where every change
+is by hand and therefore teaches.
+
+| Where | When |
+|-------|------|
+| `ReceiptScanFlowController.confirm` | once per kept position — a receipt is a bulk teaching opportunity, like a statement |
+| `_LineItemSheetState._save` | one position by hand, inside or outside the scan flow |
+
+`unambiguousSuggestion(ordered)` (in `tagging_suggest_service.dart`) is the shared rule for
+whether a row may be filled unattended: a single candidate, or a strongest one whose `hitCount`
+is **strictly** greater than the runner-up's. A tie fills nothing (ADR 0154). Both the scan
+review and the sheet use it, so "unambiguous" means one thing.
+
 ## Suggest service (`domain/tagging_suggest_service.dart`)
 
 - `CategorySuggestion` — `categoryUuid`, `categoryName` (carried so suggestion renders
   without second lookup), `hitCount` (bare count is the confidence story).
 - `TaggingSuggestService` interface + `LocalTaggingSuggestService
   (taggingRuleRepository, categoryRepository)`. One method:
-  `Future<List<CategorySuggestion>> suggest(String counterparty)`.
-- Normalizes the counterparty itself via `normalizeForMatching`, so callers hand in
-  raw field value.
-- Blank counterparty → `const []`. No rules → `const []`.
-- Order from `findByCounterparty` (`hitCount` DESC, then `lastAssignedAt` DESC).
+  `Future<List<CategorySuggestion>> suggest(String matchValue, {required TaggingMatchField matchField})`.
+- Normalizes the value itself via `normalizeForMatching`, so callers hand in the raw
+  field value — a counterparty, or an article description.
+- Blank value → `const []`. No rules of that kind → `const []`.
+- Order from `findByMatch` (`hitCount` DESC, then `lastAssignedAt` DESC).
 - Rules whose category is archived or gone are dropped: the category picker offers
   neither, so suggesting it would be an offer the user cannot repeat by hand. A rule
   pointing at an archived category stays a legal stored state (ticket 025 cures it).
@@ -87,7 +112,8 @@ The first two also reset `Transaction.categoryAutoSuggested` to `false`, because
   tapped suggestion, `null` when dismissed.
 - Renders the name the suggestion carries instead of a `CategoryChip`, so the sheet
   needs no category provider.
-- Shared by the booking form and the PDF-import preview.
+- Shared by the booking form, the PDF-import preview, the scan review screen and the
+  line-item sheet (ticket 056).
 
 ## Providers (`domain/tagging_providers.dart`)
 - `taggingRuleRepositoryProvider`

@@ -167,3 +167,6 @@ acted on, because line numbers rot.
 | [0149](0149-merchant-segment-cut-at-refr.md) | 2026-09-10 | Merchant segment is cut at `Refr`, without proof the reference changes per transaction |
 | [0150](0150-mirror-leg-matched-by-link-plus-figures.md) | 2026-09-22 | A mirror leg is matched by `counterpartUuid` + `kind` first, then amount and a ±5-day window — never by the dedupe hash |
 | [0151](0151-hash-layer-takes-precedence-over-mirror-layer.md) | 2026-09-22 | A row the dedupe hash already matched is never offered the mirror-leg replacement |
+| [0152](0152-matchfield-required-on-the-tagging-read-path.md) | 2026-09-22 | `matchField` is required on the tagging read path, not defaulted; `upsert` keeps its default |
+| [0153](0153-drilldown-to-tagging-carries-primitives.md) | 2026-09-22 | `Drilldown → Tagging` carries primitives — `learnFromPosition` never sees a `LineItem` |
+| [0154](0154-only-an-unambiguous-rule-fills-a-row.md) | 2026-09-22 | Only an unambiguous article rule fills a row unattended; a tie fills nothing |

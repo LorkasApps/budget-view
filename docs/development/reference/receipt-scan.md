@@ -48,7 +48,7 @@ ReceiptLineItemParser (018)           ↓
 | `OcrService.recognize(Uint8List) → Future<OcrResult>` — `OcrResult(fullText, blocks)`, `OcrBlock(text, boundingBox, lines)`, `OcrLine(text, boundingBox, confidence?)`; throws `OcrEngineException` | `MlKitOcrService` (ticket 017) via `google_mlkit_text_recognition` 0.17.1 |
 | `ReceiptLineItemParser.parse(OcrResult) → ReceiptParseResult` | `HeuristicReceiptLineItemParser` — groups lines by vertical overlap, skips rows by prefix, rightmost price, printed total from totals row, drops rows without money tokens, quantity parsing |
 | `ReceiptPdfReader.read(Uint8List) → ReceiptParseResult?` — null = no text layer (document is scan; route to OCR) | `SyncfusionReceiptPdfReader` (ticket 033) — extracts words via `syncfusion_flutter_pdf`, delegates to `parseReceiptPdf` |
-| `ReceiptParseResult(List<LineItemCandidate>, int? printedTotalCents, int creditCents = 0)` with derived `expectedPositionSumCents` = total + credits — `LineItemCandidate(description, amountCents?, quantity?, unitPriceCents?, rawOcrText, parseState, includeInSave, categoryUuid?)`, unsigned magnitudes | — |
+| `ReceiptParseResult(List<LineItemCandidate>, int? printedTotalCents, int creditCents = 0)` with derived `expectedPositionSumCents` = total + credits — `LineItemCandidate(description, amountCents?, quantity?, unitPriceCents?, rawOcrText, parseState, includeInSave, categoryUuid?, categorySuggested)`, unsigned magnitudes. `categorySuggested` is transient, mirroring `ImportRow`: true while an article rule filled the category and nobody overrode it. `withCategory(uuid, {suggested})` sets both together, so they cannot drift apart | — |
 | `PickedReceiptDocument` — `bytes` + `filename` | — |
 | `ReceiptSource` enum: `camera` \| `gallery` \| `pdf` | — |
 | `ReceiptImageSource.pick(ScanSource) → Future<CapturedReceiptImage?>` | `ImagePickerReceiptImageSource` via `image_picker` 1.2.3 |
@@ -69,7 +69,7 @@ All in `lib/features/drilldown/scan/domain/` or `data/`. `ReceiptSource.asScanSo
 | `duplicateWarning` | Doc-hash matched prior import; user decides `proceedAfterWarning()` or `cancel()` |
 | `recognizing` | Running OCR on preprocessed image bytes. The PDF path skips this phase — reading a text layer is synchronous and goes straight to `parsing` |
 | `parsing` | Line-item parser executing |
-| `awaitingConfirm` | Candidates ready; `confirm()` or `cancel()` |
+| `awaitingConfirm` | Candidates ready; `confirm()` or `cancel()`. Article suggestions are folded into **this same** state write by `_withSuggestions`, so the review never renders a frame of unsuggested rows and the phase sequence keeps one emission (ticket 056) |
 | `persisting` | Saving line-items + ImportedSource row |
 | `done` | Pass complete; ready for "Scan another" or exit |
 | `cancelled` | User exited; no trace left |
@@ -294,9 +294,13 @@ The gaps in the OCR column are ticket **043**.
 
 ## Review screen
 
-`pushScanReview(context, transaction:, candidates:, expectedSumCents:, unreadRows:)`
+`pushScanReview(context, transaction:, candidates:, suggestions:, expectedSumCents:, unreadRows:)`
 presents the parser's output for editing and returns the reviewed list, or null if the
 user discards.
+
+Everything the screen shows is handed in rather than read from `receiptScanFlowProvider`,
+which is what keeps it drivable in a widget test without the flow. `suggestions` is a
+`Map<int, List<CategorySuggestion>>` keyed by the **parser's** index.
 
 **Unread rows (045).** An `ExpansionTile` titled `N nicht erkannte Zeilen`, collapsed on
 arrival and absent when nothing was discarded, shows the raw text of every row the
@@ -309,6 +313,15 @@ debug-only dump would be missing from exactly the release build where that happe
 **Row states and rendering.**
 - `ok`: plain `ListTile` — description, category chip once set, amount, quantity line
 - `ambiguous`: same layout on a `tertiaryContainer` background, subtitle "Beschreibung fehlt"
+
+**Article suggestions (056).** A row whose description carries an unambiguous rule arrives
+pre-filled and wears `Icons.auto_awesome_outlined` + `<hitCount>×` beside the chip; tapping
+the marker opens `pickSuggestion` when more than one rule exists, and the pick counts as an
+override. The chip itself stays the way to the full tree. An `ambiguous` row has no
+description, so it is offered nothing — `suggest` normalizes to an empty key. `Alle
+kategorisieren` overrides suggested rows too: it is an explicit bulk action. At `confirm()`
+each kept position goes through `learnFromPosition`, which drops the rows that still carry
+only this flow's own guess.
 
 The include-checkbox is **disabled for non-savable rows** — those lacking a
 non-empty trimmed description or a positive amount. Disabled rows are skipped at

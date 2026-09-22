@@ -367,12 +367,14 @@ class _CandidateRow extends StatelessWidget {
           children: [
             if (ambiguous)
               Text('Beschreibung fehlt', style: theme.textTheme.bodySmall)
-            else if (candidate.categoryUuid != null) ...[
-              CategoryChip(categoryUuid: candidate.categoryUuid),
-              // Marks the category as the machine's guess and opens the
-              // runners-up; the row itself stays the way to the full tree. Same
-              // shape as the import preview (ticket 014).
-              if (candidate.categorySuggested) ...[
+            else ...[
+              if (candidate.categoryUuid != null)
+                CategoryChip(categoryUuid: candidate.categoryUuid),
+              // Rendered whenever rules exist for this article, not only when one
+              // of them filled the row: a tie fills nothing (ADR 0154), and the
+              // marker is then the only way to reach the alternatives at all.
+              // The count appears only when the row wears one of them.
+              if (suggestions.isNotEmpty) ...[
                 const SizedBox(width: 4),
                 InkWell(
                   onTap: suggestions.length > 1 ? onShowAlternatives : null,
@@ -384,12 +386,13 @@ class _CandidateRow extends StatelessWidget {
                         size: 14,
                         color: theme.colorScheme.tertiary,
                       ),
-                      Text(
-                        '$_hitCount×',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.tertiary,
+                      if (candidate.categorySuggested)
+                        Text(
+                          '$_hitCount×',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.tertiary,
+                          ),
                         ),
-                      ),
                     ],
                   ),
                 ),

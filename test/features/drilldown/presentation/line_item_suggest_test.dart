@@ -252,8 +252,16 @@ void main() {
     });
     await enterArticle(tester, 'Milch');
 
-    expect(find.byIcon(Icons.auto_awesome_outlined), findsNothing);
+    // Nothing filled (ADR 0154), so no count — but the marker stays, because it
+    // is the only way to reach the alternatives and break the tie.
+    expect(find.byIcon(Icons.auto_awesome_outlined), findsOneWidget);
+    expect(find.text('2×'), findsNothing);
     expect(find.text('Erbt von der Buchung (ohne Kategorie)'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.auto_awesome_outlined));
+    await settle(tester);
+
+    expect(find.text('Vorschläge'), findsOneWidget);
   });
 
   testWidgets('picking the runner-up drops the suggestion marker',
@@ -273,7 +281,9 @@ void main() {
     await tester.tap(find.text('Getränke'));
     await settle(tester);
 
-    expect(find.byIcon(Icons.auto_awesome_outlined), findsNothing);
+    // The field no longer wears a suggestion, so the count is gone; the icon
+    // stays because rules for this article still exist.
+    expect(find.text('4×'), findsNothing);
   });
 
   group('what the save teaches', () {

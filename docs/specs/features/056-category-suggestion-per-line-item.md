@@ -6,7 +6,7 @@
 | **Epic** | Auto-Tagging |
 | **Domain** | Tagging |
 | **Blocked By** | 055 (article names must read correctly first) |
-| **Status** | In Progress |
+| **Status** | Done |
 
 Secondary domain: Drilldown — the suggestion is shown in the scan review screen and the line-item sheet, both of which live
 there.
@@ -61,31 +61,51 @@ and the only tools are one category for all of them (`alle kategorisieren`) or n
   against real article rules rather than imagined ones
 
 ## Acceptance Criteria
-- [ ] Setting a position's category by hand writes a rule with `matchField = description` and
-      `normalizeForMatching(description)` as its key — from the review's confirm and from the line-item sheet
-- [ ] The rule lookup is field-aware: a counterparty rule and an article rule with the same text never match each other
-- [ ] On arrival in the review, a position with an unambiguous rule is pre-filled and marked with its hit count
-- [ ] A position whose rules tie (equal `hitCount` at the top) is **not** pre-filled; the marker offers the alternatives
-- [ ] An `ambiguous` position (`Beschreibung fehlt`) neither receives a suggestion nor teaches a rule. `confirm()` already
+- [x] Setting a position's category by hand writes a rule with `matchField = description` and
+      `normalizeForMatching(description)` as its key — from the review's confirm and from the line-item sheet.
+      `learnFromPosition` takes primitives, not a `LineItem`, so the new `Drilldown → Tagging` edge drags no entity
+      along (ADR 0153)
+- [x] The rule lookup is field-aware: a counterparty rule and an article rule with the same text never match each other.
+      `matchField` is **required** on the read path rather than defaulted — a default is the silence this collision
+      would slip through (ADR 0152). `upsert` keeps its default: one production caller, which passes the field explicitly
+- [x] On arrival in the review, a position with an unambiguous rule is pre-filled and marked with its hit count.
+      Folded into the same state write that flips to `awaitingConfirm`, so no frame of unsuggested rows is ever rendered
+- [x] A position whose rules tie (equal `hitCount` at the top) is **not** pre-filled; the marker offers the alternatives.
+      This one nearly shipped broken: the marker first rendered only on `categorySuggested`, which a tie never sets, so
+      the alternatives were unreachable and a contested article could never be resolved. The icon now appears whenever
+      rules exist and the **hit count** only while the row wears one
+- [x] An `ambiguous` position (`Beschreibung fehlt`) neither receives a suggestion nor teaches a rule. `confirm()` already
       filters to `includeInSave && isSavable`, and `isSavable` demands a non-empty trimmed description — this pins it,
       because a rule learned on an empty key is exactly the wrong-name data 025 has no bulk cure for
-- [ ] A pre-filled row that the user leaves alone teaches nothing on confirm; overriding it raises the chosen category
-- [ ] `alle kategorisieren` overrides suggested and hand-set rows alike
-- [ ] Positions from a PDF receipt behave the same as from a photo
-- [ ] The line-item sheet suggests outside the scan flow as well
-- [ ] `TaggingRulesScreen` is left untouched: article rules may be written and read, but nothing changes about how the screen
+- [x] A pre-filled row that the user leaves alone teaches nothing on confirm; overriding it raises the chosen category
+- [x] `alle kategorisieren` overrides suggested and hand-set rows alike
+- [x] Positions from a PDF receipt behave the same as from a photo — all three parse paths (photo, PDF text layer,
+      scanned PDF through OCR) suggest through the same seam
+- [x] The line-item sheet suggests outside the scan flow as well, on blur of the description field. **Not** for the
+      managed Restposten row: it is not an article, the same reason it has no price history
+- [x] `TaggingRulesScreen` is left untouched: article rules may be written and read, but nothing changes about how the screen
       lists or curates them — that is 064
-- [ ] No schema change, no `kDbSchemaVersion` bump, nothing about the dedupe hash or price-trend grouping
-- [ ] `make check` green
+- [x] No schema change, no `kDbSchemaVersion` bump, nothing about the dedupe hash or price-trend grouping — the composite
+      unique index already carried `matchField`
+- [x] `make check` green — 681 passed, 6 skipped, 0 failed (2026-09-22, figure read from `.claude/tmp/check.log`)
 
 ## Out of Scope
 - Learning from the booking's own category onto its positions; that is inheritance and already exists
 - Any change to the dedupe hash or to price-trend grouping
 
 ## Affected Tests
-- The tagging learn and suggest suites gain the description field, including that a counterparty rule and an article rule with
-  the same text stay apart
-- Review-screen tests for the suggestion, and the line-item sheet tests if it is included
+- `tagging_rule_repository_test.dart` — group `the two kinds share one value space (ticket 056)`, four tests: same text in
+  both kinds stays two rules, each lookup blind to the other, separate hit counts
+- `tagging_learn_service_test.dart` — group `learning from a position (ticket 056)`, seven tests
+- `tagging_suggest_service_test.dart` — group `unambiguousSuggestion (ticket 056)`, five tests including that a tie is not
+  decided by anything further down the list
+- `receipt_scan_suggest_test.dart` (new) — eleven tests on a real Isar with **real categories**: a bare category uuid would
+  have made every one of them pass for the wrong reason, since `suggest` drops a rule whose category does not exist
+- `scan_review_screen_test.dart` — group `the suggestion marker (ticket 056)`, six widget tests
+- `line_item_suggest_test.dart` (new) — seven widget tests for the sheet, including what the save reports to the learn hook.
+  Needed the repo's first `LineItemRepository` fake: the existing sheet suite keeps a field invalid so the save path never runs
+- Three existing sheet/section suites gained fakes for the two tagging seams — the blur lookup fires on a focus change, so
+  "this test never reaches the repository" no longer implies "this test never reaches Isar"
 - **Not** the `TaggingRulesScreen` tests — the curating surface is 064
 
 ## Fixtures Needed

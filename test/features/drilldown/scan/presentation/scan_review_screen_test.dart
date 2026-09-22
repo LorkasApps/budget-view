@@ -244,7 +244,7 @@ void main() {
       expect(find.text('3×'), findsOneWidget);
     });
 
-    testWidgets('a hand-set category of the same value wears no marker',
+    testWidgets('a hand-set category of the same value wears no hit count',
         (tester) async {
       await _openReview(
         tester,
@@ -253,7 +253,31 @@ void main() {
         categories: [groceries],
       );
 
-      expect(find.byIcon(Icons.auto_awesome_outlined), findsNothing);
+      // The icon still says a rule exists for this article; the count is what
+      // says the row is wearing it.
+      expect(find.byIcon(Icons.auto_awesome_outlined), findsOneWidget);
+      expect(find.text('3×'), findsNothing);
+    });
+
+    testWidgets('a tie shows the marker and still offers both alternatives',
+        (tester) async {
+      await _openReview(
+        tester,
+        candidates: [milch(categoryUuid: null, suggested: false)],
+        suggestions: twoRules,
+        categories: [groceries, drinks],
+      );
+
+      // Nothing was filled (ADR 0154), so no count — but the alternatives have
+      // to stay reachable, or a contested article could never be resolved.
+      expect(find.byIcon(Icons.auto_awesome_outlined), findsOneWidget);
+      expect(find.text('3×'), findsNothing);
+
+      await tester.tap(find.byIcon(Icons.auto_awesome_outlined));
+      await _settle(tester);
+
+      expect(find.text('Vorschläge'), findsOneWidget);
+      expect(find.text('Getränke'), findsOneWidget);
     });
 
     testWidgets('picking the runner-up counts as an override', (tester) async {
@@ -273,9 +297,9 @@ void main() {
       await tester.tap(find.text('Getränke'));
       await _settle(tester);
 
-      // The marker is gone because the row is no longer a guess, which is what
-      // lets the learn hook raise the runner-up at confirm.
-      expect(find.byIcon(Icons.auto_awesome_outlined), findsNothing);
+      // The count is gone because the row is no longer wearing a suggestion,
+      // which is what lets the learn hook raise the runner-up at confirm.
+      expect(find.text('3×'), findsNothing);
 
       await tester.tap(find.text('1 übernehmen'));
       await _settle(tester);
@@ -314,7 +338,7 @@ void main() {
       await tester.tap(find.text('Getränke'));
       await _settle(tester);
 
-      expect(find.byIcon(Icons.auto_awesome_outlined), findsNothing);
+      expect(find.text('3×'), findsNothing);
 
       await tester.tap(find.text('1 übernehmen'));
       await _settle(tester);

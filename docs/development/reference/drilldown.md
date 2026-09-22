@@ -103,6 +103,15 @@ Non-obvious details:
 
 **`showLineItemSheet(context, {parent, existing})`** — bottom sheet, saves itself and pops. Fields: description, amount (magnitude — the sign comes from `parent`, so there is no expense/income toggle), optional quantity + price per unit side by side, category row (`allowNone: true`, `noneLabel` = "Erbt von der Buchung (<name>)", or "(ohne Kategorie)" while the booking itself has none). The mismatch warning renders inline under the two optional fields. `LineItemInvalid` from the repository surfaces as a snackbar.
 
+**Article suggestions (056).** On blur of the description field the sheet looks up article
+rules (`suggest(..., matchField: description)`) and fills the category when exactly one is
+unambiguous, marking it with `Icons.auto_awesome_outlined` + `<hitCount>×`; tapping the marker
+opens `pickSuggestion` when there is more than one. Going through the category row itself is
+always a hand-pick and drops the provenance. On a completed save the sheet calls
+`learnFromPosition`, so editing a position by hand teaches — unless the category is still the
+sheet's own guess. **Never for the managed Restposten row**: it is not an article, the same
+reason it has no price history behind a long-press.
+
 The inherit label is built from a **watched** category list. Reading it during build froze the wording at the stream's loading state and rendered every booking as uncategorized; the tap handler reads instead, because watching outside build is not allowed.
 
 ## Not in scope here

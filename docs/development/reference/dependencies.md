@@ -22,6 +22,7 @@ graph TD
     Category -->|countByCategory| Transaction
     Drilldown --> Transaction
     Drilldown -->|doc-hash + ImportedSource| Import
+    Drilldown -->|article rules, primitives only| Tagging
     Drilldown -->|navigation only| Analytics
     Tagging --> Transaction
     Tagging --> Category
@@ -51,6 +52,13 @@ neither may be widened without a new decision record.
 - Category → Transaction is a second intentional narrow cycle (alongside Account ↔ Transaction): `CategoryRepository` injects `TransactionRepository` solely for `countByCategory`, so `delete` can refuse to archive a category still in use. Nothing else in the category feature touches transactions.
 - Drilldown line-items override parent Transaction category (fractal rule).
 - Tagging learns from user-assigned Transaction↔Category pairs. `TaggingLearnService` reads a `Transaction`, so the edge points Tagging → Transaction; the learn call itself sits in the UI, never in `TransactionRepository`, which keeps it that way. Tagging holds no reference to Category beyond storing its uuid — a rule pointing at an archived category is a legal, unvalidated state.
+- `Drilldown → Tagging` (ticket 056) exists so a scanned or hand-entered position can be
+  suggested a category and teach one back. It carries **primitives only**: the scan flow and
+  the line-item sheet hand over a description string, a category uuid and a bool, and call
+  `suggest(..., matchField: description)` / `learnFromPosition(...)`. Tagging therefore never
+  imports `LineItem`, the same restraint that keeps it from importing `Category`. There is no
+  reverse edge and no cycle — if Tagging ever needed to read a position, that would be a new
+  decision, not an extension of this one.
 - `Drilldown → Analytics` is navigation only, like `Account → Category`: a
   long-press on a position row pushes `ItemPriceChartScreen`. No drilldown data
   or logic touches the analytics feature, and analytics still reads drilldown —
