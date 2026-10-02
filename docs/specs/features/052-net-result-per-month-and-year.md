@@ -6,7 +6,7 @@
 | **Epic** | Analytics |
 | **Domain** | Analytics |
 | **Blocked By** | None |
-| **Status** | In Progress |
+| **Status** | Done |
 
 ## Description
 The monthly report answers "where did it go" one direction at a time: the direction filter shows expenses **or** income, so
@@ -112,11 +112,13 @@ No. Bookings across a few months built inline, including one transfer that must 
 The one thing `make check` cannot see: the widget tests run at 1200 px width, while four columns next to `September` on a
 360 px phone are the tight case. `maxLines: 1` + ellipsis means a miss shows as `…`, not as an overflow error.
 
-- [ ] `Report` tab, a month that has bookings: the line above the donut reads `Einnahmen`, `Ausgaben`, `Ergebnis`, and none
+- [x] `Report` tab, a month that has bookings: the line above the donut reads `Einnahmen`, `Ausgaben`, `Ergebnis`, and none
       of the three amounts is cut off with `…`
-- [ ] `Jahr` tapped: twelve rows `Januar` … `Dezember`, and in the `September` row neither the month name nor any of its
+- [x] `Jahr` tapped: twelve rows `Januar` … `Dezember`, and in the `September` row neither the month name nor any of its
       three amounts is cut off
-- [ ] A month row tapped: the screen stands in month mode on exactly that month, with the donut and the
+- [x] A month row tapped: the screen stands in month mode on exactly that month, with the donut and the
       `Ausgaben` / `Einnahmen` switch back
-- [ ] A positive `Ergebnis` is green with a leading `+`, a negative one red with `-`, and both are legible under
+- [x] A positive `Ergebnis` is green with a leading `+`, a negative one red with `-`, and both are legible under
       `Einstellungen` → theme `Dunkel` as well as `Hell`
+
+Passed on device, 2026-10-02.
