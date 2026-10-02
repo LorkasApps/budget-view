@@ -6,7 +6,7 @@
 | **Epic** | Categories |
 | **Domain** | Category |
 | **Blocked By** | None |
-| **Status** | In Progress |
+| **Status** | Done |
 
 ## Description
 The category tree is free-depth today: a category may hang under any other, and `buildCategoryTree` recurses as far as the
@@ -108,10 +108,12 @@ No. Two- and three-level trees built inline, plus an archived parent for the pro
 Both changes are visible but narrow, and the widget tests cover them at 1200 px. What they cannot see is the extra line the
 helper text adds under the parent field.
 
-- [ ] `Kategorien` → a category **with** subcategories: the parent field is greyed out and reads
+- [x] `Kategorien` → a category **with** subcategories: the parent field is greyed out and reads
       `Hat Unterkategorien — kann selbst keine werden`, and the field below it is not pushed off screen
-- [ ] A category **without** subcategories: the field is usable and offers only root categories plus `Keine (Wurzel)`
-- [ ] In a category picker (e.g. on a booking), a subcategory row carries no `+` while a root row still does
+- [x] A category **without** subcategories: the field is usable and offers only root categories plus `Keine (Wurzel)`
+- [x] In a category picker (e.g. on a booking), a subcategory row carries no `+` while a root row still does
+
+Passed on device, 2026-10-02.
 
 ### Refinement Tokens (estimate)
 - Input: ~10k tokens
