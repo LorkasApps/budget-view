@@ -60,12 +60,12 @@ void main() {
     }
   }
 
-  /// Three levels, because the descendant rule is only interesting below depth
-  /// two: `Limonade` says nothing about the `Lebensmittel` it hangs under.
+  /// Two levels, which is all the tree can hold since 051. The subtree and
+  /// path rules are therefore only exercised one level deep — noted as a loss
+  /// in that ticket and in 038.
   final categories = [
     _cat('root-1', 'Lebensmittel'),
     _cat('child-1', 'Getränke', parent: 'root-1'),
-    _cat('grand-1', 'Limonade', parent: 'child-1'),
     _cat('root-2', 'Freizeit'),
     _cat('child-2', 'Kino', parent: 'root-2'),
   ];
@@ -125,20 +125,17 @@ void main() {
   testWidgets('an empty field shows the whole tree', (tester) async {
     await openPicker(tester, repository: _RecordingCategoryRepository());
 
-    for (final name in ['Lebensmittel', 'Getränke', 'Limonade', 'Freizeit']) {
+    for (final name in ['Lebensmittel', 'Getränke', 'Freizeit', 'Kino']) {
       expect(find.text(name), findsOneWidget, reason: name);
     }
   });
 
-  testWidgets('a hit pulls its whole subtree along, three levels deep', (
-    tester,
-  ) async {
+  testWidgets('a hit pulls its whole subtree along', (tester) async {
     await openPicker(tester, repository: _RecordingCategoryRepository());
     await search(tester, 'lebensmittel');
 
     expect(find.text('Lebensmittel'), findsOneWidget);
     expect(find.text('Getränke'), findsOneWidget);
-    expect(find.text('Limonade'), findsOneWidget);
     expect(find.text('Freizeit'), findsNothing);
     expect(find.text('Kino'), findsNothing);
   });
@@ -150,10 +147,16 @@ void main() {
       tester,
       repository: _RecordingCategoryRepository(),
     );
-    await search(tester, 'Limonade');
+    await search(tester, 'Getränke');
 
     expect(find.text('Lebensmittel'), findsOneWidget, reason: 'path');
-    expect(find.text('Getränke'), findsOneWidget, reason: 'path');
+    // Through the ListTile: the search field holds this text too, so the plain
+    // text finder matches twice once the query is the name being looked for.
+    expect(
+      find.widgetWithText(ListTile, 'Getränke'),
+      findsOneWidget,
+      reason: 'the hit',
+    );
     expect(find.text('Freizeit'), findsNothing);
 
     await tester.tap(find.text('Lebensmittel'));
@@ -181,7 +184,7 @@ void main() {
     await settle(tester);
 
     expect(find.text('Lebensmittel'), findsOneWidget);
-    expect(find.text('Limonade'), findsOneWidget);
+    expect(find.text('Getränke'), findsOneWidget);
   });
 
   testWidgets('a filtered hit keeps the indentation of its real depth', (
@@ -191,9 +194,9 @@ void main() {
     await search(tester, 'Lebensmittel');
 
     final tile = tester.widget<ListTile>(
-      find.widgetWithText(ListTile, 'Limonade'),
+      find.widgetWithText(ListTile, 'Getränke'),
     );
-    expect((tile.contentPadding! as EdgeInsets).left, 16 + 2 * 20);
+    expect((tile.contentPadding! as EdgeInsets).left, 16 + 1 * 20);
   });
 
   testWidgets('the none option keeps its slot and wording while filtering', (
@@ -222,19 +225,19 @@ void main() {
     final result = await openPicker(tester, repository: repository);
     await search(tester, 'Lebensmittel');
 
-    await tester.tap(find.byTooltip('Unterkategorie in Getränke'));
+    await tester.tap(find.byTooltip('Unterkategorie in Lebensmittel'));
     await settle(tester);
     await tester.enterText(
       find.descendant(
         of: find.byType(AlertDialog),
         matching: find.byType(TextField),
       ),
-      'Limonade Bio',
+      'Getränke Bio',
     );
     await tester.tap(find.text('Anlegen'));
     await settle(tester);
 
-    expect(repository.saved.single.parentUuid, 'child-1');
+    expect(repository.saved.single.parentUuid, 'root-1');
     expect(result.value?.uuid, 'new-uuid');
   });
 }

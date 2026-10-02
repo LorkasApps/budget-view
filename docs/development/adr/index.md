@@ -170,3 +170,4 @@ acted on, because line numbers rot.
 | [0152](0152-matchfield-required-on-the-tagging-read-path.md) | 2026-09-22 | `matchField` is required on the tagging read path, not defaulted; `upsert` keeps its default |
 | [0153](0153-drilldown-to-tagging-carries-primitives.md) | 2026-09-22 | `Drilldown → Tagging` carries primitives — `learnFromPosition` never sees a `LineItem` |
 | [0154](0154-only-an-unambiguous-rule-fills-a-row.md) | 2026-09-22 | Only an unambiguous article rule fills a row unattended; a tie fills nothing |
+| [0155](0155-two-category-levels-enforced-on-both-sides.md) | 2026-10-02 | The two-level category rule is enforced in the repository on both sides, and eligibility reads the stored `parentUuid` |

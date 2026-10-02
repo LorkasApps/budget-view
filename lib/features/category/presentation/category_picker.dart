@@ -160,13 +160,17 @@ class _CategoryPickerSheetState extends ConsumerState<_CategoryPickerSheet> {
                   ),
                   title: Text(node.category.name),
                   selected: node.category.uuid == widget.selected,
-                  // Its own hit area: tapping the row still selects.
-                  trailing: IconButton(
-                    icon: const Icon(Icons.add),
-                    tooltip: 'Unterkategorie in ${node.category.name}',
-                    onPressed: () =>
-                        _quickCreate(context, parent: node.category),
-                  ),
+                  // Its own hit area: tapping the row still selects. Decided on
+                  // the stored parentUuid, so a child whose parent is archived
+                  // renders at root level but still takes no children.
+                  trailing: node.category.parentUuid == null
+                      ? IconButton(
+                          icon: const Icon(Icons.add),
+                          tooltip: 'Unterkategorie in ${node.category.name}',
+                          onPressed: () =>
+                              _quickCreate(context, parent: node.category),
+                        )
+                      : null,
                   onTap: () => Navigator.pop(
                     context,
                     CategoryPick(node.category.uuid),

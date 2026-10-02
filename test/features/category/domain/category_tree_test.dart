@@ -69,26 +69,6 @@ void main() {
     );
   });
 
-  test('ineligibleParents covers the category itself and its descendants', () {
-    final categories = [
-      _cat('a', 'Wohnen'),
-      _cat('b', 'Strom', parent: 'a'),
-      _cat('c', 'Grundgebühr', parent: 'b'),
-      _cat('d', 'Mobilität'),
-    ];
-
-    final blocked = ineligibleParents(categories, categories.first);
-
-    expect(blocked, {'a', 'b', 'c'});
-    expect(blocked.contains('d'), isFalse);
-  });
-
-  test('ineligibleParents is empty for an unsaved category', () {
-    final blocked = ineligibleParents([_cat('a', 'Wohnen')], Category());
-
-    expect(blocked, isEmpty);
-  });
-
   group('subtreeUuids', () {
     final categories = [
       _cat('a', 'Wohnen'),

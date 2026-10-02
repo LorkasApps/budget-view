@@ -6,7 +6,7 @@ description: Category tree entity, repository (sync-wired, exceptions), tree hel
 
 # Category (Category domain)
 
-User-defined free category tree (parent-child, arbitrary depth). Feature-first under `lib/features/category/`.
+User-defined category tree, capped at **two levels** — roots and their children, nothing below (ticket 051, ADR 0155). Feature-first under `lib/features/category/`.
 
 ## Entity — `Category` (`data/category.dart`)
 Implements `SyncableEntity` (`entityType = 'category'`).
@@ -43,7 +43,16 @@ Takes `TransactionRepository` as its third constructor argument, used only by `d
 
 ## Exceptions — first domain exceptions in codebase
 
-**`CategoryInvalid`**: thrown by `save()` on empty/too-long name, duplicate sibling name (case-insensitive), missing parent, category as own parent, or move creating a cycle. Field: `message` (German, user-facing).
+**`CategoryInvalid`**: thrown by `save()` on empty/too-long name, duplicate sibling name (case-insensitive), missing parent, category as own parent, or a violation of the two-level rule. Field: `message` (German, user-facing).
+
+The two-level rule is checked on **both sides**, and only when a parent is being set (ADR 0155):
+
+| Refused | Message |
+|---------|---------|
+| The chosen parent has a `parentUuid` of its own | `Nur eine Unterebene erlaubt — das gewählte Elternteil ist selbst eine Unterkategorie` |
+| The category being given a parent has children | `Kategorie hat Unterkategorien und kann selbst keine werden` |
+
+Archived categories count on both sides: the parent lookup ignores `archived`, and `findChildren` returns archived children, so hiding a category never frees up a level. Existing deeper data is not refused on read and not migrated.
 
 **`CategoryDeleteBlocked`**: thrown by `delete()` when category has children or transactions; unblocks when moved first. Fields: `childCount`, `transactionCount` (counts non-deleted transactions referencing the category via `TransactionRepository.countByCategory()`), `.message` (German, user-facing: "Kategorie hat X Unterkategorien und Y Buchungen — bitte zuerst verschieben.").
 
@@ -55,7 +64,8 @@ Pure tree-building functions:
 - **`flattenVisible(roots, expanded)`**: depth-first traversal for on-screen list; a node's children included only if its uuid is in the `expanded` set.
 - **`filterCategoryTree(roots, query)`**: prunes tree for search; a name hit keeps its whole subtree, non-matching ancestors kept as path to matching descendants, case-insensitive substring (umlauts literal), empty query returns roots unchanged, node depth preserved.
 - **`subtreeUuids(categories, rootUuid)`**: `rootUuid` plus every uuid below it, by fixpoint walk over `parentUuid`. Empty `rootUuid` yields nothing. Backs the booking-list category filter (053), where picking a parent must show its children's bookings.
-- **`ineligibleParents(categories, category)`**: returns set of uuids that cannot be the category's parent (itself + all descendants; guards cycle prevention). Delegates to `subtreeUuids` — the same walk, which only ever carried a name about parent eligibility.
+
+`buildCategoryTree` still recurses to any depth: the cap is a write rule, not a read rule, so data that predates it renders unchanged. There is no parent-eligibility helper — with two levels a cycle cannot exist, so the form asks for the roots instead (ADR 0155).
 
 ## Providers (`domain/category_providers.dart`)
 - `categoryRepositoryProvider` → `CategoryRepository(isar, syncAdapter, transactionRepository)`
@@ -86,11 +96,13 @@ Non-obvious details:
 - Visible children count shown as subtitle.
 - Deletion pre-check: refuses immediately if children known in current list rather than asking then refusing (repository still guards, including hidden archived children).
 
-**`CategoryFormScreen`**: full screen (not bottom sheet), create/edit fields: name (validated), parent picker (blocked set excludes category + descendants), icon grid (24 icons from `categoryIcons` map), color grid (12 from palette). Reads all non-archived categories to build parent picker and determine ineligible set. FAB to create.
+**`CategoryFormScreen`**: full screen (not bottom sheet), create/edit fields: name (validated), parent dropdown, icon grid (24 icons from `categoryIcons` map), color grid (12 from palette). Reads all non-archived categories. FAB to create.
+
+The parent dropdown offers `Keine (Wurzel)` plus the **roots only**, minus the category itself, decided on the stored `parentUuid` — so a category promoted to root level by an archived parent is not offered. A category that has children gets the dropdown disabled with the helper text `Hat Unterkategorien — kann selbst keine werden`: hiding the field would make the form look different per category and provoke the question where it went.
 
 **`category_picker.dart`**: `pickCategory(context, {selected, allowNone, noneLabel})` returns `Future<CategoryPick?>`. `noneLabel` renames the first option where "none" carries a specific meaning — line-items pass "Erbt von der Buchung (…)". Bottom sheet: title, none-option (if `allowNone`), divider, "Neue Kategorie" row (`Icons.add`, creates at root), divider, then tree rows expanded. Any node selectable (leaf or non-leaf). Returning null means dismissed; returning `CategoryPick(null)` means deliberately cleared—this distinction is load-bearing. 
   - **Search**: dense `TextField` below title, `prefixIcon` `Icons.search`, `hintText` `Suchen`, `OutlineInputBorder`, clear `IconButton` (tooltip `Suche leeren`) shows when query non-empty; filters tree via `filterCategoryTree`, shows `Kein Treffer.` when no match; none-option and "Neue Kategorie" row survive active filter. `CategoryTreeScreen` has none: reordering a filtered list is meaningless.
-  - **Quick-create** (`_QuickCreateDialog`, private): each tree row carries a trailing `IconButton` (`Icons.add`, tooltip `Unterkategorie in <name>`) that opens an `AlertDialog` (title `Neue Kategorie` or `Neue Unterkategorie in <parent>`, single `Name` field, buttons `Abbrechen`/`Anlegen`). Icon, colour, sortOrder use entity defaults (`label`, `#607D8B`, 1000). Validation: `CategoryValidation.name` first, then `CategoryRepository.save` — `CategoryInvalid` from duplicate sibling becomes `errorText`, dialog stays open. On success, returns `CategoryPick(newUuid)` to the caller without a second tap. Root "Neue Kategorie" row creates with `parentUuid = null`; per-row `+` button creates a child whose `parentUuid` is that row's `uuid`. Row tap still selects (separate hit area: row tap = select, `+` icon = create child).
+  - **Quick-create** (`_QuickCreateDialog`, private): each tree row carries a trailing `IconButton` (`Icons.add`, tooltip `Unterkategorie in <name>`) that opens an `AlertDialog` (title `Neue Kategorie` or `Neue Unterkategorie in <parent>`, single `Name` field, buttons `Abbrechen`/`Anlegen`). Icon, colour, sortOrder use entity defaults (`label`, `#607D8B`, 1000). Validation: `CategoryValidation.name` first, then `CategoryRepository.save` — `CategoryInvalid` from duplicate sibling becomes `errorText`, dialog stays open. On success, returns `CategoryPick(newUuid)` to the caller without a second tap. Root "Neue Kategorie" row creates with `parentUuid = null`; per-row `+` button creates a child whose `parentUuid` is that row's `uuid`. Row tap still selects (separate hit area: row tap = select, `+` icon = create child). The `+` is **absent on any row whose stored `parentUuid` is set**, including a child rendered at root level because its parent is archived — otherwise this path would write the third level the repository refuses (ADR 0155).
 
 **`category_chip.dart`**: `CategoryChip({categoryUuid, onTap})` compact label for transaction rows and import previews. Reads the archived list so a transaction pointing at an archived category still renders. Shows `—` when uncategorized, `?` if uuid points nowhere.
 

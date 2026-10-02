@@ -98,13 +98,54 @@ void main() {
     expect(() => repo.save(saved), throwsA(isA<CategoryInvalid>()));
   });
 
-  test('save rejects a move that would close a cycle', () async {
-    final parent = await repo.save(build('Wohnen'));
-    final child = await repo.save(build('Strom', parent: parent.uuid));
+  test('save rejects a parent that is itself a child', () async {
+    final root = await repo.save(build('Wohnen'));
+    final child = await repo.save(build('Strom', parent: root.uuid));
 
-    parent.parentUuid = child.uuid;
+    expect(
+      () => repo.save(build('Grundgebühr', parent: child.uuid)),
+      throwsA(isA<CategoryInvalid>()),
+    );
+  });
 
-    expect(() => repo.save(parent), throwsA(isA<CategoryInvalid>()));
+  test('save rejects an archived child as a parent', () async {
+    final root = await repo.save(build('Wohnen'));
+    final child = await repo.save(build('Strom', parent: root.uuid));
+    await repo.delete(child.uuid);
+
+    expect(
+      () => repo.save(build('Grundgebühr', parent: child.uuid)),
+      throwsA(isA<CategoryInvalid>()),
+    );
+  });
+
+  test('save rejects giving a parent to a category with children', () async {
+    final root = await repo.save(build('Wohnen'));
+    await repo.save(build('Strom', parent: root.uuid));
+    final other = await repo.save(build('Fixkosten'));
+
+    root.parentUuid = other.uuid;
+
+    expect(() => repo.save(root), throwsA(isA<CategoryInvalid>()));
+  });
+
+  test('an archived child still blocks its parent from moving', () async {
+    final root = await repo.save(build('Wohnen'));
+    final child = await repo.save(build('Strom', parent: root.uuid));
+    await repo.delete(child.uuid);
+    final other = await repo.save(build('Fixkosten'));
+
+    root.parentUuid = other.uuid;
+
+    expect(() => repo.save(root), throwsA(isA<CategoryInvalid>()));
+  });
+
+  test('save still accepts a root as a parent', () async {
+    final root = await repo.save(build('Wohnen'));
+
+    final child = await repo.save(build('Strom', parent: root.uuid));
+
+    expect(child.parentUuid, root.uuid);
   });
 
   test('delete blocks while children exist and reports the count', () async {

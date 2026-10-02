@@ -176,11 +176,22 @@ class CategoryRepository {
           'Eine Kategorie kann nicht ihr eigenes Elternteil sein',
         );
       }
-      if (await findByUuid(parentUuid) == null) {
+      final parent = await findByUuid(parentUuid);
+      if (parent == null) {
         throw const CategoryInvalid('Übergeordnete Kategorie existiert nicht');
       }
-      if (await _wouldCycle(category)) {
-        throw const CategoryInvalid('Verschieben würde einen Zirkel erzeugen');
+      if (parent.parentUuid != null) {
+        throw const CategoryInvalid(
+          'Nur eine Unterebene erlaubt — das gewählte Elternteil ist '
+          'selbst eine Unterkategorie',
+        );
+      }
+      // Archived children count too: hiding one must not free up a level.
+      if (category.uuid.isNotEmpty &&
+          (await findChildren(category.uuid)).isNotEmpty) {
+        throw const CategoryInvalid(
+          'Kategorie hat Unterkategorien und kann selbst keine werden',
+        );
       }
     }
 
@@ -189,23 +200,6 @@ class CategoryRepository {
         'Auf dieser Ebene existiert der Name bereits',
       );
     }
-  }
-
-  /// Walks ancestors of the intended parent; reaching the category itself means
-  /// the move would close a loop.
-  Future<bool> _wouldCycle(Category category) async {
-    if (category.uuid.isEmpty) return false;
-
-    var cursor = category.parentUuid;
-    final seen = <String>{};
-    while (cursor != null) {
-      if (cursor == category.uuid) return true;
-      if (!seen.add(cursor)) return true; // pre-existing loop, do not spin
-      final parent = await findByUuid(cursor);
-      if (parent == null) return false;
-      cursor = parent.parentUuid;
-    }
-    return false;
   }
 
   /// Names are unique per level, compared case-insensitively so `Einkauf` and

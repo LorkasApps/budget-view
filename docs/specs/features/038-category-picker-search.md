@@ -77,6 +77,23 @@ about their parent (`Bio`, `Wochenmarkt`), which is exactly when the flat filter
 ## Fixtures Needed
 No file. A three-level tree built inline in the test, deeper than the two-level trees the picker tests use today.
 
+> [!NOTE]
+> **Coverage lost to ticket 051, 2026-10-02.** The tree is capped at two levels, so the inline
+> three-level fixture had to be flattened. What the search tests can no longer show:
+> - `a hit pulls its whole subtree along` now proves one level of subtree, not two — a hit's
+>   grandchildren are no longer part of the assertion
+> - `the path to a hit is shown` searches a child instead of a grandchild, so the *chain* of
+>   non-matching ancestors is untested; only a single path node is
+> - `a filtered hit keeps the indentation of its real depth` asserts `16 + 1 * 20` instead of
+>   `16 + 2 * 20`, which no longer distinguishes "real depth" from "depth within the filtered tree" —
+>   at depth 1 the two values coincide
+>
+> `filterCategoryTree` is still depth-agnostic in code, but it has **no unit test of its own** — this
+> fixture was the only place its behaviour below depth one was ever asserted, and
+> `category_tree_search_test.dart` was two-level already. So the loss is real, not just relocated.
+> Restoring it means a direct unit test over a three-level input, which is legitimate: the cap is a
+> write rule and `buildCategoryTree` still tolerates any depth.
+
 ### Refinement Tokens (estimate)
 - Input: ~12k tokens
 - Output: ~2k tokens

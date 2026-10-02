@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/category.dart';
 import '../domain/category_providers.dart';
 import '../domain/category_repository.dart';
-import '../domain/category_tree.dart';
 import '../domain/category_validation.dart';
 import 'category_style.dart';
 
@@ -85,12 +84,19 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Fehler: $e')),
         data: (all) {
-          final blocked = widget.existing == null
-              ? const <String>{}
-              : ineligibleParents(all, widget.existing!);
+          final existingUuid = widget.existing?.uuid;
+          // Stored parentUuid, not tree depth: a category whose parent is
+          // archived renders at root level but is not a root.
           final options = all
-              .where((category) => !blocked.contains(category.uuid))
+              .where(
+                (category) =>
+                    category.parentUuid == null &&
+                    category.uuid != existingUuid,
+              )
               .toList();
+          final hasChildren =
+              existingUuid != null &&
+              all.any((category) => category.parentUuid == existingUuid);
           if (_parentUuid != null &&
               !options.any((option) => option.uuid == _parentUuid)) {
             _parentUuid = null;
@@ -110,8 +116,11 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String?>(
                   initialValue: _parentUuid,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Übergeordnete Kategorie',
+                    helperText: hasChildren
+                        ? 'Hat Unterkategorien — kann selbst keine werden'
+                        : null,
                   ),
                   items: [
                     const DropdownMenuItem<String?>(
@@ -124,7 +133,7 @@ class _CategoryFormScreenState extends ConsumerState<CategoryFormScreen> {
                         child: Text(option.name),
                       ),
                   ],
-                  onChanged: _saving
+                  onChanged: _saving || hasChildren
                       ? null
                       : (value) => setState(() => _parentUuid = value),
                 ),

@@ -125,10 +125,6 @@ Set<String> subtreeUuids(List<Category> categories, String rootUuid) {
   return inside;
 }
 
-/// Uuids that may not become [category]'s parent: itself and its descendants.
-Set<String> ineligibleParents(List<Category> categories, Category category) =>
-    subtreeUuids(categories, category.uuid);
-
 int _bySortOrderThenName(Category a, Category b) {
   final bySortOrder = a.sortOrder.compareTo(b.sortOrder);
   if (bySortOrder != 0) return bySortOrder;

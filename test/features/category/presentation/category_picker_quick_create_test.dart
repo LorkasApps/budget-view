@@ -134,8 +134,33 @@ void main() {
 
     expect(find.text('Neue Kategorie'), findsOneWidget);
     expect(find.byTooltip('Unterkategorie in Lebensmittel'), findsOneWidget);
-    expect(find.byTooltip('Unterkategorie in Getränke'), findsOneWidget);
     expect(find.byTooltip('Unterkategorie in Freizeit'), findsOneWidget);
+  });
+
+  testWidgets('a child row carries no add button', (tester) async {
+    await openPicker(
+      tester,
+      categories: categories,
+      repository: _RecordingCategoryRepository(),
+    );
+
+    expect(find.text('Getränke'), findsOneWidget);
+    expect(find.byTooltip('Unterkategorie in Getränke'), findsNothing);
+  });
+
+  testWidgets('a child promoted by an absent parent carries none either', (
+    tester,
+  ) async {
+    await openPicker(
+      tester,
+      categories: [_cat('child-x', 'Strom', parent: 'archived-root')],
+      repository: _RecordingCategoryRepository(),
+    );
+
+    // buildCategoryTree renders it at root level because its parent is not in
+    // the list; the stored parentUuid still makes it a child.
+    expect(find.text('Strom'), findsOneWidget);
+    expect(find.byTooltip('Unterkategorie in Strom'), findsNothing);
   });
 
   testWidgets(
